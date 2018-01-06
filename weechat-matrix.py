@@ -7,14 +7,19 @@ import socket
 import ssl
 import time
 
+# pylint: disable=redefined-builtin
 from builtins import bytes
+
 from collections import deque, Mapping, Iterable, namedtuple
 from enum import Enum, unique
 from functools import wraps
+
+# pylint: disable=unused-import
 from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 
 from http_parser.pyparser import HttpParser
 
+# pylint: disable=import-error
 import weechat
 
 WEECHAT_SCRIPT_NAME        = "matrix"                              # type: unicode
@@ -23,11 +28,10 @@ WEECHAT_SCRIPT_AUTHOR      = "Damir Jelić <poljar@termina.org.uk>" # type: unic
 WEECHAT_SCRIPT_VERSION     = "0.1"                                 # type: unicode
 WEECHAT_SCRIPT_LICENSE     = "MIT"                                 # type: unicode
 
-SCRIPT_COMMAND  = WEECHAT_SCRIPT_NAME   # type: unicode
-
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: unicode
 
 SERVERS = dict()  # type: Dict[unicode, MatrixServer]
+CONFIG  = None    # type: weechat.config
 
 # Unicode handling
 
@@ -183,10 +187,10 @@ class Matrix:
 
 
 class MatrixRoom:
-    def __init__(self, id, join_rule, alias=None):
+    def __init__(self, room_id, join_rule, alias=None):
         # type: (unicode, unicode, unicode) -> None
-        self.id        = id         # type: unicode
-        self.alias     = alias      # type: unicode
+        self.room_id = room_id      # type: unicode
+        self.alias   = alias        # type: unicode
         self.join_rule = join_rule  # type: unicode
 
 
@@ -205,10 +209,9 @@ def server_config_change_cb(server_name, option):
             break
 
     if not option_name:
-        # TODO print error here
+        # TODO print error here, can this happen?
         return 0
 
-    # TODO update the changed option in the server class
     if option_name == "address":
         value = W.config_string(option)
         server.address = value
@@ -231,47 +234,46 @@ def server_config_change_cb(server_name, option):
 
 
 class MatrixServer:
+    # pylint: disable=too-many-instance-attributes
     def __init__(self, name, config_file):
-        # type: (unicode, unicode, int) -> None
-        self.name           = name     # type: unicode
-        self.address        = None     # type: unicode
-        self.port           = None     # type: int
-        self.options        = dict()   # type: Dict[unicode, weechat.config]
+        # type: (unicode, weechat.config) -> None
+        self.name            = name     # type: unicode
+        self.address         = ""       # type: unicode
+        self.port            = 8448     # type: int
+        self.options         = dict()   # type: Dict[unicode, weechat.config]
 
-        self.user           = ""       # type: unicode
-        self.password       = ""       # type: unicode
+        self.user            = ""       # type: unicode
+        self.password        = ""       # type: unicode
 
-        self.buffers        = dict()   # type: Dict[unicode, weechat.buffer]
-        self.server_buffer  = None     # type: weechat.buffer
-        self.fd_hook        = None     # type: weechat.hook
-        self.timer_hook     = None     # type: weechat.hook
+        self.buffers         = dict()   # type: Dict[unicode, weechat.buffer]
+        self.server_buffer   = None     # type: weechat.buffer
+        self.fd_hook         = None     # type: weechat.hook
+        self.timer_hook      = None     # type: weechat.hook
 
-        self.autoconnect    = False                         # type: bool
-        self.connected      = False                         # type: bool
-        self.connecting     = False                         # type: bool
-        self.reconnectCount = 0                             # type: long
-        self.socket         = None                          # type: ssl.SSLSocket
-        self.ssl_context    = ssl.create_default_context()  # type: ssl.SSLContext
+        self.autoconnect     = False                         # type: bool
+        self.connected       = False                         # type: bool
+        self.connecting      = False                         # type: bool
+        self.reconnect_count = 0                             # type: int
+        self.socket          = None                          # type: ssl.SSLSocket
+        self.ssl_context     = ssl.create_default_context()  # type: ssl.SSLContext
 
-        self.access_token   = None                          # type: unicode
-        self.next_batch     = None                          # type: unicode
+        self.access_token    = None                          # type: unicode
+        self.next_batch      = None                          # type: unicode
 
 
         # TODO this should be made stateless
         host_string = ':'.join([self.address,
                                 str(self.port)])         # type: unicode
-        self.builder    = RequestBuilder(host_string)    # type: RequestBuilder
+        self.builder     = RequestBuilder(host_string)   # type: RequestBuilder
 
-        self.httpParser = HttpParser()                   # type: HttpParser
-        self.httpBodyBuffer = []                         # type: List[bytes]
+        self.http_parser = HttpParser()                  # type: HttpParser
+        self.http_buffer = []                            # type: List[bytes]
 
         # Queue of messages we need to send off.
-        self.sendQueue = deque()  # type: Deque[MatrixMessage]
+        self.send_queue = deque()  # type: Deque[MatrixMessage]
         # Queue of messages we send off and are waiting a response for
-        self.recieveQueue = deque()  # type: Deque[MatrixMessage]
-        # Queue for messages we got a response of and need to handle
-        # TODO is this needed? will we ever deffer message handling?
-        self.MessageQueue = deque()  # type: Deque[MatrixMessage]
+        self.receive_queue = deque()  # type: Deque[MatrixMessage]
+        self.message_queue = deque()  # type: Deque[MatrixMessage]
 
         self._create_options(config_file)
 
@@ -284,7 +286,7 @@ class MatrixServer:
         self.ssl_context.verify_mode = ssl.CERT_NONE
 
     def _create_options(self, config_file):
-        Option = namedtuple(
+        option = namedtuple(
             'Option', [
                 'name',
                 'type',
@@ -296,23 +298,23 @@ class MatrixServer:
             ])
 
         options = [
-            Option(
+            option(
                 'autoconnect', 'boolean', '', 0, 0, 'off',
                 "Automatically connect to the matrix server when Weechat is starting"
             ),
-            Option(
+            option(
                 'address', 'string', '', 0, 0, '',
                 "Hostname or IP address for the server"
             ),
-            Option(
+            option(
                 'port', 'integer', '', 0, 65535, '8448',
                 "Port for the server"
             ),
-            Option(
+            option(
                 'username', 'string', '', 0, 0, '',
                 "Username to use on server"
             ),
-            Option(
+            option(
                 'password', 'string', '', 0, 0, '',
                 "Password for server"
             ),
@@ -324,38 +326,44 @@ class MatrixServer:
             option_name = "{server}.{option}".format(
                 server=self.name, option=option.name)
 
-            o = W.config_new_option(
+            self.options[option.name] = W.config_new_option(
                 config_file, section, option_name,
                 option.type, option.description, option.string_values,
                 option.min, option.max, option.value, option.value, 0, "",
                 "", "server_config_change_cb", self.name, "", "")
 
-            self.options[option.name] = o
 
-
-def wrap_socket(server, fd):
+def wrap_socket(server, file_descriptor):
     # type: (MatrixServer, int) -> socket.socket
-    s = None  # type: socket.socket
+    sock = None  # type: socket.socket
+
+    temp_socket = socket.fromfd(
+        file_descriptor,
+        socket.AF_INET,
+        socket.SOCK_STREAM
+    )
 
     # TODO explain why these type gymnastics are needed
-    tempSocket = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
-
-    if type(tempSocket) == socket._socket.socket:
-        s = socket._socketobject(_sock=tempSocket)
+    # pylint: disable=protected-access
+    if isinstance(temp_socket, socket._socket.socket):
+    # pylint: disable=no-member
+        sock = socket._socketobject(_sock=temp_socket)
     else:
-        s = tempSocket
+        sock = temp_socket
 
     try:
-        ssl_socket = server.ssl_context.wrap_socket(s,
+        ssl_socket = server.ssl_context.wrap_socket(
+            sock,
             server_hostname=server.address)  # type: ssl.SSLSocket
+
         return ssl_socket
     # TODO add the other relevant exceptions
-    except ssl.SSLError as e:
-        server_buffer_prnt(server, str(e))
+    except ssl.SSLError as error:
+        server_buffer_prnt(server, str(error))
         return None
 
 
-def handleHttpResponse(server, message):
+def handle_http_response(server, message):
     # type: (MatrixServer, MatrixMessage) -> None
 
     status_code = message.response.status
@@ -365,9 +373,13 @@ def handleHttpResponse(server, message):
     if status_code == 200:
         # TODO json.loads can fail
         response = json.loads(message.response.body, encoding='utf-8')
-        handleMatrixMessage(server, message.type, response)
+        handle_matrix_message(server, message.type, response)
     else:
-        server_buffer_prnt(server, "ERROR IN HTTP RESPONSE {status_code}".format(status_code=status_code))
+        server_buffer_prnt(
+            server,
+            "ERROR IN HTTP RESPONSE {status_code}".format(
+                status_code=status_code))
+
         server_buffer_prnt(server, message.request.request)
         server_buffer_prnt(server, message.response.body)
 
@@ -401,7 +413,7 @@ def handle_room_info(server, room_info):
         W.buffer_set(buf, "localvar_set_server", "matrix.org")
 
         # TODO put this in a function
-        short_name = name=alias.rsplit(":", 1)[0]
+        short_name = alias.rsplit(":", 1)[0]
         W.buffer_set(buf, "short_name", short_name)
 
         server.buffers[room_id] = buf
@@ -467,15 +479,15 @@ def handle_room_info(server, room_info):
         event_id = "matrix_id_{id}".format(id=event_id)
 
         msg_age = event['unsigned']['age']
-        t = time.time()
-        t = int(t - (msg_age / 1000))
+        now = time.time()
+        msg_date = int(now - (msg_age / 1000))
         buf = server.buffers[room_id]
 
         # TODO if this is an initial sync tag the messages as backlog
         tag = "nick_{a},{event_id},irc_privmsg,notify_message".format(
-                a=msg_author, event_id=event_id)
+            a=msg_author, event_id=event_id)
 
-        W.prnt_date_tags(buf, t, tag, data)
+        W.prnt_date_tags(buf, msg_date, tag, data)
 
     for room_id, room in room_info['join'].iteritems():
         # TODO do we need these queues or can we just rename the buffer if and
@@ -497,7 +509,7 @@ def handle_room_info(server, room_info):
             if event['type'] == 'm.room.member':
                 handle_members(room_id, event)
             else:
-                assert("Wrong event type in event queue")
+                assert "Wrong event type in event queue"
 
         while message_queue:
             event = message_queue.popleft()
@@ -513,38 +525,42 @@ def handle_room_info(server, room_info):
                 else:
                     server_buffer_prnt(
                         server,
-                        "Handling of content type {type} not implemented".format(type=event['content']['type'])
+                        "Handling of content type {type} not implemented".format(
+                            type=event['content']['type'])
                     )
 
 
-def handleMatrixMessage(server, messageType, matrixResponse):
+def handle_matrix_message(server, message_type, response):
     # type: (MatrixServer, MessageType, Dict[Any, Any]) -> None
 
-    if messageType is MessageType.LOGIN:
-        server.access_token = matrixResponse["access_token"]
+    if message_type is MessageType.LOGIN:
+        server.access_token = response["access_token"]
         message = generate_matrix_request(server, MessageType.SYNC)
         send_or_queue(server, message)
 
-    elif messageType is messageType.SYNC:
-        next_batch = matrixResponse['next_batch']
+    elif message_type is MessageType.SYNC:
+        next_batch = response['next_batch']
 
         # we got the same batch again, nothing to do
         if next_batch == server.next_batch:
             return
 
-        room_info = matrixResponse['rooms']
+        room_info = response['rooms']
         handle_room_info(server, room_info)
 
         server.next_batch = next_batch
 
     else:
-        server_buffer_prnt(server, "Handling of message type {type} not implemented".format(type=messageType))
+        server_buffer_prnt(
+            server,
+            "Handling of message type {type} not implemented".format(
+                type=message_type))
 
 
-def generate_matrix_request(server, type, room_id=None, data=None):
+def generate_matrix_request(server, message_type, room_id=None, data=None):
     # type: (MatrixServer, MessageType, unicode, Dict[Any, Any]) -> MatrixMessage
     # TODO clean this up
-    if type == MessageType.LOGIN:
+    if message_type == MessageType.LOGIN:
         path = '/_matrix/client/r0/login'
         post_data = {"type": "m.login.password",
                      "user": server.user,
@@ -554,24 +570,26 @@ def generate_matrix_request(server, type, room_id=None, data=None):
 
         return MatrixMessage(MessageType.LOGIN, request, None)
 
-    elif type == MessageType.SYNC:
-        path = '/_matrix/client/r0/sync?access_token={access_token}'.format(access_token=server.access_token)
+    elif message_type == MessageType.SYNC:
+        path = '/_matrix/client/r0/sync?access_token={access_token}'.format(
+            access_token=server.access_token)
 
         if server.next_batch:
-            path = path + '&since={next_batch}'.format(next_batch=server.next_batch)
+            path = path + '&since={next_batch}'.format(
+                next_batch=server.next_batch)
 
         request = server.builder.request(path)
 
         return MatrixMessage(MessageType.SYNC, request, None)
 
-    elif type == MessageType.POST_MSG:
+    elif message_type == MessageType.POST_MSG:
         path = '/_matrix/client/r0/rooms/{room}/send/m.room.message?access_token={access_token}'.format(room=room_id, access_token=server.access_token)
         request = server.builder.request(path, data)
 
         return MatrixMessage(MessageType.POST_MSG, request, None)
 
     else:
-        assert("Incorrect message type")
+        assert "Incorrect message type"
         return None
 
 
@@ -584,7 +602,7 @@ def matrix_login(server):
 def send_or_queue(server, message):
     # type: (MatrixServer, MatrixMessage) -> None
     if not send(server, message):
-        server.sendQueue.append(message)
+        server.send_queue.append(message)
 
 
 def send(server, message):
@@ -598,23 +616,22 @@ def send(server, message):
         if payload:
             server.socket.sendall(bytes(payload, 'utf-8'))
 
-        server.recieveQueue.append(message)
+        server.receive_queue.append(message)
         return True
 
-    except socket.error as e:
+    except socket.error as error:
         disconnect(server)
-        server_buffer_prnt(server, str(e))
+        server_buffer_prnt(server, str(error))
         return False
 
 @utf8_decode
-def recieve_cb(server_name, fd):
+def receive_cb(server_name, file_descriptor):
     server = SERVERS[server_name]
 
     if not server.connected:
         server_buffer_prnt(server, "NOT CONNECTED WHILE RECEIVING")
         # can this happen?
         # do reconnection
-        pass
 
     while True:
         try:
@@ -622,42 +639,42 @@ def recieve_cb(server_name, fd):
         # TODO add the other relevant exceptions
         except ssl.SSLWantReadError:
             break
-        except socket.error as e:
+        except socket.error as error:
             disconnect(server)
 
             # Queue the failed message for resending
-            message = server.recieveQueue.popleft()
-            server.sendQueue.appendleft(message)
+            message = server.receive_queue.popleft()
+            server.send_queue.appendleft(message)
 
-            server_buffer_prnt(server, e)
-            return
+            server_buffer_prnt(server, error)
+            return W.WEECHAT_RC_OK
 
         if not data:
             server_buffer_prnt(server, "No data while reading")
             disconnect(server)
             break
 
-        recieved = len(data)  # type: int
-        nParsed  = server.httpParser.execute(data, recieved)
+        received = len(data)  # type: int
+        parsed_bytes = server.http_parser.execute(data, received)
 
-        assert nParsed == recieved
+        assert parsed_bytes == received
 
-        if server.httpParser.is_partial_body():
-            server.httpBodyBuffer.append(server.httpParser.recv_body())
+        if server.http_parser.is_partial_body():
+            server.http_buffer.append(server.http_parser.recv_body())
 
-        if server.httpParser.is_message_complete():
-            status = server.httpParser.get_status_code()
-            headers = server.httpParser.get_headers()
-            body = b"".join(server.httpBodyBuffer)
+        if server.http_parser.is_message_complete():
+            status = server.http_parser.get_status_code()
+            headers = server.http_parser.get_headers()
+            body = b"".join(server.http_buffer)
 
-            message = server.recieveQueue.popleft()
+            message = server.receive_queue.popleft()
             message.response = HttpResponse(status, headers, body)
 
             # Message done, reset the parser state.
-            server.httpParser = HttpParser()
-            server.httpBodyBuffer = []
+            server.http_parser = HttpParser()
+            server.http_buffer = []
 
-            handleHttpResponse(server, message)
+            handle_http_response(server, message)
             break
 
     return W.WEECHAT_RC_OK
@@ -677,10 +694,10 @@ def disconnect(server):
 
 def server_buffer_prnt(server, string):
     # type: (MatrixServer, unicode) -> None
-    assert(server.server_buffer)
-    b = server.server_buffer
-    t = int(time.time())
-    W.prnt_date_tags(b, t, "", string)
+    assert server.server_buffer
+    buffer = server.server_buffer
+    now = int(time.time())
+    W.prnt_date_tags(buffer, now, "", string)
 
 
 def create_server_buffer(server):
@@ -708,18 +725,23 @@ def create_server_buffer(server):
 # socket creation
 @utf8_decode
 def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
+    # pylint: disable=too-many-arguments
     status_value = int(status)  # type: long
     server = SERVERS[data]
-    print(server.name)
 
+    # pylint: disable=too-many-branches
     if status_value == W.WEECHAT_HOOK_CONNECT_OK:
-        fd = int(sock)  # type: int
-        socket = wrap_socket(server, fd)
+        file_descriptor = int(sock)  # type: int
+        sock = wrap_socket(server, file_descriptor)
 
-        if socket:
-            server.socket = socket
-            fd = server.socket.fileno()
-            hook = W.hook_fd(fd, 1, 0, 0, "recieve_cb", server.name)
+        if sock:
+            server.socket = sock
+            hook = W.hook_fd(
+                server.socket.fileno(),
+                1, 0, 0,
+                "receive_cb",
+                server.name
+            )
 
             server.fd_hook        = hook
             server.connected      = True
@@ -770,15 +792,18 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
 
 def reconnect(server):
     # type: (MatrixServer) -> None
-    timeout = server.reconnectCount * 5 * 1000
+    timeout = server.reconnect_count * 5 * 1000
 
     if timeout > 0:
-        server_buffer_prnt(server, "Reconnecting in {timeout} seconds.".format(timeout=timeout / 1000))
+        server_buffer_prnt(
+            server,
+            "Reconnecting in {timeout} seconds.".format(
+                timeout=timeout / 1000))
         W.hook_timer(timeout, 0, 1, "reconnect_cb", server.name)
     else:
         connect(server)
 
-    server.reconnectCount += 1
+    server.reconnect_count += 1
 
 
 @utf8_decode
@@ -853,23 +878,25 @@ def matrix_timer_cb(server_name, remaining_calls):
             reconnect(server)
         return W.WEECHAT_RC_OK
 
-    while server.sendQueue:
-        message = server.sendQueue.popleft()
+    while server.send_queue:
+        message = server.send_queue.popleft()
 
         if not send(server, message):
             # We got an error while sending the last message return the message
             # to the queue and exit the loop
-            server.sendQueue.appendleft(message)
+            server.send_queue.appendleft(message)
             break
 
-    for message in server.MessageQueue:
-        server_buffer_prnt(server, "Handling message: {message}".format(message=message))
+    for message in server.message_queue:
+        server_buffer_prnt(
+            server,
+            "Handling message: {message}".format(message=message))
 
     # TODO don't send this out here, if a SYNC fails for some reason (504 try
     # again!) we'll hammer the server unnecessarily
     if server.next_batch:
         message = generate_matrix_request(server, MessageType.SYNC)
-        server.sendQueue.append(message)
+        server.send_queue.append(message)
 
     return W.WEECHAT_RC_OK
 
@@ -878,13 +905,14 @@ def matrix_timer_cb(server_name, remaining_calls):
 def matrix_config_reload_cb(data, config_file):
     return W.WEECHAT_RC_OK
 
+
 @utf8_decode
 def matrix_config_server_read_cb(
-    data, config_file, section,
-    option_name, value
+        data, config_file, section,
+        option_name, value
 ):
 
-    rc = W.WEECHAT_CONFIG_OPTION_SET_ERROR
+    return_code = W.WEECHAT_CONFIG_OPTION_SET_ERROR
 
     if option_name:
         server_name, option = option_name.rsplit('.', 1)
@@ -898,11 +926,11 @@ def matrix_config_server_read_cb(
 
         # Ignore invalid options
         if option in server.options:
-            rc = W.config_option_set(server.options[option], value, 1)
+            return_code = W.config_option_set(server.options[option], value, 1)
 
-    # TODO print out error message in case of erroneous rc
+    # TODO print out error message in case of erroneous return_code
 
-    return rc
+    return return_code
 
 
 @utf8_decode
@@ -922,21 +950,21 @@ def init_matrix_config():
     config_file = W.config_new("matrix", "matrix_config_reload_cb", "")
 
     section = W.config_new_section(config_file, "color", 0, 0, "", "", "", "",
-        "", "", "", "", "", "")
+                                   "", "", "", "", "", "")
 
     # TODO color options
 
     section = W.config_new_section(config_file, "look", 0, 0, "", "", "", "",
-        "", "", "", "", "", "")
+                                   "", "", "", "", "", "")
 
     # TODO look options
 
-    section = W.config_new_section(config_file, "network", 0, 0, "", "", "", "",
-        "", "", "", "", "", "")
+    section = W.config_new_section(config_file, "network", 0, 0, "", "", "",
+                                   "", "", "", "", "", "", "")
 
     # TODO network options
 
-    section = W.config_new_section(
+    W.config_new_section(
         config_file, "server",
         0, 0,
         "matrix_config_server_read_cb",
@@ -950,12 +978,12 @@ def init_matrix_config():
 
 def read_matrix_config():
     # type: () -> bool
-    rc = W.config_read(CONFIG)
-    if rc == weechat.WEECHAT_CONFIG_READ_OK:
+    return_code = W.config_read(CONFIG)
+    if return_code == weechat.WEECHAT_CONFIG_READ_OK:
         return True
-    elif rc == weechat.WEECHAT_CONFIG_READ_MEMORY_ERROR:
+    elif return_code == weechat.WEECHAT_CONFIG_READ_MEMORY_ERROR:
         return False
-    elif rc == weechat.WEECHAT_CONFIG_READ_FILE_NOT_FOUND:
+    elif return_code == weechat.WEECHAT_CONFIG_READ_FILE_NOT_FOUND:
         return True
     else:
         return False
@@ -964,26 +992,28 @@ def read_matrix_config():
 @utf8_decode
 def matrix_unload_cb():
     for section in ["network", "look", "color", "server"]:
-        s = W.config_search_section(CONFIG, section)
-        W.config_section_free_options(s)
-        W.config_section_free(s)
+        section_pointer = W.config_search_section(CONFIG, section)
+        W.config_section_free_options(section_pointer)
+        W.config_section_free(section_pointer)
 
     W.config_free(CONFIG)
 
     return W.WEECHAT_RC_OK
 
 
-def get_boolean(config, section, key):
-    s = W.config_search_section(config, section)
-    option = W.config_search_option(config, s, key)
-    return W.config_boolean(option)
-
-
 @utf8_decode
 def matrix_server_command_cb(data, buffer, args):
-    a = args.split(' ', 2)
+    def connect_server(servers):
+        # TODO check if the server exists
+        for server_name in servers:
+            server = SERVERS[server_name]
+            connect(server)
 
-    command, args = a[0], a[1:]
+    def disconnect_server(servers):
+        # TODO check if the server exists
+        for server_name in servers:
+            server = SERVERS[server_name]
+            disconnect(server)
 
     def list_servers():
         if SERVERS:
@@ -994,16 +1024,35 @@ def matrix_server_command_cb(data, buffer, args):
                     server=server
                 ))
 
+    # TODO
+    def list_full_servers(servers):
+        W.prnt("", "\nCommand not implemented")
+
+    # TODO
+    def delete_server(servers):
+        W.prnt("", "\nCommand not implemented")
+
+    split_args = args.split(' ', 2)
+
+    command, args = split_args[0], split_args[1:]
+
     if command == 'connect':
-        for server_name in args:
-            server = SERVERS[server_name]
-            connect(server)
+        connect_server(args)
+
+    elif command == 'disconnect':
+        disconnect_server(args)
+
+    elif command == 'reconnect':
+        disconnect_server(args)
+        connect_server(args)
 
     elif command == 'server':
         subcommand, args = args[0], args[1:]
 
         if subcommand == 'list':
             list_servers()
+        if subcommand == 'listfull':
+            list_full_servers(args)
         elif subcommand == 'add':
             # TODO allow setting the address and port
             SERVERS[args[0]] = MatrixServer(args[0], CONFIG)
@@ -1026,11 +1075,11 @@ def add_servers_to_completion(completion):
 
 
 @utf8_decode
-def matrix_server_command_completion_cb(data, completion_item, buffer, completion):
-    input = weechat.buffer_get_string(buffer, "input").split()
+def server_command_completion_cb(data, completion_item, buffer, completion):
+    buffer_input = weechat.buffer_get_string(buffer, "input").split()
 
-    args = input[1:]
-    commands = ['add', 'delete', 'list']
+    args = buffer_input[1:]
+    commands = ['add', 'delete', 'list', 'listfull', 'rename']
 
     def complete_commands():
         for command in commands:
@@ -1048,11 +1097,11 @@ def matrix_server_command_completion_cb(data, completion_item, buffer, completio
         if args[1] not in commands:
             complete_commands()
         else:
-            if args[1] == 'delete':
+            if args[1] == 'delete' or args[1] == 'listfull':
                 add_servers_to_completion(completion)
 
     elif len(args) == 3:
-        if args[1] == 'delete':
+        if args[1] == 'delete' or args[1] == 'listfull':
             if args[2] not in SERVERS.keys():
                 add_servers_to_completion(completion)
 
@@ -1073,6 +1122,46 @@ def create_default_server(config_file):
     return True
 
 
+def init_hooks():
+    W.hook_completion(
+        "matrix_server_commands", "Matrix server completion",
+        "server_command_completion_cb", "")
+
+    W.hook_completion(
+        "matrix_servers", "Matrix server completion",
+        "matrix_server_completion_cb", "")
+
+    W.hook_command(
+        # Command name and short description
+        'matrix', 'Matrix chat protocol command',
+        # Synopsis
+        'server add <server-name> <hostname>[:<port>] ||' +
+        'server delete|list|listfull <server-name> ||' +
+        'server rename <server-name> <new-name> ||' +
+        'connect <server-name> ||' +
+        'disconnect <server-name> ||' +
+        'reconnect <server-name>',
+        # Description
+        '    server: list, add, remove, or rename Matrix servers' + '\n' +
+        '   connect: connect to Matrix servers' + '\n' +
+        'disconnect: disconnect from one or all Matrix servers' + '\n' +
+        ' reconnect: reconnect to server(s)' + '\n' +
+        '\nUse /matrix help [command] to find out more\n',
+        # Completions
+        'server %(matrix_server_commands)|%* ||' +
+        'connect %(matrix_servers) ||' +
+        'disconnect %(matrix_servers) ||' +
+        'reconnect %(matrix_servers)',
+        # Function name
+        'matrix_server_command_cb', '')
+
+
+def autoconnect(servers):
+    for server in servers.values():
+        if server.autoconnect:
+            connect(server)
+
+
 if __name__ == "__main__":
     W = WeechatWrapper(weechat)
 
@@ -1088,36 +1177,10 @@ if __name__ == "__main__":
         CONFIG = init_matrix_config()
         read_matrix_config()
 
+        init_hooks()
+
         # TODO this can't be here
-        if (len(SERVERS) == 0):
+        if not SERVERS:
             create_default_server(CONFIG)
 
-        subcommands = ['connect', 'disconnect', 'list']
-
-        W.hook_completion(
-            "matrix_server_commands", "Matrix server completion",
-            "matrix_server_command_completion_cb", "")
-
-        W.hook_completion(
-            "matrix_servers", "Matrix server completion",
-            "matrix_server_completion_cb", "")
-
-        # TODO implement help
-        # TODO we want a better description
-        W.hook_command(
-            # Command name and description
-            'matrix', 'Matrix chat protocol',
-            # Usage
-            '[command] [command options]',
-            # Description of arguments
-            'Commands:\n' +
-            '\n'.join(subcommands) +
-            '\nUse /matrix help [command] to find out more\n',
-            # Completions
-            'server %(matrix_server_commands)|%* || connect %(matrix_servers)',
-            # Function name
-            'matrix_server_command_cb', '')
-
-        for server in SERVERS.values():
-            if server.autoconnect:
-                connect(server)
+        autoconnect(SERVERS)
