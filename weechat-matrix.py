@@ -33,8 +33,10 @@ MATRIX_API_PATH = "/_matrix/client/r0"  # type: unicode
 SERVERS = dict()  # type: Dict[unicode, MatrixServer]
 CONFIG  = None    # type: weechat.config
 
-# Unicode handling
+NICK_GROUP_HERE = "0|Here"
 
+
+# Unicode handling
 def encode_to_utf8(data):
     if isinstance(data, unicode):
         return data.encode('utf-8')
@@ -260,7 +262,6 @@ class MatrixServer:
         self.access_token    = None                          # type: unicode
         self.next_batch      = None                          # type: unicode
 
-
         # TODO this should be made stateless
         host_string = ':'.join([self.address,
                                 str(self.port)])         # type: unicode
@@ -346,7 +347,7 @@ def wrap_socket(server, file_descriptor):
     # TODO explain why these type gymnastics are needed
     # pylint: disable=protected-access
     if isinstance(temp_socket, socket._socket.socket):
-    # pylint: disable=no-member
+        # pylint: disable=no-member
         sock = socket._socketobject(_sock=temp_socket)
     else:
         sock = temp_socket
@@ -385,8 +386,6 @@ def handle_http_response(server, message):
 
     return
 
-NICK_GROUP_HERE = "0|Here"
-NICK_GROUP_AWAY = "1|Away"
 
 def handle_room_info(server, room_info):
     # type: (MatrixServer, Dict) -> None
@@ -624,6 +623,7 @@ def send(server, message):
         server_buffer_prnt(server, str(error))
         return False
 
+
 @utf8_decode
 def receive_cb(server_name, file_descriptor):
     server = SERVERS[server_name]
@@ -743,10 +743,10 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
                 server.name
             )
 
-            server.fd_hook        = hook
-            server.connected      = True
-            server.connecting     = False
-            server.reconnectCount = 0
+            server.fd_hook         = hook
+            server.connected       = True
+            server.connecting      = False
+            server.reconnect_count = 0
 
             server_buffer_prnt(server, "Connected")
 
@@ -792,6 +792,8 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
 
 def reconnect(server):
     # type: (MatrixServer) -> None
+    # TODO this needs some more work, do we want a reconnecting flag?
+    server.connecting = True
     timeout = server.reconnect_count * 5 * 1000
 
     if timeout > 0:
@@ -834,18 +836,18 @@ def connect(server):
     if not server.server_buffer:
         create_server_buffer(server)
 
-    server.timer_hook = W.hook_timer(
-        1 * 1000,
-        0,
-        0,
-        "matrix_timer_cb",
-        server.name
-    )
+    if not server.timer_hook:
+        server.timer_hook = W.hook_timer(
+            1 * 1000,
+            0,
+            0,
+            "matrix_timer_cb",
+            server.name
+        )
 
     W.hook_connect("", server.address, server.port, 1, 0, "",
                    "connect_cb", server.name)
 
-    server.connecting = True
     return W.WEECHAT_RC_OK
 
 
@@ -853,6 +855,13 @@ def connect(server):
 def room_input_cb(server_name, buffer, input_data):
     server = SERVERS[server_name]
 
+    if not server.connected:
+        message = "{prefix}you are not connected to the server".format(
+            prefix=W.prefix("error"))
+        W.prnt(buffer, message)
+        return W.WEECHAT_RC_ERROR
+
+    # TODO put this in a function
     room_id = list(server.buffers.keys())[list(server.buffers.values()).index(buffer)]
     body = {"msgtype": "m.text", "body": input_data}
     message = generate_matrix_request(server, MessageType.POST_MSG,
@@ -1001,19 +1010,31 @@ def matrix_unload_cb():
     return W.WEECHAT_RC_OK
 
 
+def check_server_existence(server_name, servers):
+        if not server_name in servers:
+            message = "{prefix}matrix: No such server: {server} found".format(
+                prefix=W.prefix("error"), server=server_name)
+            W.prnt("", message)
+            return False
+        else:
+            return True
+
+
 @utf8_decode
 def matrix_server_command_cb(data, buffer, args):
-    def connect_server(servers):
-        # TODO check if the server exists
-        for server_name in servers:
-            server = SERVERS[server_name]
-            connect(server)
+    def connect_server(args):
+        for server_name in args:
+            if check_server_existence(server_name, SERVERS):
+                server = SERVERS[server_name]
+                connect(server)
 
-    def disconnect_server(servers):
-        # TODO check if the server exists
-        for server_name in servers:
-            server = SERVERS[server_name]
-            disconnect(server)
+    def disconnect_server(args):
+        for server_name in args:
+            if check_server_existence(server_name, SERVERS):
+                server = SERVERS[server_name]
+                W.unhook(server.timer_hook)
+                server.timer_hook = None
+                disconnect(server)
 
     def list_servers():
         if SERVERS:
@@ -1028,9 +1049,39 @@ def matrix_server_command_cb(data, buffer, args):
     def list_full_servers(servers):
         W.prnt("", "\nCommand not implemented")
 
+    def delete_server(args):
+        for server_name in args:
+            if check_server_existence(server_name, SERVERS):
+                server = SERVERS[server_name]
+
+                if server.connected:
+                    message = ("{prefix}matrix: you can not delete server "
+                               "\"{server}\" because you are connected to it. "
+                               "Try \"/matrix disconnect {server}\" "
+                               "before.").format(prefix=W.prefix("error"),
+                                                 server=server.name)
+                    W.prnt("", message)
+                    return
+
+                for buf in server.buffers.values():
+                    W.buffer_close(buf)
+
+                W.buffer_close(server.server_buffer)
+
+                for option in server.options.values():
+                    W.config_option_free(option)
+
+                message = "matrix: server {server} has been deleted".format(
+                    server=server.name)
+
+                del SERVERS[server.name]
+                server = None
+
+                W.prnt("", message)
+
     # TODO
-    def delete_server(servers):
-        W.prnt("", "\nCommand not implemented")
+    def add_server(args):
+        pass
 
     split_args = args.split(' ', 2)
 
@@ -1051,11 +1102,17 @@ def matrix_server_command_cb(data, buffer, args):
 
         if subcommand == 'list':
             list_servers()
+
         if subcommand == 'listfull':
             list_full_servers(args)
+
         elif subcommand == 'add':
             # TODO allow setting the address and port
             SERVERS[args[0]] = MatrixServer(args[0], CONFIG)
+
+        elif subcommand == 'delete':
+            delete_server(args)
+
         else:
             print("Unknown subcommand")
     else:
@@ -1179,7 +1236,6 @@ if __name__ == "__main__":
 
         init_hooks()
 
-        # TODO this can't be here
         if not SERVERS:
             create_default_server(CONFIG)
 
