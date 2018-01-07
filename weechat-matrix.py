@@ -101,7 +101,12 @@ class WeechatWrapper(object):
     # first, we want to disable the prefix, which is done by specifying a space.
     def prnt_date_tags(self, buffer, date, tags, message):
         message = message.replace("\n", "\n \t")
-        return self.wrap_for_utf8(self.wrapped_class.prnt_date_tags)(buffer, date, tags, message)
+        return self.wrap_for_utf8(self.wrapped_class.prnt_date_tags)(
+            buffer,
+            date,
+            tags,
+            message
+        )
 
 
 @unique
@@ -140,9 +145,14 @@ class RequestBuilder:
         if data:
             json_data     = json.dumps(data, separators=(',', ':'))
 
-            post          = 'POST {location} HTTP/1.1'.format(location=location)
+            post          = 'POST {location} HTTP/1.1'.format(
+                location=location
+            )
+
             type_header   = 'Content-Type: application/x-www-form-urlencoded'
-            length_header = 'Content-Length: {length}'.format(length=len(json_data))
+            length_header = 'Content-Length: {length}'.format(
+                length=len(json_data)
+            )
 
             request_list  = [post, self.host_header,
                              self.user_agent, accept_header,
@@ -301,7 +311,10 @@ class MatrixServer:
         options = [
             option(
                 'autoconnect', 'boolean', '', 0, 0, 'off',
-                "Automatically connect to the matrix server when Weechat is starting"
+                (
+                    "Automatically connect to the matrix server when Weechat "
+                    "is starting"
+                )
             ),
             option(
                 'address', 'string', '', 0, 0, '',
@@ -522,11 +535,11 @@ def handle_room_info(server, room_info):
                     handle_text_message(room_id, event)
                 # TODO handle different content types here
                 else:
-                    server_buffer_prnt(
-                        server,
-                        "Handling of content type {type} not implemented".format(
-                            type=event['content']['type'])
-                    )
+                    message = (
+                        "Handling of content type {type} not implemented"
+                    ).format(type=event['content']['type'])
+
+                    server_buffer_prnt(server, message)
 
 
 def handle_matrix_message(server, message_type, response):
@@ -725,11 +738,10 @@ def create_server_buffer(server):
 # socket creation
 @utf8_decode
 def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-branches
     status_value = int(status)  # type: long
     server = SERVERS[data]
 
-    # pylint: disable=too-many-branches
     if status_value == W.WEECHAT_HOOK_CONNECT_OK:
         file_descriptor = int(sock)  # type: int
         sock = wrap_socket(server, file_descriptor)
@@ -902,7 +914,8 @@ def matrix_timer_cb(server_name, remaining_calls):
             "Handling message: {message}".format(message=message))
 
     # TODO don't send this out here, if a SYNC fails for some reason (504 try
-    # again!) we'll hammer the server unnecessarily
+    # again!) we'll hammer the server unnecessarily, send it out after a
+    # successful sync or after a 504 sync with a proper timeout
     if server.next_batch:
         message = generate_matrix_request(server, MessageType.SYNC)
         server.send_queue.append(message)
@@ -994,8 +1007,7 @@ def read_matrix_config():
         return False
     elif return_code == weechat.WEECHAT_CONFIG_READ_FILE_NOT_FOUND:
         return True
-    else:
-        return False
+    return False
 
 
 @utf8_decode
@@ -1011,13 +1023,12 @@ def matrix_unload_cb():
 
 
 def check_server_existence(server_name, servers):
-        if not server_name in servers:
-            message = "{prefix}matrix: No such server: {server} found".format(
-                prefix=W.prefix("error"), server=server_name)
-            W.prnt("", message)
-            return False
-        else:
-            return True
+    if server_name not in servers:
+        message = "{prefix}matrix: No such server: {server} found".format(
+            prefix=W.prefix("error"), server=server_name)
+        W.prnt("", message)
+        return False
+    return True
 
 
 @utf8_decode
@@ -1039,7 +1050,7 @@ def matrix_server_command_cb(data, buffer, args):
     def list_servers():
         if SERVERS:
             W.prnt("", "\nAll matrix servers:")
-            for server in SERVERS.keys():
+            for server in SERVERS:
                 W.prnt("", "    {color}{server}".format(
                     color=W.color("yellow"),
                     server=server
@@ -1122,7 +1133,7 @@ def matrix_server_command_cb(data, buffer, args):
 
 
 def add_servers_to_completion(completion):
-    for server_name in SERVERS.keys():
+    for server_name in SERVERS:
         W.hook_completion_list_add(
             completion,
             server_name,
@@ -1159,7 +1170,7 @@ def server_command_completion_cb(data, completion_item, buffer, completion):
 
     elif len(args) == 3:
         if args[1] == 'delete' or args[1] == 'listfull':
-            if args[2] not in SERVERS.keys():
+            if args[2] not in SERVERS:
                 add_servers_to_completion(completion)
 
     return W.WEECHAT_RC_OK
@@ -1181,34 +1192,46 @@ def create_default_server(config_file):
 
 def init_hooks():
     W.hook_completion(
-        "matrix_server_commands", "Matrix server completion",
-        "server_command_completion_cb", "")
+        "matrix_server_commands",
+        "Matrix server completion",
+        "server_command_completion_cb",
+        ""
+    )
 
     W.hook_completion(
-        "matrix_servers", "Matrix server completion",
-        "matrix_server_completion_cb", "")
+        "matrix_servers",
+        "Matrix server completion",
+        "matrix_server_completion_cb",
+        ""
+    )
 
     W.hook_command(
         # Command name and short description
         'matrix', 'Matrix chat protocol command',
         # Synopsis
-        'server add <server-name> <hostname>[:<port>] ||' +
-        'server delete|list|listfull <server-name> ||' +
-        'server rename <server-name> <new-name> ||' +
-        'connect <server-name> ||' +
-        'disconnect <server-name> ||' +
-        'reconnect <server-name>',
+        (
+            'server add <server-name> <hostname>[:<port>] ||'
+            'server delete|list|listfull <server-name> ||'
+            'server rename <server-name> <new-name> ||'
+            'connect <server-name> ||'
+            'disconnect <server-name> ||'
+            'reconnect <server-name>'
+        ),
         # Description
-        '    server: list, add, remove, or rename Matrix servers' + '\n' +
-        '   connect: connect to Matrix servers' + '\n' +
-        'disconnect: disconnect from one or all Matrix servers' + '\n' +
-        ' reconnect: reconnect to server(s)' + '\n' +
-        '\nUse /matrix help [command] to find out more\n',
+        (
+            '    server: list, add, remove, or rename Matrix servers\n'
+            '   connect: connect to Matrix servers\n'
+            'disconnect: disconnect from one or all Matrix servers\n'
+            ' reconnect: reconnect to server(s)\n\n'
+            'Use /matrix help [command] to find out more\n'
+        ),
         # Completions
-        'server %(matrix_server_commands)|%* ||' +
-        'connect %(matrix_servers) ||' +
-        'disconnect %(matrix_servers) ||' +
-        'reconnect %(matrix_servers)',
+        (
+            'server %(matrix_server_commands)|%* ||'
+            'connect %(matrix_servers) ||'
+            'disconnect %(matrix_servers) ||'
+            'reconnect %(matrix_servers)'
+        ),
         # Function name
         'matrix_server_command_cb', '')
 
