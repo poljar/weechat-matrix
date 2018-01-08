@@ -1031,8 +1031,212 @@ def check_server_existence(server_name, servers):
     return True
 
 
+def matrix_server_command(command, args):
+    def weechat_server_color():
+        option = weechat.config_get("weechat.color.chat_server")
+        color = W.config_color(option)
+        return W.color(color)
+
+    def list_servers(args):
+        if SERVERS:
+            W.prnt("", "\nAll matrix servers:")
+            for server in SERVERS:
+                W.prnt("", "    {color}{server}".format(
+                    color=weechat_server_color(),
+                    server=server
+                ))
+
+    # TODO
+    def list_full_servers(args):
+        W.prnt("", "\nCommand not implemented")
+
+    def delete_server(args):
+        for server_name in args:
+            if check_server_existence(server_name, SERVERS):
+                server = SERVERS[server_name]
+
+                if server.connected:
+                    message = ("{prefix}matrix: you can not delete server "
+                               "{color}{server}{ncolor} because you are "
+                               "connected to it. Try \"/matrix disconnect "
+                               "{color}{server}{ncolor}\" before.").format(
+                                   prefix=W.prefix("error"),
+                                   color=weechat_server_color(),
+                                   ncolor=W.color("chat"),
+                                   server=server.name)
+                    W.prnt("", message)
+                    return
+
+                for buf in server.buffers.values():
+                    W.buffer_close(buf)
+
+                if server.server_buffer:
+                    W.buffer_close(server.server_buffer)
+
+                for option in server.options.values():
+                    W.config_option_free(option)
+
+                message = ("matrix: server {color}{server}{ncolor} has been "
+                           "deleted").format(
+                               server=server.name,
+                               color=weechat_server_color(),
+                               ncolor=W.color("chat"))
+
+                del SERVERS[server.name]
+                server = None
+
+                W.prnt("", message)
+
+    def add_server(args):
+        if len(args) < 2:
+            message = ("{prefix}matrix: Too few arguments for command "
+                       "\"/matrix server add\" (see the help for the command: "
+                       "/matrix help server").format(prefix=W.prefix("error"))
+            W.prnt("", message)
+            return
+        elif len(args) > 4:
+            message = ("{prefix}matrix: Too many arguments for command "
+                       "\"/matrix server add\" (see the help for the command: "
+                       "/matrix help server").format(prefix=W.prefix("error"))
+            W.prnt("", message)
+            return
+
+        def remove_server(server):
+            for option in server.options.values():
+                W.config_option_free(option)
+            del SERVERS[server.name]
+
+        server_name = args[0]
+
+        if server_name in SERVERS:
+            message = ("{prefix}matrix: server {color}{server}{ncolor} "
+                       "already exists, can't add it").format(
+                           prefix=W.prefix("error"),
+                           color=weechat_server_color(),
+                           server=server_name,
+                           ncolor=W.color("chat"))
+            W.prnt("", message)
+            return
+
+        server = MatrixServer(args[0], CONFIG)
+        SERVERS[server.name] = server
+
+        if len(args) >= 2:
+            try:
+                host, port = args[1].split(":", 1)
+            except ValueError:
+                host, port = args[1], None
+
+            return_code = W.config_option_set(
+                server.options["address"],
+                host,
+                1
+            )
+
+            if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
+                remove_server(server)
+                message = ("{prefix}Failed to set address for server "
+                           "{color}{server}{ncolor}, failed to add "
+                           "server.").format(
+                               prefix=W.prefix("error"),
+                               color=weechat_server_color(),
+                               server=server.name,
+                               ncolor=W.color("chat"))
+
+                W.prnt("", message)
+                server = None
+                return
+
+            if port:
+                return_code = W.config_option_set(
+                    server.options["port"],
+                    port,
+                    1
+                )
+                if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
+                    remove_server(server)
+                    message = ("{prefix}Failed to set port for server "
+                               "{color}{server}{ncolor}, failed to add "
+                               "server.").format(
+                                   prefix=W.prefix("error"),
+                                   color=weechat_server_color(),
+                                   server=server.name,
+                                   ncolor=W.color("chat"))
+
+                    W.prnt("", message)
+                    server = None
+                    return
+
+        if len(args) >= 3:
+            user = args[2]
+            return_code = W.config_option_set(
+                server.options["username"],
+                user,
+                1
+            )
+
+            if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
+                remove_server(server)
+                message = ("{prefix}Failed to set user for server "
+                           "{color}{server}{ncolor}, failed to add "
+                           "server.").format(
+                               prefix=W.prefix("error"),
+                               color=weechat_server_color(),
+                               server=server.name,
+                               ncolor=W.color("chat"))
+
+                W.prnt("", message)
+                server = None
+                return
+
+        if len(args) == 4:
+            password = args[3]
+
+            return_code = W.config_option_set(
+                server.options["password"],
+                password,
+                1
+            )
+            if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
+                remove_server(server)
+                message = ("{prefix}Failed to set password for server "
+                           "{color}{server}{ncolor}, failed to add "
+                           "server.").format(
+                               prefix=W.prefix("error"),
+                               color=weechat_server_color(),
+                               server=server.name,
+                               ncolor=W.color("chat"))
+                W.prnt("", message)
+                server = None
+                return
+
+        message = ("matrix: server {color}{server}{ncolor} "
+                   "has been added").format(
+                       server=server.name,
+                       color=weechat_server_color(),
+                       ncolor=W.color("chat"))
+        W.prnt("", message)
+
+    # TODO the argument for list and listfull is used as a match word to
+    # find/filter servers, we're currently match exactly to the whole name
+    if command == 'list':
+        list_servers(args)
+
+    elif command == 'listfull':
+        list_full_servers(args)
+
+    elif command == 'add':
+        add_server(args)
+
+    elif command == 'delete':
+        delete_server(args)
+
+    else:
+        print("Unknown server command")
+
+
 @utf8_decode
-def matrix_server_command_cb(data, buffer, args):
+def matrix_command_cb(data, buffer, args):
     def connect_server(args):
         for server_name in args:
             if check_server_existence(server_name, SERVERS):
@@ -1047,58 +1251,15 @@ def matrix_server_command_cb(data, buffer, args):
                 server.timer_hook = None
                 disconnect(server)
 
-    def list_servers():
-        if SERVERS:
-            W.prnt("", "\nAll matrix servers:")
-            for server in SERVERS:
-                W.prnt("", "    {color}{server}".format(
-                    color=W.color("yellow"),
-                    server=server
-                ))
-
-    # TODO
-    def list_full_servers(servers):
-        W.prnt("", "\nCommand not implemented")
-
-    def delete_server(args):
-        for server_name in args:
-            if check_server_existence(server_name, SERVERS):
-                server = SERVERS[server_name]
-
-                if server.connected:
-                    message = ("{prefix}matrix: you can not delete server "
-                               "\"{server}\" because you are connected to it. "
-                               "Try \"/matrix disconnect {server}\" "
-                               "before.").format(prefix=W.prefix("error"),
-                                                 server=server.name)
-                    W.prnt("", message)
-                    return
-
-                for buf in server.buffers.values():
-                    W.buffer_close(buf)
-
-                W.buffer_close(server.server_buffer)
-
-                for option in server.options.values():
-                    W.config_option_free(option)
-
-                message = "matrix: server {server} has been deleted".format(
-                    server=server.name)
-
-                del SERVERS[server.name]
-                server = None
-
-                W.prnt("", message)
-
-    # TODO
-    def add_server(args):
-        pass
-
-    split_args = args.split(' ', 2)
+    split_args = args.split(' ')
 
     command, args = split_args[0], split_args[1:]
 
-    if command == 'connect':
+    if not command:
+        # TODO print out error
+        return W.WEECHAT_RC_ERROR
+
+    elif command == 'connect':
         connect_server(args)
 
     elif command == 'disconnect':
@@ -1109,23 +1270,10 @@ def matrix_server_command_cb(data, buffer, args):
         connect_server(args)
 
     elif command == 'server':
-        subcommand, args = args[0], args[1:]
+        if len(args) >= 1:
+            subcommand, args = args[0], args[1:]
+            matrix_server_command(subcommand, args)
 
-        if subcommand == 'list':
-            list_servers()
-
-        if subcommand == 'listfull':
-            list_full_servers(args)
-
-        elif subcommand == 'add':
-            # TODO allow setting the address and port
-            SERVERS[args[0]] = MatrixServer(args[0], CONFIG)
-
-        elif subcommand == 'delete':
-            delete_server(args)
-
-        else:
-            print("Unknown subcommand")
     else:
         print("Unknown command")
 
@@ -1147,7 +1295,7 @@ def server_command_completion_cb(data, completion_item, buffer, completion):
     buffer_input = weechat.buffer_get_string(buffer, "input").split()
 
     args = buffer_input[1:]
-    commands = ['add', 'delete', 'list', 'listfull', 'rename']
+    commands = ['add', 'delete', 'list', 'listfull']
 
     def complete_commands():
         for command in commands:
@@ -1185,6 +1333,7 @@ def create_default_server(config_file):
     server = MatrixServer('matrix.org', config_file)
     SERVERS[server.name] = server
 
+    # TODO set this to matrix.org
     W.config_option_set(server.options["address"], "localhost", 1)
 
     return True
@@ -1212,14 +1361,13 @@ def init_hooks():
         (
             'server add <server-name> <hostname>[:<port>] ||'
             'server delete|list|listfull <server-name> ||'
-            'server rename <server-name> <new-name> ||'
             'connect <server-name> ||'
             'disconnect <server-name> ||'
             'reconnect <server-name>'
         ),
         # Description
         (
-            '    server: list, add, remove, or rename Matrix servers\n'
+            '    server: list, add, or remove Matrix servers\n'
             '   connect: connect to Matrix servers\n'
             'disconnect: disconnect from one or all Matrix servers\n'
             ' reconnect: reconnect to server(s)\n\n'
@@ -1233,7 +1381,7 @@ def init_hooks():
             'reconnect %(matrix_servers)'
         ),
         # Function name
-        'matrix_server_command_cb', '')
+        'matrix_command_cb', '')
 
 
 def autoconnect(servers):
