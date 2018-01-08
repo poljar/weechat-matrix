@@ -1037,6 +1037,19 @@ def matrix_server_command(command, args):
         color = W.config_color(option)
         return W.color(color)
 
+    def get_value_string(value, default_value):
+        if value == default_value:
+            if not value:
+                value = "''"
+            value_string = "  ({value})".format(value=value)
+        else:
+            value_string = "{color}{value}{ncolor}".format(
+                color=W.color("chat_value"),
+                value=value,
+                ncolor=W.color("reset"))
+
+        return value_string
+
     def list_servers(args):
         if SERVERS:
             W.prnt("", "\nAll matrix servers:")
@@ -1046,9 +1059,81 @@ def matrix_server_command(command, args):
                     server=server
                 ))
 
-    # TODO
     def list_full_servers(args):
-        W.prnt("", "\nCommand not implemented")
+        for server_name in args:
+            if server_name not in SERVERS:
+                continue
+
+            server = SERVERS[server_name]
+            connected = ""
+
+            W.prnt("", "")
+
+            option = weechat.config_get("weechat.color.chat_delimiters")
+            delimiter_color = W.color(W.config_color(option))
+
+            if server.connected:
+                connected = "connected"
+            else:
+                connected = "not connected"
+
+            message = ("Server: {server_color}{server}{delimiter_color}"
+                       " [{ncolor}{connected}{delimiter_color}]"
+                       "{ncolor}").format(
+                           server_color=weechat_server_color(),
+                           server=server.name,
+                           delimiter_color=delimiter_color,
+                           connected=connected,
+                           ncolor=W.color("chat"))
+
+            W.prnt("", message)
+
+            option = server.options["autoconnect"]
+            default_value = W.config_string_default(option)
+            value = W.config_string(option)
+
+            value_string = get_value_string(value, default_value)
+            message = "  autoconnect. : {value}".format(value=value_string)
+
+            W.prnt("", message)
+
+            option = server.options["address"]
+            default_value = W.config_string_default(option)
+            value = W.config_string(option)
+
+            value_string = get_value_string(value, default_value)
+            message = "  address. . . : {value}".format(value=value_string)
+
+            W.prnt("", message)
+
+            option = server.options["port"]
+            default_value = str(W.config_integer_default(option))
+            value = str(W.config_integer(option))
+
+            value_string = get_value_string(value, default_value)
+            message = "  port . . . . : {value}".format(value=value_string)
+
+            W.prnt("", message)
+
+            option = server.options["username"]
+            default_value = W.config_string_default(option)
+            value = W.config_string(option)
+
+            value_string = get_value_string(value, default_value)
+            message = "  username . . : {value}".format(value=value_string)
+
+            W.prnt("", message)
+
+            option = server.options["password"]
+            value = W.config_string(option)
+
+            if value:
+                value = "(hidden)"
+
+            value_string = get_value_string(value, '')
+            message = "  password . . : {value}".format(value=value_string)
+
+            W.prnt("", message)
 
     def delete_server(args):
         for server_name in args:
@@ -1251,7 +1336,7 @@ def matrix_command_cb(data, buffer, args):
                 server.timer_hook = None
                 disconnect(server)
 
-    split_args = args.split(' ')
+    split_args = list(filter(bool, args.split(' ')))
 
     command, args = split_args[0], split_args[1:]
 
@@ -1273,6 +1358,8 @@ def matrix_command_cb(data, buffer, args):
         if len(args) >= 1:
             subcommand, args = args[0], args[1:]
             matrix_server_command(subcommand, args)
+        else:
+            matrix_server_command("list", "")
 
     else:
         print("Unknown command")
