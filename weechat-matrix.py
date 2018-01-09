@@ -121,19 +121,29 @@ class RequestType(Enum):
     DELETE = 3
 
 
-class RequestBuilder:
-    # TODO put the user agent somewhere globally
-    def __init__(self, host, user_agent='weechat-matrix/0.1'):
-        # type: (unicode, unicode) -> None
-        self.host = host
+class HttpResponse:
+    def __init__(self, status, headers, body):
+        self.status  = status   # type: int
+        self.headers = headers  # type: Dict[unicode, unicode]
+        self.body    = body     # type: bytes
 
-        self.host_header = 'Host: {host}'.format(host=host)
-        self.user_agent  = 'User-Agent: {agent}'.format(agent=user_agent)
 
-    # TODO we need to handle PUT as well
-    def request(self, location, data=None):
-        # type: (unicode, Dict[Any, Any]) -> (HttpRequest)
+class HttpRequest:
+    def __init__(
+            self,
+            host,
+            port,
+            location,
+            data=None,
+            user_agent='weechat-matrix/{version}'.format(
+                version=WEECHAT_SCRIPT_VERSION)
+    ):
+        # type: (unicode, int, unicode, Dict[Any, Any]) -> None
+        # TODO we need to handle PUT as well
+        host_string   = ':'.join([host, str(port)])
 
+        user_agent    = 'User-Agent: {agent}'.format(agent=user_agent)
+        host_header   = 'Host: {host}'.format(host=host_string)
         request_list  = []             # type: List[unicode]
         accept_header = 'Accept: */*'  # type: unicode
         end_separator = '\r\n'         # type: unicode
@@ -151,30 +161,17 @@ class RequestBuilder:
                 length=len(json_data)
             )
 
-            request_list  = [post, self.host_header,
-                             self.user_agent, accept_header,
+            request_list  = [post, host_header,
+                             user_agent, accept_header,
                              length_header, type_header, end_separator]
             payload       = json_data
         else:
             get = 'GET {location} HTTP/1.1'.format(location=location)
-            request_list  = [get, self.host_header,
-                             self.user_agent, accept_header, end_separator]
+            request_list  = [get, host_header,
+                             user_agent, accept_header, end_separator]
 
         request = '\r\n'.join(request_list)
 
-        return HttpRequest(request, payload)
-
-
-class HttpResponse:
-    def __init__(self, status, headers, body):
-        self.status  = status   # type: int
-        self.headers = headers  # type: Dict[unicode, unicode]
-        self.body    = body     # type: bytes
-
-
-class HttpRequest:
-    def __init__(self, request, payload):
-        # type: (unicode, unicode) -> None
         self.request = request
         self.payload = payload
 
@@ -268,11 +265,6 @@ class MatrixServer:
 
         self.access_token    = None                          # type: unicode
         self.next_batch      = None                          # type: unicode
-
-        # TODO this should be made stateless
-        host_string = ':'.join([self.address,
-                                str(self.port)])         # type: unicode
-        self.builder     = RequestBuilder(host_string)   # type: RequestBuilder
 
         self.http_parser = HttpParser()                  # type: HttpParser
         self.http_buffer = []                            # type: List[bytes]
@@ -575,7 +567,7 @@ def generate_matrix_request(server, message_type, room_id=None, data=None):
                      "user": server.user,
                      "password": server.password}
 
-        request = server.builder.request(path, post_data)
+        request = HttpRequest(server.address, server.port, path, post_data)
 
         return MatrixMessage(MessageType.LOGIN, request, None)
 
@@ -587,13 +579,13 @@ def generate_matrix_request(server, message_type, room_id=None, data=None):
             path = path + '&since={next_batch}'.format(
                 next_batch=server.next_batch)
 
-        request = server.builder.request(path)
+        request = HttpRequest(server.address, server.port, path)
 
         return MatrixMessage(MessageType.SYNC, request, None)
 
     elif message_type == MessageType.POST_MSG:
         path = '/_matrix/client/r0/rooms/{room}/send/m.room.message?access_token={access_token}'.format(room=room_id, access_token=server.access_token)
-        request = server.builder.request(path, data)
+        request = HttpRequest(server.address, server.port, path, data)
 
         return MatrixMessage(MessageType.POST_MSG, request, None)
 
