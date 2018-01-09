@@ -46,8 +46,7 @@ def encode_to_utf8(data):
         return type(data)(map(encode_to_utf8, data.iteritems()))
     elif isinstance(data, Iterable):
         return type(data)(map(encode_to_utf8, data))
-    else:
-        return data
+    return data
 
 
 def decode_from_utf8(data):
@@ -59,18 +58,17 @@ def decode_from_utf8(data):
         return type(data)(map(decode_from_utf8, data.iteritems()))
     elif isinstance(data, Iterable):
         return type(data)(map(decode_from_utf8, data))
-    else:
-        return data
+    return data
 
 
-def utf8_decode(f):
+def utf8_decode(function):
     """
     Decode all arguments from byte strings to unicode strings. Use this for
     functions called from outside of this script, e.g. callbacks from weechat.
     """
-    @wraps(f)
+    @wraps(function)
     def wrapper(*args, **kwargs):
-        return f(*decode_from_utf8(args), **decode_from_utf8(kwargs))
+        return function(*decode_from_utf8(args), **decode_from_utf8(kwargs))
     return wrapper
 
 
@@ -94,8 +92,7 @@ class WeechatWrapper(object):
         orig_attr = self.wrapped_class.__getattribute__(attr)
         if callable(orig_attr):
             return self.wrap_for_utf8(orig_attr)
-        else:
-            return decode_from_utf8(orig_attr)
+        return decode_from_utf8(orig_attr)
 
     # Ensure all lines sent to weechat specify a prefix. For lines after the
     # first, we want to disable the prefix, which is done by specifying a space.
@@ -739,7 +736,7 @@ def create_server_buffer(server):
 @utf8_decode
 def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
     # pylint: disable=too-many-arguments,too-many-branches
-    status_value = int(status)  # type: long
+    status_value = int(status)  # type: int
     server = SERVERS[data]
 
     if status_value == W.WEECHAT_HOOK_CONNECT_OK:
@@ -1031,12 +1028,100 @@ def check_server_existence(server_name, servers):
     return True
 
 
-def matrix_server_command(command, args):
-    def weechat_server_color():
-        option = weechat.config_get("weechat.color.chat_server")
-        color = W.config_color(option)
-        return W.color(color)
+def matrix_command_help(args):
+    for command in args:
+        message = ""
 
+        if command == "connect":
+            message = ("{delimiter_color}[{ncolor}matrix{delimiter_color}]  "
+                       "{ncolor}{cmd_color}/connect{ncolor} "
+                       "<server-name> [<server-name>...]"
+                       "\n\n"
+                       "connect to Matrix server(s)"
+                       "\n\n"
+                       "server-name: server to connect to"
+                       "(internal name)").format(
+                           delimiter_color=W.color("chat_delimiters"),
+                           cmd_color=W.color("chat_buffer"),
+                           ncolor=W.color("reset"))
+
+        elif command == "disconnect":
+            message = ("{delimiter_color}[{ncolor}matrix{delimiter_color}]  "
+                       "{ncolor}{cmd_color}/disconnect{ncolor} "
+                       "<server-name> [<server-name>...]"
+                       "\n\n"
+                       "disconnect from Matrix server(s)"
+                       "\n\n"
+                       "server-name: server to disconnect"
+                       "(internal name)").format(
+                           delimiter_color=W.color("chat_delimiters"),
+                           cmd_color=W.color("chat_buffer"),
+                           ncolor=W.color("reset"))
+
+        elif command == "reconnect":
+            message = ("{delimiter_color}[{ncolor}matrix{delimiter_color}]  "
+                       "{ncolor}{cmd_color}/reconnect{ncolor} "
+                       "<server-name> [<server-name>...]"
+                       "\n\n"
+                       "reconnect to Matrix server(s)"
+                       "\n\n"
+                       "server-name: server to reconnect"
+                       "(internal name)").format(
+                           delimiter_color=W.color("chat_delimiters"),
+                           cmd_color=W.color("chat_buffer"),
+                           ncolor=W.color("reset"))
+
+        elif command == "server":
+            message = ("{delimiter_color}[{ncolor}matrix{delimiter_color}]  "
+                       "{ncolor}{cmd_color}/server{ncolor} "
+                       "add <server-name> <hostname>[:<port>]"
+                       "\n                  "
+                       "delete|list|listfull <server-name>"
+                       "\n\n"
+                       "list, add, or remove Matrix servers"
+                       "\n\n"
+                       "       list: list servers (without argument, this "
+                       "list is displayed)\n"
+                       "   listfull: list servers with detailed info for each "
+                       "server\n"
+                       "        add: add a new server\n"
+                       "     delete: delete a server\n"
+                       "server-name: server to reconnect (internal name)\n"
+                       "   hostname: name or IP address of server\n"
+                       "       port: port of server (default: 8448)\n"
+                       "\n"
+                       "Examples:"
+                       "\n  /server listfull"
+                       "\n  /server add matrix matrix.org:80"
+                       "\n  /server del matrix").format(
+                           delimiter_color=W.color("chat_delimiters"),
+                           cmd_color=W.color("chat_buffer"),
+                           ncolor=W.color("reset"))
+
+        elif command == "help":
+            message = ("{delimiter_color}[{ncolor}matrix{delimiter_color}]  "
+                       "{ncolor}{cmd_color}/help{ncolor} "
+                       "<matrix-command> [<matrix-command>...]"
+                       "\n\n"
+                       "display help about Matrix commands"
+                       "\n\n"
+                       "matrix-command: a Matrix command name"
+                       "(internal name)").format(
+                           delimiter_color=W.color("chat_delimiters"),
+                           cmd_color=W.color("chat_buffer"),
+                           ncolor=W.color("reset"))
+
+        else:
+            message = ("{prefix}matrix: No help available, \"{command}\" "
+                       "is not a matrix command").format(
+                           prefix=W.prefix("error"),
+                           command=command)
+
+        W.prnt("", "")
+        W.prnt("", message)
+
+
+def matrix_server_command(command, args):
     def get_value_string(value, default_value):
         if value == default_value:
             if not value:
@@ -1055,7 +1140,7 @@ def matrix_server_command(command, args):
             W.prnt("", "\nAll matrix servers:")
             for server in SERVERS:
                 W.prnt("", "    {color}{server}".format(
-                    color=weechat_server_color(),
+                    color=W.color("chat_server"),
                     server=server
                 ))
 
@@ -1069,9 +1154,6 @@ def matrix_server_command(command, args):
 
             W.prnt("", "")
 
-            option = weechat.config_get("weechat.color.chat_delimiters")
-            delimiter_color = W.color(W.config_color(option))
-
             if server.connected:
                 connected = "connected"
             else:
@@ -1080,11 +1162,11 @@ def matrix_server_command(command, args):
             message = ("Server: {server_color}{server}{delimiter_color}"
                        " [{ncolor}{connected}{delimiter_color}]"
                        "{ncolor}").format(
-                           server_color=weechat_server_color(),
+                           server_color=W.color("chat_server"),
                            server=server.name,
-                           delimiter_color=delimiter_color,
+                           delimiter_color=W.color("chat_delimiters"),
                            connected=connected,
-                           ncolor=W.color("chat"))
+                           ncolor=W.color("reset"))
 
             W.prnt("", message)
 
@@ -1146,8 +1228,8 @@ def matrix_server_command(command, args):
                                "connected to it. Try \"/matrix disconnect "
                                "{color}{server}{ncolor}\" before.").format(
                                    prefix=W.prefix("error"),
-                                   color=weechat_server_color(),
-                                   ncolor=W.color("chat"),
+                                   color=W.color("chat_server"),
+                                   ncolor=W.color("reset"),
                                    server=server.name)
                     W.prnt("", message)
                     return
@@ -1164,8 +1246,8 @@ def matrix_server_command(command, args):
                 message = ("matrix: server {color}{server}{ncolor} has been "
                            "deleted").format(
                                server=server.name,
-                               color=weechat_server_color(),
-                               ncolor=W.color("chat"))
+                               color=W.color("chat_server"),
+                               ncolor=W.color("reset"))
 
                 del SERVERS[server.name]
                 server = None
@@ -1197,9 +1279,9 @@ def matrix_server_command(command, args):
             message = ("{prefix}matrix: server {color}{server}{ncolor} "
                        "already exists, can't add it").format(
                            prefix=W.prefix("error"),
-                           color=weechat_server_color(),
+                           color=W.color("chat_server"),
                            server=server_name,
-                           ncolor=W.color("chat"))
+                           ncolor=W.color("reset"))
             W.prnt("", message)
             return
 
@@ -1224,9 +1306,9 @@ def matrix_server_command(command, args):
                            "{color}{server}{ncolor}, failed to add "
                            "server.").format(
                                prefix=W.prefix("error"),
-                               color=weechat_server_color(),
+                               color=W.color("chat_server"),
                                server=server.name,
-                               ncolor=W.color("chat"))
+                               ncolor=W.color("reset"))
 
                 W.prnt("", message)
                 server = None
@@ -1244,9 +1326,9 @@ def matrix_server_command(command, args):
                                "{color}{server}{ncolor}, failed to add "
                                "server.").format(
                                    prefix=W.prefix("error"),
-                                   color=weechat_server_color(),
+                                   color=W.color("chat_server"),
                                    server=server.name,
-                                   ncolor=W.color("chat"))
+                                   ncolor=W.color("reset"))
 
                     W.prnt("", message)
                     server = None
@@ -1266,9 +1348,9 @@ def matrix_server_command(command, args):
                            "{color}{server}{ncolor}, failed to add "
                            "server.").format(
                                prefix=W.prefix("error"),
-                               color=weechat_server_color(),
+                               color=W.color("chat_server"),
                                server=server.name,
-                               ncolor=W.color("chat"))
+                               ncolor=W.color("reset"))
 
                 W.prnt("", message)
                 server = None
@@ -1288,9 +1370,9 @@ def matrix_server_command(command, args):
                            "{color}{server}{ncolor}, failed to add "
                            "server.").format(
                                prefix=W.prefix("error"),
-                               color=weechat_server_color(),
+                               color=W.color("chat_server"),
                                server=server.name,
-                               ncolor=W.color("chat"))
+                               ncolor=W.color("reset"))
                 W.prnt("", message)
                 server = None
                 return
@@ -1298,8 +1380,8 @@ def matrix_server_command(command, args):
         message = ("matrix: server {color}{server}{ncolor} "
                    "has been added").format(
                        server=server.name,
-                       color=weechat_server_color(),
-                       ncolor=W.color("chat"))
+                       color=W.color("chat_server"),
+                       ncolor=W.color("reset"))
         W.prnt("", message)
 
     # TODO the argument for list and listfull is used as a match word to
@@ -1361,6 +1443,9 @@ def matrix_command_cb(data, buffer, args):
         else:
             matrix_server_command("list", "")
 
+    elif command == 'help':
+        matrix_command_help(args)
+
     else:
         print("Unknown command")
 
@@ -1411,8 +1496,20 @@ def server_command_completion_cb(data, completion_item, buffer, completion):
     return W.WEECHAT_RC_OK
 
 
+@utf8_decode
 def matrix_server_completion_cb(data, completion_item, buffer, completion):
     add_servers_to_completion(completion)
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_command_completion_cb(data, completion_item, buffer, completion):
+    for command in ["connect", "disconnect", "reconnect", "server", "help"]:
+        W.hook_completion_list_add(
+            completion,
+            command,
+            0,
+            weechat.WEECHAT_LIST_POS_SORT)
     return W.WEECHAT_RC_OK
 
 
@@ -1441,6 +1538,13 @@ def init_hooks():
         ""
     )
 
+    W.hook_completion(
+        "matrix_commands",
+        "Matrix command completion",
+        "matrix_command_completion_cb",
+        ""
+    )
+
     W.hook_command(
         # Command name and short description
         'matrix', 'Matrix chat protocol command',
@@ -1450,7 +1554,8 @@ def init_hooks():
             'server delete|list|listfull <server-name> ||'
             'connect <server-name> ||'
             'disconnect <server-name> ||'
-            'reconnect <server-name>'
+            'reconnect <server-name> ||'
+            'help <matrix-command>'
         ),
         # Description
         (
@@ -1458,6 +1563,7 @@ def init_hooks():
             '   connect: connect to Matrix servers\n'
             'disconnect: disconnect from one or all Matrix servers\n'
             ' reconnect: reconnect to server(s)\n\n'
+            '      help: show detailed command help\n\n'
             'Use /matrix help [command] to find out more\n'
         ),
         # Completions
@@ -1465,7 +1571,8 @@ def init_hooks():
             'server %(matrix_server_commands)|%* ||'
             'connect %(matrix_servers) ||'
             'disconnect %(matrix_servers) ||'
-            'reconnect %(matrix_servers)'
+            'reconnect %(matrix_servers) ||'
+            'help %(matrix_commands)'
         ),
         # Function name
         'matrix_command_cb', '')
