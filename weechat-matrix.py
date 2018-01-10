@@ -138,7 +138,7 @@ class HttpRequest:
             user_agent='weechat-matrix/{version}'.format(
                 version=WEECHAT_SCRIPT_VERSION)
     ):
-        # type: (unicode, int, unicode, Dict[Any, Any]) -> None
+        # type: (unicode, int, unicode, Dict[unicode, Any], unicode) -> None
         # TODO we need to handle PUT as well
         host_string   = ':'.join([host, str(port)])
 
@@ -200,6 +200,11 @@ class MatrixRoom:
         self.join_rule = join_rule  # type: unicode
 
 
+def key_from_value(dictionary, value):
+    # type: (Dict[unicode, Any], Any) -> unicode
+    return list(dictionary.keys())[list(dictionary.values()).index(value)]
+
+
 @utf8_decode
 def server_config_change_cb(server_name, option):
     server = SERVERS[server_name]
@@ -208,15 +213,7 @@ def server_config_change_cb(server_name, option):
     # The function config_option_get_string() is used to get differing
     # properties from a config option, sadly it's only available in the plugin
     # API of weechat.
-    # TODO we already have a function to get a key from a value out of a dict
-    for name, server_option in server.options.items():
-        if server_option == option:
-            option_name = name
-            break
-
-    if not option_name:
-        # TODO print error here, can this happen?
-        return 0
+    option_name = key_from_value(server.options, option)
 
     if option_name == "address":
         value = W.config_string(option)
@@ -376,7 +373,7 @@ def handle_http_response(server, message):
     if status_code == 200:
         # TODO json.loads can fail
         response = json.loads(message.response.body, encoding='utf-8')
-        handle_matrix_message(server, message.type, response)
+        matrix_handle_message(server, message.type, response)
     else:
         server_buffer_prnt(
             server,
@@ -389,150 +386,185 @@ def handle_http_response(server, message):
     return
 
 
-def handle_room_info(server, room_info):
-    # type: (MatrixServer, Dict) -> None
-    def create_buffer(roomd_id, alias=None):
-        if not alias:
-            alias = "#{id}".format(id=room_id)
+def strip_matrix_server(string):
+    # type: (unicode) -> unicode
+    return string.rsplit(":", 1)[0]
 
-        buf = W.buffer_new(
-            alias,
-            "room_input_cb",
-            server.name,
-            "room_close_cb",
-            server.name
-        )
 
-        # TODO set the buffer type dynamically
-        W.buffer_set(buf, "localvar_set_type", 'channel')
-        W.buffer_set(buf, "type", 'formated')
-        W.buffer_set(buf, "localvar_set_channel", alias)
+def matrix_create_room_buffer(server, room_id):
+    # type: (MatrixServer, unicode) -> None
+    buf = W.buffer_new(
+        room_id,
+        "room_input_cb",
+        server.name,
+        "room_close_cb",
+        server.name
+    )
 
-        # TODO set the nick dynamically
-        W.buffer_set(buf, "localvar_set_nick", 'poljar')
+    # TODO set the buffer type dynamically
+    W.buffer_set(buf, "localvar_set_type", 'channel')
+    W.buffer_set(buf, "type", 'formated')
+    W.buffer_set(buf, "localvar_set_channel", room_id)
 
-        W.buffer_set(buf, "localvar_set_server", "matrix.org")
+    W.buffer_set(buf, "localvar_set_nick", server.user)
 
-        # TODO put this in a function
-        short_name = alias.rsplit(":", 1)[0]
-        W.buffer_set(buf, "short_name", short_name)
+    W.buffer_set(buf, "localvar_set_server", server.name)
 
-        server.buffers[room_id] = buf
+    short_name = strip_matrix_server(room_id)
+    W.buffer_set(buf, "short_name", short_name)
 
-    def handle_aliases(room_id, event):
-        if room_id not in server.buffers:
-            alias = event['content']['aliases'][-1]
-            create_buffer(room_id, alias)
+    W.nicklist_add_group(
+        buf,
+        '',
+        NICK_GROUP_HERE,
+        "weechat.color.nicklist_group",
+        1
+    )
 
-    def handle_members(room_id, event):
-        if event['membership'] == 'join':
-            try:
-                buf = server.buffers[room_id]
-            except KeyError:
-                event_queue.append(event)
-                return
+    W.buffer_set(buf, "nicklist", "1")
+    W.buffer_set(buf, "nicklist_display_groups", "0")
 
-            W.buffer_set(buf, "nicklist", "1")
-            W.buffer_set(buf, "nicklist_display_groups", "0")
-            # create nicklists for the current channel if they don't exist
-            # if they do, use the existing pointer
-            # TODO move this into the buffer creation
-            here = W.nicklist_search_group(buf, '', NICK_GROUP_HERE)
-            nick = event['content']['displayname']
-            if not here:
-                here = W.nicklist_add_group(
-                    buf,
-                    '',
-                    NICK_GROUP_HERE,
-                    "weechat.color.nicklist_group",
-                    1
-                )
+    server.buffers[room_id] = buf
 
+
+def matrix_handle_room_aliases(server, room_id, event):
+    # type: (MatrixServer, unicode, Dict[unicode, Any]) -> None
+    buf = server.buffers[room_id]
+
+    alias = event['content']['aliases'][-1]
+
+    if not alias:
+        return
+
+    short_name = strip_matrix_server(alias)
+
+    W.buffer_set(buf, "name", alias)
+    W.buffer_set(buf, "short_name", short_name)
+    W.buffer_set(buf, "localvar_set_channel", alias)
+
+
+def matrix_handle_room_members(server, room_id, event):
+    # type: (MatrixServer, unicode, Dict[unicode, Any]) -> None
+    buf = server.buffers[room_id]
+    here = W.nicklist_search_group(buf, '', NICK_GROUP_HERE)
+
+    if event['membership'] == 'join':
+        # TODO do we wan't to use the displayname here?
+        nick = event['content']['displayname']
+        nick_pointer = W.nicklist_search_nick(buf, "", nick)
+        if not nick_pointer:
             W.nicklist_add_nick(buf, here, nick, "", "", "", 1)
 
-    def handle_room_state(state_events):
-        for event in state_events:
-            if event['type'] == 'm.room.aliases':
-                handle_aliases(room_id, event)
-            elif event['type'] == 'm.room.member':
-                handle_members(room_id, event)
-            elif event['type'] == 'm.room.message':
-                message_queue.append(event)
+    elif event['membership'] == 'leave':
+        nick = event['content']['displayname']
+        nick_pointer = W.nicklist_search_nick(buf, "", nick)
+        if nick_pointer:
+            W.nicklist_remove_nick(buf, nick_pointer)
 
-    def handle_room_timeline(timeline_events):
-        for event in timeline_events:
-            if event['type'] == 'm.room.aliases':
-                handle_aliases(room_id, event)
-            elif event['type'] == 'm.room.member':
-                handle_members(room_id, event)
-            elif event['type'] == 'm.room.message':
-                message_queue.append(event)
 
-    def handle_text_message(room_id, event):
-        msg = event['content']['body']
+def date_from_age(age):
+    # type: (float) -> int
+    now = time.time()
+    date = int(now - (age / 1000))
+    return date
 
-        # TODO put this in a function or lambda
-        msg_author = event['sender'].rsplit(":", 1)[0][1:]
 
-        data = "{author}\t{msg}".format(author=msg_author, msg=msg)
+def matrix_handle_room_text_message(server, room_id, event):
+    # type: (MatrixServer, unicode, Dict[unicode, Any]) -> None
+    msg = event['content']['body']
 
-        event_id = event['event_id']
-        event_id = "matrix_id_{id}".format(id=event_id)
+    msg_author = strip_matrix_server(event['sender'])[1:]
 
-        msg_age = event['unsigned']['age']
-        now = time.time()
-        msg_date = int(now - (msg_age / 1000))
-        buf = server.buffers[room_id]
+    data = "{author}\t{msg}".format(author=msg_author, msg=msg)
 
-        # TODO if this is an initial sync tag the messages as backlog
-        tag = "nick_{a},{event_id},irc_privmsg,notify_message".format(
-            a=msg_author, event_id=event_id)
+    event_id = event['event_id']
+    event_id = "matrix_id_{id}".format(id=event_id)
 
-        W.prnt_date_tags(buf, msg_date, tag, data)
+    msg_date = date_from_age(event['unsigned']['age'])
 
+    # TODO if this is an initial sync tag the messages as backlog
+    tag = "nick_{a},{event_id},irc_privmsg,notify_message".format(
+        a=msg_author, event_id=event_id)
+
+    buf = server.buffers[room_id]
+    W.prnt_date_tags(buf, msg_date, tag, data)
+
+
+def matrix_handle_redacted_message(server, room_id, event):
+    censor = strip_matrix_server(event['unsigned']['redacted_by'])
+    msg = ("(Message redacted by: {censor}{reason}").format(
+        censor=censor,
+        reason=")")
+
+    msg_author = strip_matrix_server(event['sender'])[1:]
+
+    data = "{author}\t{msg}".format(author=msg_author, msg=msg)
+
+    event_id = event['event_id']
+    event_id = "matrix_id_{id}".format(id=event_id)
+
+    msg_date = date_from_age(event['unsigned']['age'])
+
+    tag = ("nick_{a},{event_id},irc_privmsg,matrix_redactedmsg,"
+           "notify_message").format(a=msg_author, event_id=event_id)
+
+    buf = server.buffers[room_id]
+    W.prnt_date_tags(buf, msg_date, tag, data)
+
+
+def matrix_handle_room_messages(server, room_id, event):
+    # type: (MatrixServer, unicode, Dict[unicode, Any]) -> None
+    if event['type'] == 'm.room.message':
+        if 'redacted_by' in event['unsigned']:
+            matrix_handle_redacted_message(server, room_id, event)
+            return
+
+        if event['content']['msgtype'] == 'm.text':
+            matrix_handle_room_text_message(server, room_id, event)
+
+        # TODO handle different content types here
+        else:
+            message = ("{prefix}Handling of content type "
+                       "{type} not implemented").format(
+                           type=event['content']['type'],
+                           prefix=W.prefix("error"))
+            W.prnt(server.server_buffer, message)
+
+def matrix_handle_room_events(server, room_id, room_events):
+    # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
+    for event in room_events:
+        if event['type'] == 'm.room.aliases':
+            matrix_handle_room_aliases(server, room_id, event)
+
+        elif event['type'] == 'm.room.member':
+            matrix_handle_room_members(server, room_id, event)
+
+        elif event['type'] == 'm.room.message':
+            matrix_handle_room_messages(server, room_id, event)
+
+        else:
+            message = ("{prefix}Handling of message type "
+                       "{type} not implemented").format(
+                           type=event['type'],
+                           prefix=W.prefix("error"))
+            W.prnt(server.server_buffer, message)
+
+
+def matrix_handle_room_info(server, room_info):
+    # type: (MatrixServer, Dict) -> None
     for room_id, room in room_info['join'].iteritems():
-        # TODO do we need these queues or can we just rename the buffer if and
-        # when we get an alias dynamically?
-        event_queue   = deque()  # type: Deque[Dict]
-        message_queue = deque()  # type: Deque[Dict]
+        if not room_id:
+            continue
 
-        handle_room_state(room['state']['events'])
-        handle_room_timeline(room['timeline']['events'])
-
-        # The room doesn't have an alias, create it now using the room id
         if room_id not in server.buffers:
-            create_buffer(room_id)
+            matrix_create_room_buffer(server, room_id)
 
-        # TODO we don't need a separate event/message queue here
-        while event_queue:
-            event = event_queue.popleft()
-
-            if event['type'] == 'm.room.member':
-                handle_members(room_id, event)
-            else:
-                assert "Wrong event type in event queue"
-
-        while message_queue:
-            event = message_queue.popleft()
-
-            if event['type'] == 'm.room.message':
-                # TODO print out that there was an redacted message here
-                if 'redacted_by' in event['unsigned']:
-                    continue
-
-                if event['content']['msgtype'] == 'm.text':
-                    handle_text_message(room_id, event)
-                # TODO handle different content types here
-                else:
-                    message = (
-                        "Handling of content type {type} not implemented"
-                    ).format(type=event['content']['type'])
-
-                    server_buffer_prnt(server, message)
+        matrix_handle_room_events(server, room_id, room['state']['events'])
+        matrix_handle_room_events(server, room_id, room['timeline']['events'])
 
 
-def handle_matrix_message(server, message_type, response):
-    # type: (MatrixServer, MessageType, Dict[Any, Any]) -> None
+def matrix_handle_message(server, message_type, response):
+    # type: (MatrixServer, MessageType, Dict[unicode, Any]) -> None
 
     if message_type is MessageType.LOGIN:
         server.access_token = response["access_token"]
@@ -547,7 +579,7 @@ def handle_matrix_message(server, message_type, response):
             return
 
         room_info = response['rooms']
-        handle_room_info(server, room_info)
+        matrix_handle_room_info(server, room_info)
 
         server.next_batch = next_batch
 
@@ -559,21 +591,27 @@ def handle_matrix_message(server, message_type, response):
 
 
 def generate_matrix_request(server, message_type, room_id=None, data=None):
-    # type: (MatrixServer, MessageType, unicode, Dict[Any, Any]) -> MatrixMessage
-    # TODO clean this up
-    if message_type == MessageType.LOGIN:
-        path = '/_matrix/client/r0/login'
-        post_data = {"type": "m.login.password",
-                     "user": server.user,
-                     "password": server.password}
+    # type: (MatrixServer, MessageType, unicode, Dict[unicode, Any]) -> MatrixMessage
 
-        request = HttpRequest(server.address, server.port, path, post_data)
+    if message_type == MessageType.LOGIN:
+        path = ("{api}/login").format(api=MATRIX_API_PATH)
+        request = HttpRequest(server.address, server.port, path, data)
 
         return MatrixMessage(MessageType.LOGIN, request, None)
 
     elif message_type == MessageType.SYNC:
-        path = '/_matrix/client/r0/sync?access_token={access_token}'.format(
-            access_token=server.access_token)
+        # TODO the limit should be configurable matrix.network.sync_limit
+        sync_filter = {
+            "room": {
+                "timeline": {"limit": 1000}
+            }
+        }
+
+        path = ("{api}/sync?access_token={access_token}&"
+                "filter={sync_filter}").format(
+                    api=MATRIX_API_PATH,
+                    access_token=server.access_token,
+                    sync_filter=json.dumps(sync_filter, separators=(',', ':')))
 
         if server.next_batch:
             path = path + '&since={next_batch}'.format(
@@ -584,7 +622,12 @@ def generate_matrix_request(server, message_type, room_id=None, data=None):
         return MatrixMessage(MessageType.SYNC, request, None)
 
     elif message_type == MessageType.POST_MSG:
-        path = '/_matrix/client/r0/rooms/{room}/send/m.room.message?access_token={access_token}'.format(room=room_id, access_token=server.access_token)
+        path = ("{api}/rooms/{room}/send/m.room.message?"
+                "access_token={access_token}").format(
+                    api=MATRIX_API_PATH,
+                    room=room_id,
+                    access_token=server.access_token)
+
         request = HttpRequest(server.address, server.port, path, data)
 
         return MatrixMessage(MessageType.POST_MSG, request, None)
@@ -596,7 +639,15 @@ def generate_matrix_request(server, message_type, room_id=None, data=None):
 
 def matrix_login(server):
     # type: (MatrixServer) -> None
-    message = generate_matrix_request(server, MessageType.LOGIN)
+    post_data = {"type": "m.login.password",
+                 "user": server.user,
+                 "password": server.password}
+
+    message = generate_matrix_request(
+        server,
+        MessageType.LOGIN,
+        data=post_data
+    )
     send_or_queue(server, message)
 
 
@@ -712,9 +763,8 @@ def create_server_buffer(server):
         ""
     )
 
-    # TODO the nick and server name should be dynamic
     W.buffer_set(server.server_buffer, "localvar_set_type", 'server')
-    W.buffer_set(server.server_buffer, "localvar_set_nick", 'poljar')
+    W.buffer_set(server.server_buffer, "localvar_set_nick", server.user)
     W.buffer_set(server.server_buffer, "localvar_set_server", server.name)
     W.buffer_set(server.server_buffer, "localvar_set_channel", server.name)
 
@@ -862,9 +912,9 @@ def room_input_cb(server_name, buffer, input_data):
         W.prnt(buffer, message)
         return W.WEECHAT_RC_ERROR
 
-    # TODO put this in a function
-    room_id = list(server.buffers.keys())[list(server.buffers.values()).index(buffer)]
+    room_id = key_from_value(server.buffers, buffer)
     body = {"msgtype": "m.text", "body": input_data}
+
     message = generate_matrix_request(server, MessageType.POST_MSG,
                                       data=body, room_id=room_id)
     send_or_queue(server, message)
