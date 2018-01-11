@@ -177,11 +177,47 @@ class HttpRequest:
 
 
 class MatrixMessage:
-    def __init__(self, messageType, request, response):
-        # type: (MessageType, HttpRequest, HttpResponse) -> None
-        self.type     = messageType
-        self.request  = request
-        self.response = response
+    def __init__(self, server, message_type, room_id=None, data=None,
+                 extra_data=None):
+        # type: (MatrixServer, MessageType, unicode, Dict[unicode, Any], Dict[unicode, Any]) -> None
+        self.type       = message_type  # MessageType
+        self.request    = None          # HttpRequest
+        self.response   = None          # HttpRequest
+        self.extra_data = extra_data    # Dict[unicode, Any]
+
+        if message_type == MessageType.LOGIN:
+            path = ("{api}/login").format(api=MATRIX_API_PATH)
+            self.request = HttpRequest(server.address, server.port, path, data)
+
+        elif message_type == MessageType.SYNC:
+            # TODO the limit should be configurable matrix.network.sync_limit
+            sync_filter = {
+                "room": {
+                    "timeline": {"limit": 1000}
+                }
+            }
+
+            path = ("{api}/sync?access_token={access_token}&"
+                    "filter={sync_filter}").format(
+                        api=MATRIX_API_PATH,
+                        access_token=server.access_token,
+                        sync_filter=json.dumps(sync_filter,
+                                               separators=(',', ':')))
+
+            if server.next_batch:
+                path = path + '&since={next_batch}'.format(
+                    next_batch=server.next_batch)
+
+            self.request = HttpRequest(server.address, server.port, path)
+
+        elif message_type == MessageType.POST_MSG:
+            path = ("{api}/rooms/{room}/send/m.room.message?"
+                    "access_token={access_token}").format(
+                        api=MATRIX_API_PATH,
+                        room=room_id,
+                        access_token=server.access_token)
+
+            self.request = HttpRequest(server.address, server.port, path, data)
 
 
 class Matrix:
@@ -195,8 +231,8 @@ class Matrix:
 class MatrixRoom:
     def __init__(self, room_id, join_rule, alias=None):
         # type: (unicode, unicode, unicode) -> None
-        self.room_id = room_id      # type: unicode
-        self.alias   = alias        # type: unicode
+        self.room_id   = room_id    # type: unicode
+        self.alias     = alias      # type: unicode
         self.join_rule = join_rule  # type: unicode
 
 
@@ -267,10 +303,11 @@ class MatrixServer:
         self.http_buffer = []                            # type: List[bytes]
 
         # Queue of messages we need to send off.
-        self.send_queue = deque()  # type: Deque[MatrixMessage]
+        self.send_queue    = deque()  # type: Deque[MatrixMessage]
         # Queue of messages we send off and are waiting a response for
         self.receive_queue = deque()  # type: Deque[MatrixMessage]
         self.message_queue = deque()  # type: Deque[MatrixMessage]
+        self.ignore_event_list = []   # type: List[unicode]
 
         self._create_options(config_file)
 
@@ -373,7 +410,7 @@ def handle_http_response(server, message):
     if status_code == 200:
         # TODO json.loads can fail
         response = json.loads(message.response.body, encoding='utf-8')
-        matrix_handle_message(server, message.type, response)
+        matrix_handle_message(server, message.type, response, message.extra_data)
     else:
         server_buffer_prnt(
             server,
@@ -478,12 +515,11 @@ def matrix_handle_room_text_message(server, room_id, event):
     data = "{author}\t{msg}".format(author=msg_author, msg=msg)
 
     event_id = event['event_id']
-    event_id = "matrix_id_{id}".format(id=event_id)
 
     msg_date = date_from_age(event['unsigned']['age'])
 
     # TODO if this is an initial sync tag the messages as backlog
-    tag = "nick_{a},{event_id},irc_privmsg,notify_message".format(
+    tag = "nick_{a},matrix_id_{event_id},irc_privmsg,notify_message".format(
         a=msg_author, event_id=event_id)
 
     buf = server.buffers[room_id]
@@ -491,7 +527,9 @@ def matrix_handle_room_text_message(server, room_id, event):
 
 
 def matrix_handle_redacted_message(server, room_id, event):
-    censor = strip_matrix_server(event['unsigned']['redacted_by'])
+    censor = strip_matrix_server(
+        event['unsigned']['redacted_because']['sender']
+    )[1:]
     msg = ("(Message redacted by: {censor}{reason}").format(
         censor=censor,
         reason=")")
@@ -501,11 +539,10 @@ def matrix_handle_redacted_message(server, room_id, event):
     data = "{author}\t{msg}".format(author=msg_author, msg=msg)
 
     event_id = event['event_id']
-    event_id = "matrix_id_{id}".format(id=event_id)
 
     msg_date = date_from_age(event['unsigned']['age'])
 
-    tag = ("nick_{a},{event_id},irc_privmsg,matrix_redactedmsg,"
+    tag = ("nick_{a},matrix_id_{event_id},irc_privmsg,matrix_redacted_msg,"
            "notify_message").format(a=msg_author, event_id=event_id)
 
     buf = server.buffers[room_id]
@@ -533,6 +570,10 @@ def matrix_handle_room_messages(server, room_id, event):
 def matrix_handle_room_events(server, room_id, room_events):
     # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
     for event in room_events:
+        if event['event_id'] in server.ignore_event_list:
+            server.ignore_event_list.remove(event['event_id'])
+            continue
+
         if event['type'] == 'm.room.aliases':
             matrix_handle_room_aliases(server, room_id, event)
 
@@ -563,12 +604,12 @@ def matrix_handle_room_info(server, room_info):
         matrix_handle_room_events(server, room_id, room['timeline']['events'])
 
 
-def matrix_handle_message(server, message_type, response):
-    # type: (MatrixServer, MessageType, Dict[unicode, Any]) -> None
+def matrix_handle_message(server, message_type, response, extra_data):
+    # type: (MatrixServer, MessageType, Dict[unicode, Any], Dict[unicode, Any]) -> None
 
     if message_type is MessageType.LOGIN:
         server.access_token = response["access_token"]
-        message = generate_matrix_request(server, MessageType.SYNC)
+        message = MatrixMessage(server, MessageType.SYNC)
         send_or_queue(server, message)
 
     elif message_type is MessageType.SYNC:
@@ -583,58 +624,30 @@ def matrix_handle_message(server, message_type, response):
 
         server.next_batch = next_batch
 
+    elif message_type is MessageType.POST_MSG:
+        author   = extra_data["author"]
+        message  = extra_data["message"]
+        room_id  = extra_data["room_id"]
+        date     = int(time.time())
+        event_id = response["event_id"]
+
+        # This message will be part of the next sync, we already printed it out
+        # so ignore it in the sync.
+        server.ignore_event_list.append(event_id)
+
+        tag = "nick_{a},matrix_id_{event_id},irc_privmsg".format(
+            a=author, event_id=event_id)
+
+        data = "{author}\t{msg}".format(author=author, msg=message)
+
+        buf = server.buffers[room_id]
+        W.prnt_date_tags(buf, date, tag, data)
+
     else:
         server_buffer_prnt(
             server,
             "Handling of message type {type} not implemented".format(
                 type=message_type))
-
-
-def generate_matrix_request(server, message_type, room_id=None, data=None):
-    # type: (MatrixServer, MessageType, unicode, Dict[unicode, Any]) -> MatrixMessage
-
-    if message_type == MessageType.LOGIN:
-        path = ("{api}/login").format(api=MATRIX_API_PATH)
-        request = HttpRequest(server.address, server.port, path, data)
-
-        return MatrixMessage(MessageType.LOGIN, request, None)
-
-    elif message_type == MessageType.SYNC:
-        # TODO the limit should be configurable matrix.network.sync_limit
-        sync_filter = {
-            "room": {
-                "timeline": {"limit": 1000}
-            }
-        }
-
-        path = ("{api}/sync?access_token={access_token}&"
-                "filter={sync_filter}").format(
-                    api=MATRIX_API_PATH,
-                    access_token=server.access_token,
-                    sync_filter=json.dumps(sync_filter, separators=(',', ':')))
-
-        if server.next_batch:
-            path = path + '&since={next_batch}'.format(
-                next_batch=server.next_batch)
-
-        request = HttpRequest(server.address, server.port, path)
-
-        return MatrixMessage(MessageType.SYNC, request, None)
-
-    elif message_type == MessageType.POST_MSG:
-        path = ("{api}/rooms/{room}/send/m.room.message?"
-                "access_token={access_token}").format(
-                    api=MATRIX_API_PATH,
-                    room=room_id,
-                    access_token=server.access_token)
-
-        request = HttpRequest(server.address, server.port, path, data)
-
-        return MatrixMessage(MessageType.POST_MSG, request, None)
-
-    else:
-        assert "Incorrect message type"
-        return None
 
 
 def matrix_login(server):
@@ -643,7 +656,7 @@ def matrix_login(server):
                  "user": server.user,
                  "password": server.password}
 
-    message = generate_matrix_request(
+    message = MatrixMessage(
         server,
         MessageType.LOGIN,
         data=post_data
@@ -914,9 +927,16 @@ def room_input_cb(server_name, buffer, input_data):
 
     room_id = key_from_value(server.buffers, buffer)
     body = {"msgtype": "m.text", "body": input_data}
+    extra_data = {
+        "author": server.user,
+        "message": input_data,
+        "room_id": room_id
+    }
 
-    message = generate_matrix_request(server, MessageType.POST_MSG,
-                                      data=body, room_id=room_id)
+    message = MatrixMessage(server, MessageType.POST_MSG,
+                            data=body, room_id=room_id,
+                            extra_data=extra_data)
+
     send_or_queue(server, message)
     return W.WEECHAT_RC_OK
 
@@ -956,7 +976,7 @@ def matrix_timer_cb(server_name, remaining_calls):
     # again!) we'll hammer the server unnecessarily, send it out after a
     # successful sync or after a 504 sync with a proper timeout
     if server.next_batch:
-        message = generate_matrix_request(server, MessageType.SYNC)
+        message = MatrixMessage(server, MessageType.SYNC)
         server.send_queue.append(message)
 
     return W.WEECHAT_RC_OK
