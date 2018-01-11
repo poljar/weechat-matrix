@@ -6,6 +6,7 @@ import json
 import socket
 import ssl
 import time
+import datetime
 
 # pylint: disable=redefined-builtin
 from builtins import bytes
@@ -110,7 +111,8 @@ class WeechatWrapper(object):
 class MessageType(Enum):
     LOGIN    = 0
     SYNC     = 1
-    POST_MSG = 2
+    SEND     = 2
+    STATE    = 3
 
 
 @unique
@@ -118,7 +120,6 @@ class RequestType(Enum):
     GET    = 0
     POST   = 1
     PUT    = 2
-    DELETE = 3
 
 
 class HttpResponse:
@@ -131,6 +132,7 @@ class HttpResponse:
 class HttpRequest:
     def __init__(
             self,
+            request_type,
             host,
             port,
             location,
@@ -138,7 +140,7 @@ class HttpRequest:
             user_agent='weechat-matrix/{version}'.format(
                 version=WEECHAT_SCRIPT_VERSION)
     ):
-        # type: (unicode, int, unicode, Dict[unicode, Any], unicode) -> None
+        # type: (RequestType, unicode, int, unicode, Dict[unicode, Any], unicode) -> None
         # TODO we need to handle PUT as well
         host_string   = ':'.join([host, str(port)])
 
@@ -149,10 +151,23 @@ class HttpRequest:
         end_separator = '\r\n'         # type: unicode
         payload       = None           # type: unicode
 
-        if data:
+        if request_type == RequestType.GET:
+            get = 'GET {location} HTTP/1.1'.format(location=location)
+            request_list  = [get, host_header,
+                             user_agent, accept_header, end_separator]
+
+        elif (request_type == RequestType.POST or
+              request_type == RequestType.PUT):
+
             json_data     = json.dumps(data, separators=(',', ':'))
 
-            post          = 'POST {location} HTTP/1.1'.format(
+            if request_type == RequestType.POST:
+                method = "POST"
+            else:
+                method = "PUT"
+
+            request_line = '{method} {location} HTTP/1.1'.format(
+                method=method,
                 location=location
             )
 
@@ -161,14 +176,10 @@ class HttpRequest:
                 length=len(json_data)
             )
 
-            request_list  = [post, host_header,
+            request_list  = [request_line, host_header,
                              user_agent, accept_header,
                              length_header, type_header, end_separator]
             payload       = json_data
-        else:
-            get = 'GET {location} HTTP/1.1'.format(location=location)
-            request_list  = [get, host_header,
-                             user_agent, accept_header, end_separator]
 
         request = '\r\n'.join(request_list)
 
@@ -177,17 +188,30 @@ class HttpRequest:
 
 
 class MatrixMessage:
-    def __init__(self, server, message_type, room_id=None, data=None,
-                 extra_data=None):
-        # type: (MatrixServer, MessageType, unicode, Dict[unicode, Any], Dict[unicode, Any]) -> None
+    def __init__(
+            self,
+            server,           # type: MatrixServer
+            message_type,     # type: MessageType
+            room_id=None,     # type: unicode
+            event_type=None,  # type: unicode
+            data=None,        # type: Dict[unicode, Any]
+            extra_data=None   # type: Dict[unicode, Any]
+    ):
+        # type: (...) -> None
         self.type       = message_type  # MessageType
         self.request    = None          # HttpRequest
-        self.response   = None          # HttpRequest
+        self.response   = None          # HttpResponse
         self.extra_data = extra_data    # Dict[unicode, Any]
 
         if message_type == MessageType.LOGIN:
             path = ("{api}/login").format(api=MATRIX_API_PATH)
-            self.request = HttpRequest(server.address, server.port, path, data)
+            self.request = HttpRequest(
+                RequestType.POST,
+                server.address,
+                server.port,
+                path,
+                data
+            )
 
         elif message_type == MessageType.SYNC:
             # TODO the limit should be configurable matrix.network.sync_limit
@@ -208,32 +232,54 @@ class MatrixMessage:
                 path = path + '&since={next_batch}'.format(
                     next_batch=server.next_batch)
 
-            self.request = HttpRequest(server.address, server.port, path)
+            self.request = HttpRequest(
+                RequestType.GET,
+                server.address,
+                server.port,
+                path
+            )
 
-        elif message_type == MessageType.POST_MSG:
+        elif message_type == MessageType.SEND:
             path = ("{api}/rooms/{room}/send/m.room.message?"
                     "access_token={access_token}").format(
                         api=MATRIX_API_PATH,
                         room=room_id,
                         access_token=server.access_token)
 
-            self.request = HttpRequest(server.address, server.port, path, data)
+            self.request = HttpRequest(
+                RequestType.POST,
+                server.address,
+                server.port,
+                path,
+                data
+            )
 
+        elif message_type == MessageType.STATE:
+            path = ("{api}/rooms/{room}/state/{event_type}?"
+                    "access_token={access_token}").format(
+                        api=MATRIX_API_PATH,
+                        room=room_id,
+                        event_type=event_type,
+                        access_token=server.access_token)
 
-class Matrix:
-    def __init__(self):
-        # type: () -> None
-        self.access_token = ""   # type: unicode
-        self.next_batch = ""     # type: unicode
-        self.rooms = {}          # type: Dict[unicode, MatrixRoom]
+            self.request = HttpRequest(
+                RequestType.PUT,
+                server.address,
+                server.port,
+                path,
+                data
+            )
+
 
 
 class MatrixRoom:
-    def __init__(self, room_id, join_rule, alias=None):
-        # type: (unicode, unicode, unicode) -> None
-        self.room_id   = room_id    # type: unicode
-        self.alias     = alias      # type: unicode
-        self.join_rule = join_rule  # type: unicode
+    def __init__(self, room_id):
+        # type: (unicode) -> None
+        self.room_id      = room_id    # type: unicode
+        self.alias        = room_id    # type: unicode
+        self.topic        = ""         # type: unicode
+        self.topic_author = ""         # type: unicode
+        self.topic_date   = None       # type: datetime.datetime
 
 
 def key_from_value(dictionary, value):
@@ -284,10 +330,12 @@ class MatrixServer:
         self.user            = ""       # type: unicode
         self.password        = ""       # type: unicode
 
+        self.rooms           = dict()   # type: Dict[unicode, MatrixRoom]
         self.buffers         = dict()   # type: Dict[unicode, weechat.buffer]
         self.server_buffer   = None     # type: weechat.buffer
         self.fd_hook         = None     # type: weechat.hook
         self.timer_hook      = None     # type: weechat.hook
+        self.numeric_address = ""       # type: unicode
 
         self.autoconnect     = False                         # type: bool
         self.connected       = False                         # type: bool
@@ -403,6 +451,8 @@ def wrap_socket(server, file_descriptor):
 def handle_http_response(server, message):
     # type: (MatrixServer, MatrixMessage) -> None
 
+    assert message.response
+
     status_code = message.response.status
 
     # TODO handle error responses
@@ -462,11 +512,13 @@ def matrix_create_room_buffer(server, room_id):
     W.buffer_set(buf, "nicklist_display_groups", "0")
 
     server.buffers[room_id] = buf
+    server.rooms[room_id] = MatrixRoom(room_id)
 
 
 def matrix_handle_room_aliases(server, room_id, event):
     # type: (MatrixServer, unicode, Dict[unicode, Any]) -> None
     buf = server.buffers[room_id]
+    room = server.rooms[room_id]
 
     alias = event['content']['aliases'][-1]
 
@@ -475,6 +527,7 @@ def matrix_handle_room_aliases(server, room_id, event):
 
     short_name = strip_matrix_server(alias)
 
+    room.alias = alias
     W.buffer_set(buf, "name", alias)
     W.buffer_set(buf, "short_name", short_name)
     W.buffer_set(buf, "localvar_set_channel", alias)
@@ -563,9 +616,10 @@ def matrix_handle_room_messages(server, room_id, event):
         else:
             message = ("{prefix}Handling of content type "
                        "{type} not implemented").format(
-                           type=event['content']['type'],
+                           type=event['content']['msgtype'],
                            prefix=W.prefix("error"))
             W.prnt(server.server_buffer, message)
+
 
 def matrix_handle_room_events(server, room_id, room_events):
     # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
@@ -582,6 +636,36 @@ def matrix_handle_room_events(server, room_id, room_events):
 
         elif event['type'] == 'm.room.message':
             matrix_handle_room_messages(server, room_id, event)
+
+        elif event['type'] == 'm.room.topic':
+            buf = server.buffers[room_id]
+            room = server.rooms[room_id]
+            topic = event['content']['topic']
+
+            room.topic = topic
+            room.topic_author = event['sender']
+
+            topic_age = event['unsigned']['age']
+            # TODO put the age calculation in a function
+            room.topic_date = datetime.datetime.fromtimestamp(
+                time.time() - (topic_age / 1000))
+
+            W.buffer_set(buf, "title", topic)
+
+            # TODO nick and topic color
+            # TODO print old topic if configured so
+            # TODO nick display name if configured so and found
+            message = ("{prefix}{nick} has changed the topic for {room} to "
+                       "\"{topic}\"").format(
+                           prefix=W.prefix("network"),
+                           nick=room.topic_author,
+                           room=room.alias,
+                           topic=topic)
+
+            tags = "matrix_topic,log3"
+            date = int(time.time())
+
+            W.prnt_date_tags(buf, date, tags, message)
 
         else:
             message = ("{prefix}Handling of message type "
@@ -624,7 +708,7 @@ def matrix_handle_message(server, message_type, response, extra_data):
 
         server.next_batch = next_batch
 
-    elif message_type is MessageType.POST_MSG:
+    elif message_type is MessageType.SEND:
         author   = extra_data["author"]
         message  = extra_data["message"]
         room_id  = extra_data["room_id"]
@@ -642,6 +726,10 @@ def matrix_handle_message(server, message_type, response, extra_data):
 
         buf = server.buffers[room_id]
         W.prnt_date_tags(buf, date, tag, data)
+
+    # Nothing to do here, we'll handle state changes in the sync
+    elif message_type == MessageType.STATE:
+        pass
 
     else:
         server_buffer_prnt(
@@ -766,6 +854,21 @@ def server_buffer_prnt(server, string):
     W.prnt_date_tags(buffer, now, "", string)
 
 
+def server_buffer_set_title(server):
+    # type: (MatrixServer) -> None
+    if server.numeric_address:
+        ip_string = " ({address})".format(address=server.numeric_address)
+    else:
+        ip_string = ""
+
+    title = ("Matrix: {address}/{port}{ip}").format(
+        address=server.address,
+        port=server.port,
+        ip=ip_string)
+
+    W.buffer_set(server.server_buffer, "title", title)
+
+
 def create_server_buffer(server):
     # type: (MatrixServer) -> None
     server.server_buffer = W.buffer_new(
@@ -776,6 +879,7 @@ def create_server_buffer(server):
         ""
     )
 
+    server_buffer_set_title(server)
     W.buffer_set(server.server_buffer, "localvar_set_type", 'server')
     W.buffer_set(server.server_buffer, "localvar_set_nick", server.user)
     W.buffer_set(server.server_buffer, "localvar_set_server", server.name)
@@ -811,7 +915,9 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
             server.connected       = True
             server.connecting      = False
             server.reconnect_count = 0
+            server.numeric_address = ip_address
 
+            server_buffer_set_title(server)
             server_buffer_prnt(server, "Connected")
 
             if not server.access_token:
@@ -933,7 +1039,7 @@ def room_input_cb(server_name, buffer, input_data):
         "room_id": room_id
     }
 
-    message = MatrixMessage(server, MessageType.POST_MSG,
+    message = MatrixMessage(server, MessageType.SEND,
                             data=body, room_id=room_id,
                             extra_data=extra_data)
 
@@ -1440,7 +1546,7 @@ def matrix_server_command_add(args):
 
 
 def matrix_server_command(command, args):
-    def list_servers(args):
+    def list_servers(_):
         if SERVERS:
             W.prnt("", "\nAll matrix servers:")
             for server in SERVERS:
@@ -1592,6 +1698,71 @@ def create_default_server(config_file):
     return True
 
 
+@utf8_decode
+def matrix_command_topic_cb(data, buffer, command):
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            topic = None
+            room_id = key_from_value(server.buffers, buffer)
+            split_command = command.split(' ', 1)
+
+            if len(split_command) == 2:
+                topic = split_command[1]
+
+            # TODO print out topic in channel
+            if not topic:
+                room = server.rooms[room_id]
+                if room.topic:
+                    message = ("{prefix}Topic for {color}{room}{ncolor} is "
+                               "\"{topic}\"").format(
+                                   prefix=W.prefix("network"),
+                                   color=W.color("chat_buffer"),
+                                   ncolor=W.color("reset"),
+                                   room=room.alias,
+                                   topic=room.topic)
+
+                    date = int(time.time())
+                    topic_date = room.topic_date.strftime("%a, %d %b %Y "
+                                                          "%H:%M:%S")
+
+                    tags = "matrix_topic,log1"
+                    W.prnt_date_tags(buffer, date, tags, message)
+
+                    # TODO the nick should be colored
+                    # TODO we should use the display name as well as
+                    # the user name here
+                    message = ("{prefix}Topic set by {author} on "
+                               "{date}").format(
+                                   prefix=W.prefix("network"),
+                                   author=room.topic_author,
+                                   date=topic_date)
+                    W.prnt_date_tags(buffer, date, tags, message)
+
+                return W.WEECHAT_RC_OK_EAT
+
+            body = {"topic": topic}
+
+            message = MatrixMessage(
+                server,
+                MessageType.STATE,
+                data=body,
+                room_id=room_id,
+                event_type="m.room.topic"
+            )
+            send_or_queue(server, message)
+
+            return W.WEECHAT_RC_OK_EAT
+
+        elif buffer == server.server_buffer:
+            message = ("{prefix}matrix: command \"topic\" must be "
+                       "executed on a Matrix channel buffer").format(
+                           prefix=W.prefix("error"))
+            W.prnt(buffer, message)
+            return W.WEECHAT_RC_OK_EAT
+
+    return W.WEECHAT_RC_OK
+
+
 def init_hooks():
     W.hook_completion(
         "matrix_server_commands",
@@ -1645,6 +1816,8 @@ def init_hooks():
         ),
         # Function name
         'matrix_command_cb', '')
+
+    W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
 
 
 def autoconnect(servers):
