@@ -154,6 +154,9 @@ class PluginOptions:
         self.redaction_type  = RedactType.STRIKETHROUGH     # type: RedactType
         self.look_server_buf = ServerBufferType.MERGE_CORE  # type: ServerBufferType
 
+        self.redaction_comp_len = 50  # type: int
+        self.msg_redact = ""
+
         self.options = dict()  # type: Dict[unicode, weechat.config_option]
 
 
@@ -601,7 +604,7 @@ def matrix_handle_room_text_message(server, room_id, event):
     msg_date = date_from_age(event['unsigned']['age'])
 
     # TODO if this is an initial sync tag the messages as backlog
-    tag = "nick_{a},matrix_id_{event_id},irc_privmsg,notify_message".format(
+    tag = "nick_{a},matrix_id_{event_id},matrix_message,notify_message".format(
         a=msg_author, event_id=event_id)
 
     buf = server.buffers[room_id]
@@ -625,7 +628,7 @@ def matrix_handle_redacted_message(server, room_id, event):
 
     msg_date = date_from_age(event['unsigned']['age'])
 
-    tag = ("nick_{a},matrix_id_{event_id},irc_privmsg,matrix_redacted_msg,"
+    tag = ("nick_{a},matrix_id_{event_id},matrix_message,matrix_redacted,"
            "notify_message").format(a=msg_author, event_id=event_id)
 
     buf = server.buffers[room_id]
@@ -754,7 +757,7 @@ def matrix_handle_message(
         # so ignore it in the sync.
         server.ignore_event_list.append(event_id)
 
-        tag = "nick_{a},matrix_id_{event_id},irc_privmsg".format(
+        tag = "nick_{a},matrix_id_{event_id},matrix_message".format(
             a=author, event_id=event_id)
 
         data = "{author}\t{msg}".format(author=author, msg=message)
@@ -1840,6 +1843,70 @@ def matrix_command_topic_cb(data, buffer, command):
     return W.WEECHAT_RC_OK
 
 
+def matrix_redact_command_cb(data, buffer, args):
+    W.prnt("", args)
+    return W.WEECHAT_RC_OK
+
+
+def matrix_message_completion_cb(data, completion_item, buffer, completion):
+    own_lines = W.hdata_pointer(W.hdata_get('buffer'), buffer, 'own_lines')
+    if own_lines:
+        line = W.hdata_pointer(
+            W.hdata_get('lines'),
+            own_lines,
+            'last_line'
+        )
+
+        line_number = 1
+
+        while line:
+            line_data = W.hdata_pointer(
+                W.hdata_get('line'),
+                line,
+                'data'
+            )
+
+            if line_data:
+                message = W.hdata_string(W.hdata_get('line_data'), line_data,
+                                         'message')
+                tags_count = W.hdata_get_var_array_size(
+                    W.hdata_get('line_data'),
+                    line_data,
+                    'tags_array'
+                )
+
+                tags = [
+                    W.hdata_string(
+                        W.hdata_get('line_data'),
+                        line_data,
+                        '%d|tags_array' % i
+                    ) for i in range(tags_count)]
+
+                # Only add non redacted user messages to the completion
+                if (message
+                        and 'matrix_message' in tags
+                        and 'matrix_redacted' not in tags):
+
+                    if len(message) > GLOBAL_OPTIONS.redaction_comp_len + 2:
+                        message = (
+                            message[:GLOBAL_OPTIONS.redaction_comp_len]
+                            + '..')
+
+                    item = ("{number}:\"{message}\"").format(
+                        number=line_number,
+                        message=message)
+
+                    W.hook_completion_list_add(
+                        completion,
+                        item,
+                        0,
+                        weechat.WEECHAT_LIST_POS_END)
+                    line_number += 1
+
+            line = W.hdata_move(W.hdata_get('line'), line, -1)
+
+    return W.WEECHAT_RC_OK
+
 def init_hooks():
     W.hook_completion(
         "matrix_server_commands",
@@ -1861,6 +1928,14 @@ def init_hooks():
         "matrix_command_completion_cb",
         ""
     )
+
+    W.hook_completion(
+        "matrix_messages",
+        "Matrix message completion",
+        "matrix_message_completion_cb",
+        ""
+    )
+
 
     W.hook_command(
         # Command name and short description
@@ -1893,6 +1968,29 @@ def init_hooks():
         ),
         # Function name
         'matrix_command_cb', '')
+
+    W.hook_command(
+        # Command name and short description
+        'redact', 'redact messages',
+        # Synopsis
+        (
+            '<message-number>[:<"message-part">] [<reason>]'
+        ),
+        # Description
+        (
+            "message-number: number of the message to redact (message numbers"
+            "\n                start from the last recieved as "
+            "1 and count up)\n"
+            "  message-part: a shortened part of the message\n"
+            "        reason: the redaction reason\n"
+        ),
+        # Completions
+        (
+            '%(matrix_messages)'
+        ),
+        # Function name
+        'matrix_redact_command_cb', '')
+
 
     W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
 
