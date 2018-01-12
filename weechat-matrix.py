@@ -1314,6 +1314,13 @@ def check_server_existence(server_name, servers):
 
 
 def matrix_command_help(args):
+    if not args:
+        message = ("{prefix}matrix: Too few arguments for command "
+                   "\"/matrix help\" (see the help for the command: "
+                   "/matrix help help").format(prefix=W.prefix("error"))
+        W.prnt("", message)
+        return
+
     for command in args:
         message = ""
 
@@ -1404,6 +1411,8 @@ def matrix_command_help(args):
 
         W.prnt("", "")
         W.prnt("", message)
+
+        return
 
 
 def matrix_server_command_listfull(args):
@@ -1708,13 +1717,16 @@ def matrix_command_cb(data, buffer, args):
 
     split_args = list(filter(bool, args.split(' ')))
 
-    command, args = split_args[0], split_args[1:]
-
-    if not command:
-        # TODO print out error
+    if len(split_args) < 1:
+        message = ("{prefix}matrix: Too few arguments for command "
+                   "\"/matrix\" (see the help for the command: "
+                   "/help matrix").format(prefix=W.prefix("error"))
+        W.prnt("", message)
         return W.WEECHAT_RC_ERROR
 
-    elif command == 'connect':
+    command, args = split_args[0], split_args[1:]
+
+    if command == 'connect':
         connect_server(args)
 
     elif command == 'disconnect':
@@ -1828,31 +1840,33 @@ def matrix_command_topic_cb(data, buffer, command):
 
             if not topic:
                 room = server.rooms[room_id]
-                if room.topic:
-                    message = ("{prefix}Topic for {color}{room}{ncolor} is "
-                               "\"{topic}\"").format(
-                                   prefix=W.prefix("network"),
-                                   color=W.color("chat_buffer"),
-                                   ncolor=W.color("reset"),
-                                   room=room.alias,
-                                   topic=room.topic)
+                if not room.topic:
+                    return W.WEECHAT_RC_OK
 
-                    date = int(time.time())
-                    topic_date = room.topic_date.strftime("%a, %d %b %Y "
-                                                          "%H:%M:%S")
+                message = ("{prefix}Topic for {color}{room}{ncolor} is "
+                           "\"{topic}\"").format(
+                               prefix=W.prefix("network"),
+                               color=W.color("chat_buffer"),
+                               ncolor=W.color("reset"),
+                               room=room.alias,
+                               topic=room.topic)
 
-                    tags = "matrix_topic,log1"
-                    W.prnt_date_tags(buffer, date, tags, message)
+                date = int(time.time())
+                topic_date = room.topic_date.strftime("%a, %d %b %Y "
+                                                      "%H:%M:%S")
 
-                    # TODO the nick should be colored
-                    # TODO we should use the display name as well as
-                    # the user name here
-                    message = ("{prefix}Topic set by {author} on "
-                               "{date}").format(
-                                   prefix=W.prefix("network"),
-                                   author=room.topic_author,
-                                   date=topic_date)
-                    W.prnt_date_tags(buffer, date, tags, message)
+                tags = "matrix_topic,log1"
+                W.prnt_date_tags(buffer, date, tags, message)
+
+                # TODO the nick should be colored
+                # TODO we should use the display name as well as
+                # the user name here
+                message = ("{prefix}Topic set by {author} on "
+                           "{date}").format(
+                               prefix=W.prefix("network"),
+                               author=room.topic_author,
+                               date=topic_date)
+                W.prnt_date_tags(buffer, date, tags, message)
 
                 return W.WEECHAT_RC_OK_EAT
 
