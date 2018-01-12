@@ -7,6 +7,7 @@ import socket
 import ssl
 import time
 import datetime
+import re
 
 # pylint: disable=redefined-builtin
 from builtins import bytes
@@ -115,6 +116,7 @@ class MessageType(Enum):
     SYNC     = 1
     SEND     = 2
     STATE    = 3
+    REDACT   = 4
 
 
 @unique
@@ -174,7 +176,7 @@ class HttpRequest:
             host,                               # type: unicode
             port,                               # type: int
             location,                           # type: unicode
-            data=None,                          # type: Dict[unicode, any]
+            data=None,                          # type: Dict[unicode, Any]
             user_agent='weechat-matrix/{version}'.format(
                 version=WEECHAT_SCRIPT_VERSION) # type: unicode
     ):
@@ -224,13 +226,20 @@ class HttpRequest:
         self.payload = payload
 
 
+def get_transaction_id(server):
+    # type: (MatrixServer) -> int
+    transaction_id = server.transaction_id
+    server.transaction_id += 1
+    return transaction_id
+
+
 class MatrixMessage:
     def __init__(
             self,
             server,           # type: MatrixServer
             message_type,     # type: MessageType
             room_id=None,     # type: unicode
-            event_type=None,  # type: unicode
+            extra_id=None,  # type: unicode
             data=None,        # type: Dict[unicode, Any]
             extra_data=None   # type: Dict[unicode, Any]
     ):
@@ -296,7 +305,24 @@ class MatrixMessage:
                     "access_token={access_token}").format(
                         api=MATRIX_API_PATH,
                         room=room_id,
-                        event_type=event_type,
+                        event_type=extra_id,
+                        access_token=server.access_token)
+
+            self.request = HttpRequest(
+                RequestType.PUT,
+                server.address,
+                server.port,
+                path,
+                data
+            )
+
+        elif message_type == MessageType.REDACT:
+            path = ("{api}/rooms/{room}/redact/{event_id}/{tx_id}?"
+                    "access_token={access_token}").format(
+                        api=MATRIX_API_PATH,
+                        room=room_id,
+                        event_id=extra_id,
+                        tx_id=get_transaction_id(server),
                         access_token=server.access_token)
 
             self.request = HttpRequest(
@@ -325,7 +351,7 @@ def key_from_value(dictionary, value):
 
 @utf8_decode
 def server_config_change_cb(server_name, option):
-    # type: (unicode, weechat.config_option) -> bool
+    # type: (unicode, weechat.config_option) -> int
     server = SERVERS[server_name]
     option_name = None
 
@@ -383,6 +409,7 @@ class MatrixServer:
 
         self.access_token    = None                          # type: unicode
         self.next_batch      = None                          # type: unicode
+        self.transaction_id  = 0                             # type: int
 
         self.http_parser = HttpParser()                  # type: HttpParser
         self.http_buffer = []                            # type: List[bytes]
@@ -613,12 +640,18 @@ def matrix_handle_room_text_message(server, room_id, event):
 
 def matrix_handle_redacted_message(server, room_id, event):
     # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
+    reason = ">"
     censor = strip_matrix_server(
         event['unsigned']['redacted_because']['sender']
     )[1:]
-    msg = ("(Message redacted by: {censor}{reason}").format(
+
+    if 'reason' in event['unsigned']['redacted_because']['content']:
+        reason = ", reason: \"{reason}\">".format(
+            reason=event['unsigned']['redacted_because']['content']['reason'])
+
+    msg = ("<Message redacted by: {censor}{reason}").format(
         censor=censor,
-        reason=")")
+        reason=reason)
 
     msg_author = strip_matrix_server(event['sender'])[1:]
 
@@ -700,6 +733,9 @@ def matrix_handle_room_events(server, room_id, room_events):
 
             W.prnt_date_tags(buf, date, tags, message)
 
+        elif event['type'] == "m.room.redaction":
+            pass
+
         else:
             message = ("{prefix}Handling of message type "
                        "{type} not implemented").format(
@@ -765,8 +801,9 @@ def matrix_handle_message(
         buf = server.buffers[room_id]
         W.prnt_date_tags(buf, date, tag, data)
 
-    # Nothing to do here, we'll handle state changes in the sync
-    elif message_type == MessageType.STATE:
+    # Nothing to do here, we'll handle state changes and redactions in the sync
+    elif (message_type == MessageType.STATE or
+          message_type == MessageType.REDACT):
         pass
 
     else:
@@ -1827,7 +1864,7 @@ def matrix_command_topic_cb(data, buffer, command):
                 MessageType.STATE,
                 data=body,
                 room_id=room_id,
-                event_type="m.room.topic"
+                extra_id="m.room.topic"
             )
             send_or_queue(server, message)
 
@@ -1843,11 +1880,102 @@ def matrix_command_topic_cb(data, buffer, command):
     return W.WEECHAT_RC_OK
 
 
+def event_id_from_line(buf, target_number):
+    # type: (weechat.buffer, int) -> unicode
+    own_lines = W.hdata_pointer(W.hdata_get('buffer'), buf, 'own_lines')
+    if own_lines:
+        line = W.hdata_pointer(
+            W.hdata_get('lines'),
+            own_lines,
+            'last_line'
+        )
+
+        line_number = 1
+
+        while line:
+            line_data = W.hdata_pointer(
+                W.hdata_get('line'),
+                line,
+                'data'
+            )
+
+            if line_data:
+                tags_count = W.hdata_get_var_array_size(
+                    W.hdata_get('line_data'),
+                    line_data,
+                    'tags_array'
+                )
+
+                tags = [
+                    W.hdata_string(
+                        W.hdata_get('line_data'),
+                        line_data,
+                        '%d|tags_array' % i
+                    ) for i in range(tags_count)]
+
+                # Only count non redacted user messages
+                if ('matrix_message' in tags
+                        and 'matrix_redacted' not in tags):
+
+                    if line_number == target_number:
+                        for tag in tags:
+                            if tag.startswith("matrix_id"):
+                                event_id = tag[10:]
+                                return event_id
+
+                    line_number += 1
+
+            line = W.hdata_move(W.hdata_get('line'), line, -1)
+
+    return ""
+
+
+@utf8_decode
 def matrix_redact_command_cb(data, buffer, args):
-    W.prnt("", args)
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            body = {}
+
+            room_id = key_from_value(server.buffers, buffer)
+
+            matches = re.match(r"(\d+)(:\".*\")? ?(.*)?", args)
+
+            if not matches:
+                return W.WEECHAT_RC_ERROR
+
+            line_string, _, reason = matches.groups()
+            line = int(line_string)
+
+            if reason:
+                body = {"reason": reason}
+
+            event_id = event_id_from_line(buffer, line)
+
+            if not event_id:
+                print("EERRRRRORRRR")
+
+            message = MatrixMessage(
+                server,
+                MessageType.REDACT,
+                data=body,
+                room_id=room_id,
+                extra_id=event_id
+            )
+            send_or_queue(server, message)
+
+            return W.WEECHAT_RC_OK_EAT
+
+        elif buffer == server.server_buffer:
+            message = ("{prefix}matrix: command \"redact\" must be "
+                       "executed on a Matrix channel buffer").format(
+                           prefix=W.prefix("error"))
+            W.prnt(buffer, message)
+            return W.WEECHAT_RC_OK
+
     return W.WEECHAT_RC_OK
 
 
+@utf8_decode
 def matrix_message_completion_cb(data, completion_item, buffer, completion):
     own_lines = W.hdata_pointer(W.hdata_get('buffer'), buffer, 'own_lines')
     if own_lines:
