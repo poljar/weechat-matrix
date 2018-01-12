@@ -31,8 +31,9 @@ WEECHAT_SCRIPT_LICENSE     = "MIT"                                 # type: unico
 
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: unicode
 
-SERVERS = dict()  # type: Dict[unicode, MatrixServer]
-CONFIG  = None    # type: weechat.config
+SERVERS        = dict()  # type: Dict[unicode, MatrixServer]
+CONFIG         = None    # type: weechat.config
+GLOBAL_OPTIONS = None    # type: PluginOptions
 
 NICK_GROUP_HERE = "0|Here"
 
@@ -96,7 +97,8 @@ class WeechatWrapper(object):
         return decode_from_utf8(orig_attr)
 
     # Ensure all lines sent to weechat specify a prefix. For lines after the
-    # first, we want to disable the prefix, which is done by specifying a space.
+    # first, we want to disable the prefix, which is done by specifying a
+    # space.
     def prnt_date_tags(self, buffer, date, tags, message):
         message = message.replace("\n", "\n \t")
         return self.wrap_for_utf8(self.wrapped_class.prnt_date_tags)(
@@ -121,6 +123,39 @@ class RequestType(Enum):
     POST   = 1
     PUT    = 2
 
+@unique
+class RedactType(Enum):
+    STRIKETHROUGH = 0
+    NOTICE        = 1
+    DELETE        = 2
+
+
+@unique
+class ServerBufferType(Enum):
+    MERGE_CORE  = 0
+    MERGE       = 1
+    INDEPENDENT = 2
+
+
+Option = namedtuple(
+    'Option', [
+        'name',
+        'type',
+        'string_values',
+        'min',
+        'max',
+        'value',
+        'description'
+    ])
+
+
+class PluginOptions:
+    def __init__(self):
+        self.redaction_type  = RedactType.STRIKETHROUGH     # type: RedactType
+        self.look_server_buf = ServerBufferType.MERGE_CORE  # type: ServerBufferType
+
+        self.options = dict()  # type: Dict[unicode, weechat.config_option]
+
 
 class HttpResponse:
     def __init__(self, status, headers, body):
@@ -132,16 +167,15 @@ class HttpResponse:
 class HttpRequest:
     def __init__(
             self,
-            request_type,
-            host,
-            port,
-            location,
-            data=None,
+            request_type,                       # type: RequestType
+            host,                               # type: unicode
+            port,                               # type: int
+            location,                           # type: unicode
+            data=None,                          # type: Dict[unicode, any]
             user_agent='weechat-matrix/{version}'.format(
-                version=WEECHAT_SCRIPT_VERSION)
+                version=WEECHAT_SCRIPT_VERSION) # type: unicode
     ):
-        # type: (RequestType, unicode, int, unicode, Dict[unicode, Any], unicode) -> None
-        # TODO we need to handle PUT as well
+        # type: (...) -> None
         host_string   = ':'.join([host, str(port)])
 
         user_agent    = 'User-Agent: {agent}'.format(agent=user_agent)
@@ -271,7 +305,6 @@ class MatrixMessage:
             )
 
 
-
 class MatrixRoom:
     def __init__(self, room_id):
         # type: (unicode) -> None
@@ -289,6 +322,7 @@ def key_from_value(dictionary, value):
 
 @utf8_decode
 def server_config_change_cb(server_name, option):
+    # type: (unicode, weechat.config_option) -> bool
     server = SERVERS[server_name]
     option_name = None
 
@@ -368,38 +402,27 @@ class MatrixServer:
         self.ssl_context.verify_mode = ssl.CERT_NONE
 
     def _create_options(self, config_file):
-        option = namedtuple(
-            'Option', [
-                'name',
-                'type',
-                'string_values',
-                'min',
-                'max',
-                'value',
-                'description'
-            ])
-
         options = [
-            option(
+            Option(
                 'autoconnect', 'boolean', '', 0, 0, 'off',
                 (
-                    "Automatically connect to the matrix server when Weechat "
+                    "automatically connect to the matrix server when weechat "
                     "is starting"
                 )
             ),
-            option(
+            Option(
                 'address', 'string', '', 0, 0, '',
                 "Hostname or IP address for the server"
             ),
-            option(
+            Option(
                 'port', 'integer', '', 0, 65535, '8448',
                 "Port for the server"
             ),
-            option(
+            Option(
                 'username', 'string', '', 0, 0, '',
                 "Username to use on server"
             ),
-            option(
+            Option(
                 'password', 'string', '', 0, 0, '',
                 "Password for server"
             ),
@@ -460,7 +483,12 @@ def handle_http_response(server, message):
     if status_code == 200:
         # TODO json.loads can fail
         response = json.loads(message.response.body, encoding='utf-8')
-        matrix_handle_message(server, message.type, response, message.extra_data)
+        matrix_handle_message(
+            server,
+            message.type,
+            response,
+            message.extra_data
+        )
     else:
         server_buffer_prnt(
             server,
@@ -488,7 +516,6 @@ def matrix_create_room_buffer(server, room_id):
         server.name
     )
 
-    # TODO set the buffer type dynamically
     W.buffer_set(buf, "localvar_set_type", 'channel')
     W.buffer_set(buf, "type", 'formated')
     W.buffer_set(buf, "localvar_set_channel", room_id)
@@ -538,7 +565,9 @@ def matrix_handle_room_members(server, room_id, event):
     buf = server.buffers[room_id]
     here = W.nicklist_search_group(buf, '', NICK_GROUP_HERE)
 
+    # TODO print out a informational message
     if event['membership'] == 'join':
+        # TODO set the buffer type to a channel if we have more than 2 users
         # TODO do we wan't to use the displayname here?
         nick = event['content']['displayname']
         nick_pointer = W.nicklist_search_nick(buf, "", nick)
@@ -580,6 +609,7 @@ def matrix_handle_room_text_message(server, room_id, event):
 
 
 def matrix_handle_redacted_message(server, room_id, event):
+    # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
     censor = strip_matrix_server(
         event['unsigned']['redacted_because']['sender']
     )[1:]
@@ -688,8 +718,13 @@ def matrix_handle_room_info(server, room_info):
         matrix_handle_room_events(server, room_id, room['timeline']['events'])
 
 
-def matrix_handle_message(server, message_type, response, extra_data):
-    # type: (MatrixServer, MessageType, Dict[unicode, Any], Dict[unicode, Any]) -> None
+def matrix_handle_message(
+        server,        # type: MatrixServer
+        message_type,  # type: MessageType
+        response,      # type: Dict[unicode, Any]
+        extra_data     # type: Dict[unicode, Any]
+):
+    # type: (...) -> None
 
     if message_type is MessageType.LOGIN:
         server.access_token = response["access_token"]
@@ -885,9 +920,13 @@ def create_server_buffer(server):
     W.buffer_set(server.server_buffer, "localvar_set_server", server.name)
     W.buffer_set(server.server_buffer, "localvar_set_channel", server.name)
 
-    # TODO this should go into the matrix config section
-    if W.config_string(W.config_get('irc.look.server_buffer')) == 'merge_with_core':
+    # TODO merge without core
+    if GLOBAL_OPTIONS.look_server_buf == ServerBufferType.MERGE_CORE:
         W.buffer_merge(server.server_buffer, W.buffer_search_main())
+    elif GLOBAL_OPTIONS.look_server_buf == ServerBufferType.MERGE:
+        pass
+    else:
+        pass
 
 
 # TODO if we're reconnecting we should retry even if there was an error on the
@@ -1133,8 +1172,46 @@ def matrix_config_server_write_cb(data, config_file, section_name):
     return W.WEECHAT_CONFIG_WRITE_OK
 
 
+@utf8_decode
+def matrix_config_change_cb(data, option):
+    option_name = key_from_value(GLOBAL_OPTIONS.options, option)
+
+    if option_name == "redactions":
+        GLOBAL_OPTIONS.redaction_type = W.config_integer(option)
+    elif option_name == "server_buffer":
+        GLOBAL_OPTIONS.look_server_buf = W.config_integer(option)
+
+    return 1
+
+
 def init_matrix_config():
     config_file = W.config_new("matrix", "matrix_config_reload_cb", "")
+
+    look_options = [
+        Option(
+            "redactions", "integer",
+            "strikethrough|notice|delete", 0, 0,
+            "strikethrough",
+            (
+                "only notice redactions, strike through or delete "
+                "redacted messages"
+            )
+        ),
+        Option(
+            "server_buffer", "integer",
+            "merge_with_core|merge_without_core|independent",
+            0, 0, "merge_with_core", "merge server buffers"
+        )
+    ]
+
+    def add_global_options(section, options):
+        for option in options:
+            GLOBAL_OPTIONS.options[option.name] = W.config_new_option(
+                config_file, section, option.name,
+                option.type, option.description, option.string_values,
+                option.min, option.max, option.value, option.value, 0, "",
+                "", "matrix_config_change_cb", "", "", "")
+
 
     section = W.config_new_section(config_file, "color", 0, 0, "", "", "", "",
                                    "", "", "", "", "", "")
@@ -1144,7 +1221,7 @@ def init_matrix_config():
     section = W.config_new_section(config_file, "look", 0, 0, "", "", "", "",
                                    "", "", "", "", "", "")
 
-    # TODO look options
+    add_global_options(section, look_options)
 
     section = W.config_new_section(config_file, "network", 0, 0, "", "", "",
                                    "", "", "", "", "", "", "")
@@ -1836,6 +1913,8 @@ if __name__ == "__main__":
                   WEECHAT_SCRIPT_DESCRIPTION,
                   'matrix_unload_cb',
                   ''):
+
+        GLOBAL_OPTIONS = PluginOptions()
 
         # TODO if this fails we should abort and unload the script.
         CONFIG = init_matrix_config()
