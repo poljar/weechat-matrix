@@ -1826,7 +1826,6 @@ def matrix_command_topic_cb(data, buffer, command):
             if len(split_command) == 2:
                 topic = split_command[1]
 
-            # TODO print out topic in channel
             if not topic:
                 room = server.rooms[room_id]
                 if room.topic:
@@ -1941,6 +1940,10 @@ def matrix_redact_command_cb(data, buffer, args):
             matches = re.match(r"(\d+)(:\".*\")? ?(.*)?", args)
 
             if not matches:
+                message = ("{prefix}matrix: Invalid command arguments (see "
+                           "the help for the command /help redact)").format(
+                               prefix=W.prefix("error"))
+                W.prnt("", message)
                 return W.WEECHAT_RC_ERROR
 
             line_string, _, reason = matches.groups()
@@ -1952,7 +1955,12 @@ def matrix_redact_command_cb(data, buffer, args):
             event_id = event_id_from_line(buffer, line)
 
             if not event_id:
-                print("EERRRRRORRRR")
+                message = ("{prefix}matrix: No such message with number "
+                           "{number} found").format(
+                               prefix=W.prefix("error"),
+                               number=line)
+                W.prnt("", message)
+                return W.WEECHAT_RC_OK
 
             message = MatrixMessage(
                 server,
@@ -1963,13 +1971,13 @@ def matrix_redact_command_cb(data, buffer, args):
             )
             send_or_queue(server, message)
 
-            return W.WEECHAT_RC_OK_EAT
+            return W.WEECHAT_RC_OK
 
         elif buffer == server.server_buffer:
             message = ("{prefix}matrix: command \"redact\" must be "
                        "executed on a Matrix channel buffer").format(
                            prefix=W.prefix("error"))
-            W.prnt(buffer, message)
+            W.prnt("", message)
             return W.WEECHAT_RC_OK
 
     return W.WEECHAT_RC_OK
