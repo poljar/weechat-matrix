@@ -24,11 +24,11 @@ from http_parser.pyparser import HttpParser
 # pylint: disable=import-error
 import weechat
 
-WEECHAT_SCRIPT_NAME        = "matrix"                              # type: unicode
-WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"                  # type: unicode
-WEECHAT_SCRIPT_AUTHOR      = "Damir Jelić <poljar@termina.org.uk>" # type: unicode
-WEECHAT_SCRIPT_VERSION     = "0.1"                                 # type: unicode
-WEECHAT_SCRIPT_LICENSE     = "MIT"                                 # type: unicode
+WEECHAT_SCRIPT_NAME        = "matrix"                               # type: unicode
+WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"                   # type: unicode
+WEECHAT_SCRIPT_AUTHOR      = "Damir Jelić <poljar@termina.org.uk>"  # type: unicode
+WEECHAT_SCRIPT_VERSION     = "0.1"                                  # type: unicode
+WEECHAT_SCRIPT_LICENSE     = "MIT"                                  # type: unicode
 
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: unicode
 
@@ -125,6 +125,7 @@ class RequestType(Enum):
     POST   = 1
     PUT    = 2
 
+
 @unique
 class RedactType(Enum):
     STRIKETHROUGH = 0
@@ -172,13 +173,13 @@ class HttpResponse:
 class HttpRequest:
     def __init__(
             self,
-            request_type,                       # type: RequestType
-            host,                               # type: unicode
-            port,                               # type: int
-            location,                           # type: unicode
-            data=None,                          # type: Dict[unicode, Any]
+            request_type,                        # type: RequestType
+            host,                                # type: unicode
+            port,                                # type: int
+            location,                            # type: unicode
+            data=None,                           # type: Dict[unicode, Any]
             user_agent='weechat-matrix/{version}'.format(
-                version=WEECHAT_SCRIPT_VERSION) # type: unicode
+                version=WEECHAT_SCRIPT_VERSION)  # type: unicode
     ):
         # type: (...) -> None
         host_string   = ':'.join([host, str(port)])
@@ -640,16 +641,20 @@ def matrix_handle_room_text_message(server, room_id, event):
 
 def matrix_handle_redacted_message(server, room_id, event):
     # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
-    reason = ">"
+    reason = ""
     censor = strip_matrix_server(
         event['unsigned']['redacted_because']['sender']
     )[1:]
 
     if 'reason' in event['unsigned']['redacted_because']['content']:
-        reason = ", reason: \"{reason}\">".format(
+        reason = ", reason: \"{reason}\"".format(
             reason=event['unsigned']['redacted_because']['content']['reason'])
 
-    msg = ("<Message redacted by: {censor}{reason}").format(
+    msg = ("{del_color}<{log_color}Message redacted by: "
+           "{censor}{log_color}{reason}{del_color}>{ncolor}").format(
+        del_color=W.color("chat_delimiters"),
+        ncolor=W.color("reset"),
+        log_color=W.color("logger.color.backlog_line"),
         censor=censor,
         reason=reason)
 
@@ -1251,7 +1256,6 @@ def init_matrix_config():
                 option.type, option.description, option.string_values,
                 option.min, option.max, option.value, option.value, 0, "",
                 "", "matrix_config_change_cb", "", "", "")
-
 
     section = W.config_new_section(config_file, "color", 0, 0, "", "", "", "",
                                    "", "", "", "", "", "")
@@ -2057,6 +2061,7 @@ def matrix_message_completion_cb(data, completion_item, buffer, completion):
 
     return W.WEECHAT_RC_OK
 
+
 def init_hooks():
     W.hook_completion(
         "matrix_server_commands",
@@ -2085,7 +2090,6 @@ def init_hooks():
         "matrix_message_completion_cb",
         ""
     )
-
 
     W.hook_command(
         # Command name and short description
@@ -2140,7 +2144,6 @@ def init_hooks():
         ),
         # Function name
         'matrix_redact_command_cb', '')
-
 
     W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
 
