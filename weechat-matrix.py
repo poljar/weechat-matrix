@@ -1897,6 +1897,24 @@ def matrix_command_topic_cb(data, buffer, command):
     return W.WEECHAT_RC_OK
 
 
+def tags_from_line_data(line_data, ):
+    # type: (weechat.hdata) -> List[unicode]
+    tags_count = W.hdata_get_var_array_size(
+                    W.hdata_get('line_data'),
+                    line_data,
+                    'tags_array'
+                )
+
+    tags = [
+        W.hdata_string(
+            W.hdata_get('line_data'),
+            line_data,
+            '%d|tags_array' % i
+        ) for i in range(tags_count)]
+
+    return tags
+
+
 def event_id_from_line(buf, target_number):
     # type: (weechat.buffer, int) -> unicode
     own_lines = W.hdata_pointer(W.hdata_get('buffer'), buf, 'own_lines')
@@ -1917,18 +1935,7 @@ def event_id_from_line(buf, target_number):
             )
 
             if line_data:
-                tags_count = W.hdata_get_var_array_size(
-                    W.hdata_get('line_data'),
-                    line_data,
-                    'tags_array'
-                )
-
-                tags = [
-                    W.hdata_string(
-                        W.hdata_get('line_data'),
-                        line_data,
-                        '%d|tags_array' % i
-                    ) for i in range(tags_count)]
+                tags = tags_from_line_data(line_data)
 
                 # Only count non redacted user messages
                 if ('matrix_message' in tags
@@ -2023,18 +2030,8 @@ def matrix_message_completion_cb(data, completion_item, buffer, completion):
             if line_data:
                 message = W.hdata_string(W.hdata_get('line_data'), line_data,
                                          'message')
-                tags_count = W.hdata_get_var_array_size(
-                    W.hdata_get('line_data'),
-                    line_data,
-                    'tags_array'
-                )
 
-                tags = [
-                    W.hdata_string(
-                        W.hdata_get('line_data'),
-                        line_data,
-                        '%d|tags_array' % i
-                    ) for i in range(tags_count)]
+                tags = tags_from_line_data(line_data)
 
                 # Only add non redacted user messages to the completion
                 if (message
