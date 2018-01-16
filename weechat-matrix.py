@@ -2042,6 +2042,18 @@ def matrix_fetch_old_messages(server, room_id):
 
 
 @utf8_decode
+def matrix_command_buf_clear_cb(data, buffer, command):
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            room_id = key_from_value(server.buffers, buffer)
+            server.rooms[room_id].prev_batch = server.next_batch
+
+            return W.WEECHAT_RC_OK
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
 def matrix_command_pgup_cb(data, buffer, command):
     for server in SERVERS.values():
         if buffer in server.buffers.values():
@@ -2306,6 +2318,7 @@ def init_hooks():
 
     W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
     W.hook_command_run('/window page_up', 'matrix_command_pgup_cb', '')
+    W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
 
 
 def autoconnect(servers):
