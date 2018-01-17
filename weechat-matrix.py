@@ -1441,7 +1441,8 @@ def matrix_config_change_cb(data, option):
     if option_name == "redactions":
         GLOBAL_OPTIONS.redaction_type = RedactType(W.config_integer(option))
     elif option_name == "server_buffer":
-        GLOBAL_OPTIONS.look_server_buf = W.config_integer(option)
+        GLOBAL_OPTIONS.look_server_buf = ServerBufferType(
+            W.config_integer(option))
 
     return 1
 
