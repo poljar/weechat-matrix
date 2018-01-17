@@ -671,6 +671,9 @@ def matrix_handle_room_text_message(server, room_id, event, old=False):
 def matrix_handle_redacted_message(server, room_id, event):
     # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
     reason = ""
+
+    # TODO check if the message is already printed out, in that case we got the
+    # message a second time and a redaction event will take care of it.
     censor = strip_matrix_server(
         event['unsigned']['redacted_because']['sender']
     )[1:]
@@ -721,6 +724,89 @@ def matrix_handle_room_messages(server, room_id, event, old=False):
             W.prnt(server.server_buffer, message)
 
 
+def event_id_from_tags(tags):
+    # type: (List[unicode]) -> unicode
+    for tag in tags:
+        if tag.startswith("matrix_id"):
+            return tag[10:]
+
+    return ""
+
+
+def matrix_redact_line(data, tags, event):
+    reason = ""
+
+    hdata_line_data = W.hdata_get('line_data')
+
+    message = W.hdata_string(hdata_line_data, data, 'message')
+    censor = strip_matrix_server(event['sender'])[1:]
+
+    if 'reason' in event['content']:
+        reason = ", reason: \"{reason}\"".format(
+            reason=event['content']['reason'])
+
+    redaction_msg = ("{del_color}<{log_color}Message redacted by: "
+                     "{censor}{log_color}{reason}{del_color}>{ncolor}").format(
+                         del_color=W.color("chat_delimiters"),
+                         ncolor=W.color("reset"),
+                         log_color=W.color("logger.color.backlog_line"),
+                         censor=censor,
+                         reason=reason)
+
+    if GLOBAL_OPTIONS.redaction_type == RedactType.STRIKETHROUGH:
+        message = "".join(["{}\u0336".format(c) for c in message])
+        message = message + " " + redaction_msg
+    elif GLOBAL_OPTIONS.redaction_type == RedactType.DELETE:
+        message = redaction_msg
+    elif GLOBAL_OPTIONS.redaction_type == RedactType.NOTICE:
+        message = message + " " + redaction_msg
+
+    tags.append("matrix_new_redacted")
+
+    new_data = {'tags_array': tags,
+                'message': message}
+
+    W.hdata_update(hdata_line_data, data, new_data)
+
+    return W.WEECHAT_RC_OK
+
+
+def matrix_handle_room_redaction(server, room_id, event):
+    buf = server.buffers[room_id]
+    event_id = event['redacts']
+
+    own_lines = W.hdata_pointer(W.hdata_get('buffer'), buf, 'own_lines')
+
+    if own_lines:
+        hdata_line = W.hdata_get('line')
+        hdata_line_data = W.hdata_get('line_data')
+
+        line = W.hdata_pointer(
+            W.hdata_get('lines'),
+            own_lines,
+            'last_line'
+        )
+
+        while line:
+            data = W.hdata_pointer(hdata_line, line, 'data')
+
+            if data:
+                tags = tags_from_line_data(data)
+
+                message_id = event_id_from_tags(tags)
+
+                if event_id == message_id:
+                    # If the message is already redacted there is nothing to do
+                    if ("matrix_redacted" not in tags and
+                            "matrix_new_redacted" not in tags):
+                        matrix_redact_line(data, tags, event)
+                    return W.WEECHAT_RC_OK
+
+            line = W.hdata_move(hdata_line, line, -1)
+
+    return W.WEECHAT_RC_OK
+
+
 def matrix_handle_room_events(server, room_id, room_events):
     # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
     for event in room_events:
@@ -768,7 +854,7 @@ def matrix_handle_room_events(server, room_id, room_events):
             W.prnt_date_tags(buf, date, tags, message)
 
         elif event['type'] == "m.room.redaction":
-            pass
+            matrix_handle_room_redaction(server, room_id, event)
 
         else:
             message = ("{prefix}Handling of room event type "
@@ -1352,7 +1438,7 @@ def matrix_config_change_cb(data, option):
     option_name = key_from_value(GLOBAL_OPTIONS.options, option)
 
     if option_name == "redactions":
-        GLOBAL_OPTIONS.redaction_type = W.config_integer(option)
+        GLOBAL_OPTIONS.redaction_type = RedactType(W.config_integer(option))
     elif option_name == "server_buffer":
         GLOBAL_OPTIONS.look_server_buf = W.config_integer(option)
 
@@ -2113,8 +2199,9 @@ def event_id_from_line(buf, target_number):
                 tags = tags_from_line_data(line_data)
 
                 # Only count non redacted user messages
-                if ('matrix_message' in tags
-                        and 'matrix_redacted' not in tags):
+                if ("matrix_message" in tags
+                        and 'matrix_redacted' not in tags
+                        and "matrix_new_redacted" not in tags):
 
                     if line_number == target_number:
                         for tag in tags:
