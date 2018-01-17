@@ -832,7 +832,6 @@ def matrix_handle_room_events(server, room_id, room_events):
             room.topic_author = event['sender']
 
             topic_age = event['unsigned']['age']
-            # TODO put the age calculation in a function
             room.topic_date = datetime.datetime.fromtimestamp(
                 time.time() - (topic_age / 1000))
 
@@ -848,7 +847,9 @@ def matrix_handle_room_events(server, room_id, room_events):
                            room=room.alias,
                            topic=topic)
 
-            tags = "matrix_topic,log3"
+            tags = "matrix_topic,log3,matrix_id_{event_id}".format(
+                event_id=event['event_id'])
+
             date = date_from_age(topic_age)
 
             W.prnt_date_tags(buf, date, tags, message)
