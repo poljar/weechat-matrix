@@ -289,14 +289,15 @@ class MatrixMessage:
             )
 
         elif message_type == MessageType.SEND:
-            path = ("{api}/rooms/{room}/send/m.room.message?"
+            path = ("{api}/rooms/{room}/send/m.room.message/{tx_id}?"
                     "access_token={access_token}").format(
                         api=MATRIX_API_PATH,
                         room=room_id,
+                        tx_id=get_transaction_id(server),
                         access_token=server.access_token)
 
             self.request = HttpRequest(
-                RequestType.POST,
+                RequestType.PUT,
                 server.address,
                 server.port,
                 path,
