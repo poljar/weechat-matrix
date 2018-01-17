@@ -159,8 +159,12 @@ class PluginOptions:
         self.redaction_type  = RedactType.STRIKETHROUGH     # type: RedactType
         self.look_server_buf = ServerBufferType.MERGE_CORE  # type: ServerBufferType
 
-        self.redaction_comp_len = 50  # type: int
-        self.msg_redact = ""
+        self.sync_limit         = 30    # type: int
+        self.backlog_limit      = 10    # type: int
+        self.enable_backlog     = True  # type: bool
+        self.page_up_hook       = None  # type: weechat.hook
+
+        self.redaction_comp_len = 50    # type: int
 
         self.options = dict()  # type: Dict[unicode, weechat.config_option]
 
@@ -263,10 +267,9 @@ class MatrixMessage:
             )
 
         elif message_type == MessageType.SYNC:
-            # TODO the limit should be configurable matrix.network.sync_limit
             sync_filter = {
                 "room": {
-                    "timeline": {"limit": 10}
+                    "timeline": {"limit": GLOBAL_OPTIONS.sync_limit}
                 }
             }
 
@@ -344,7 +347,7 @@ class MatrixMessage:
                         api=MATRIX_API_PATH,
                         room=room_id,
                         prev_batch=extra_id,
-                        message_limit=10,
+                        message_limit=GLOBAL_OPTIONS.backlog_limit,
                         access_token=server.access_token)
             self.request = HttpRequest(
                 RequestType.GET,
@@ -547,6 +550,7 @@ def handle_http_response(server, message):
                 status_code=status_code))
 
         server_buffer_prnt(server, message.request.request)
+        server_buffer_prnt(server, message.request.payload)
         server_buffer_prnt(server, message.response.body)
 
     return
@@ -961,9 +965,6 @@ def matrix_handle_old_messages(server, room_id, events):
             pass
 
     matrix_sort_old_messages(server, room_id)
-
-    # matrix_handle_room_events(server, room_id, events)
-    # TODO sort messages
 
 
 def matrix_handle_message(
@@ -1443,6 +1444,21 @@ def matrix_config_change_cb(data, option):
     elif option_name == "server_buffer":
         GLOBAL_OPTIONS.look_server_buf = ServerBufferType(
             W.config_integer(option))
+    elif option_name == "max_initial_sync_events":
+        GLOBAL_OPTIONS.sync_limit = W.config_integer(option)
+    elif option_name == "max_backlog_sync_events":
+        GLOBAL_OPTIONS.backlog_limit = W.config_integer(option)
+    elif option_name == "fetch_backlog_on_pgup":
+        print("Turning off backlog thing")
+        GLOBAL_OPTIONS.enable_backlog = W.config_boolean(option)
+
+        if GLOBAL_OPTIONS.enable_backlog:
+            if not GLOBAL_OPTIONS.page_up_hook:
+                hook_page_up()
+        else:
+            if GLOBAL_OPTIONS.page_up_hook:
+                W.unhook(GLOBAL_OPTIONS.page_up_hook)
+                GLOBAL_OPTIONS.page_up_hook = None
 
     return 1
 
@@ -1456,16 +1472,44 @@ def init_matrix_config():
             "strikethrough|notice|delete", 0, 0,
             "strikethrough",
             (
-                "only notice redactions, strike through or delete "
+                "Only notice redactions, strike through or delete "
                 "redacted messages"
             )
         ),
         Option(
             "server_buffer", "integer",
             "merge_with_core|merge_without_core|independent",
-            0, 0, "merge_with_core", "merge server buffers"
+            0, 0, "merge_with_core", "Merge server buffers"
         )
     ]
+
+    network_options = [
+        Option(
+            "max_initial_sync_events", "integer",
+            "", 1, 10000,
+            "30",
+            (
+                "How many events to fetch during the initial sync"
+            )
+        ),
+        Option(
+            "max_backlog_sync_events", "integer",
+            "", 1, 100,
+            "10",
+            (
+                "How many events to fetch during backlog fetching"
+            )
+        ),
+        Option(
+            "fetch_backlog_on_pgup", "boolean",
+            "", 0, 0,
+            "on",
+            (
+                "Fetch messages in the backlog on a window page up event"
+            )
+        )
+    ]
+
 
     def add_global_options(section, options):
         for option in options:
@@ -1488,7 +1532,7 @@ def init_matrix_config():
     section = W.config_new_section(config_file, "network", 0, 0, "", "", "",
                                    "", "", "", "", "", "", "")
 
-    # TODO network options
+    add_global_options(section, network_options)
 
     W.config_new_section(
         config_file, "server",
@@ -2081,6 +2125,7 @@ def matrix_command_topic_cb(data, buffer, command):
                 W.prnt_date_tags(buffer, date, tags, message)
 
                 # TODO the nick should be colored
+
                 # TODO we should use the display name as well as
                 # the user name here
                 message = ("{prefix}Topic set by {author} on "
@@ -2144,6 +2189,8 @@ def matrix_command_buf_clear_cb(data, buffer, command):
 
 @utf8_decode
 def matrix_command_pgup_cb(data, buffer, command):
+    # TODO we shouldn't fetch and print out more messages than
+    # max_buffer_lines_number or older messages than max_buffer_lines_minutes
     for server in SERVERS.values():
         if buffer in server.buffers.values():
             window = W.window_search_with_buffer(buffer)
@@ -2323,6 +2370,14 @@ def matrix_message_completion_cb(data, completion_item, buffer, completion):
     return W.WEECHAT_RC_OK
 
 
+def hook_page_up():
+    GLOBAL_OPTIONS.page_up_hook = W.hook_command_run(
+        '/window page_up',
+        'matrix_command_pgup_cb',
+        ''
+    )
+
+
 def init_hooks():
     W.hook_completion(
         "matrix_server_commands",
@@ -2407,8 +2462,10 @@ def init_hooks():
         'matrix_redact_command_cb', '')
 
     W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
-    W.hook_command_run('/window page_up', 'matrix_command_pgup_cb', '')
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
+
+    if GLOBAL_OPTIONS.enable_backlog:
+        hook_page_up()
 
 
 def autoconnect(servers):
