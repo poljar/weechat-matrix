@@ -357,6 +357,15 @@ class MatrixMessage:
             )
 
 
+class MatrixUser:
+    def __init__(self, name, display_name):
+        self.name         = name          # type: unicode
+        self.display_name = display_name  # type: unicode
+        self.power_level  = 0             # type: int
+        self.nick_color   = ""            # type: unicode
+        self.prefix       = ""            # type: unicode
+
+
 class MatrixRoom:
     def __init__(self, room_id):
         # type: (unicode) -> None
@@ -366,6 +375,7 @@ class MatrixRoom:
         self.topic_author = ""         # type: unicode
         self.topic_date   = None       # type: datetime.datetime
         self.prev_batch   = ""         # type: unicode
+        self.users        = dict()     # type: Dict[unicode, MatrixUser]
 
 
 def key_from_value(dictionary, value):
@@ -410,6 +420,7 @@ class MatrixServer:
     def __init__(self, name, config_file):
         # type: (unicode, weechat.config) -> None
         self.name            = name     # type: unicode
+        self.user_id         = ""
         self.address         = ""       # type: unicode
         self.port            = 8448     # type: int
         self.options         = dict()   # type: Dict[unicode, weechat.config]
@@ -618,22 +629,49 @@ def matrix_handle_room_aliases(server, room_id, event):
 def matrix_handle_room_members(server, room_id, event):
     # type: (MatrixServer, unicode, Dict[unicode, Any]) -> None
     buf = server.buffers[room_id]
+    room = server.rooms[room_id]
     here = W.nicklist_search_group(buf, '', NICK_GROUP_HERE)
 
     # TODO print out a informational message
     if event['membership'] == 'join':
         # TODO set the buffer type to a channel if we have more than 2 users
-        # TODO do we wan't to use the displayname here?
-        nick = event['content']['displayname']
-        nick_pointer = W.nicklist_search_nick(buf, "", nick)
+        display_name = event['content']['displayname']
+        full_name = event['sender']
+        short_name = strip_matrix_server(full_name)[1:]
+
+        user = MatrixUser(short_name, display_name)
+
+        if full_name == server.user_id:
+            user.nick_color = "weechat.color.chat_nick_self"
+            W.buffer_set(
+                buf,
+                "highlight_words",
+                ",".join([full_name, user.name, user.display_name]))
+        else:
+            user.nick_color = W.info_get("nick_color_name", user.name)
+
+        room.users[full_name] = user
+
+        nick_pointer = W.nicklist_search_nick(buf, "", user.name)
         if not nick_pointer:
-            W.nicklist_add_nick(buf, here, nick, "", "", "", 1)
+            W.nicklist_add_nick(
+                buf,
+                here,
+                user.display_name,
+                user.nick_color,
+                user.prefix,
+                "",
+                1
+            )
 
     elif event['membership'] == 'leave':
-        nick = event['content']['displayname']
-        nick_pointer = W.nicklist_search_nick(buf, "", nick)
+        full_name = event['sender']
+        user = room.users[full_name]
+        nick_pointer = W.nicklist_search_nick(buf, "", user.display_name)
         if nick_pointer:
             W.nicklist_remove_nick(buf, nick_pointer)
+
+        del room.users[full_name]
 
 
 def date_from_age(age):
@@ -643,12 +681,29 @@ def date_from_age(age):
     return date
 
 
+def color_for_tags(color):
+    if color == "weechat.color.chat_nick_self":
+        option = weechat.config_get(color)
+        return weechat.config_string(option)
+    return color
+
+
 def matrix_handle_room_text_message(server, room_id, event, old=False):
     # type: (MatrixServer, unicode, Dict[unicode, Any], bool) -> None
     tag = ""
+    msg_author = ""
+    nick_color_name = ""
+
+    room = server.rooms[room_id]
     msg = event['content']['body']
 
-    msg_author = strip_matrix_server(event['sender'])[1:]
+    if user in room.users:
+        user = room.users[event['sender']]
+        msg_author = user.display_name
+        nick_color_name = user.nick_color
+    else:
+        msg_author = strip_matrix_server(event['sender'])[1:]
+        nick_color_name = W.info_get("nick_color_name", msg_author)
 
     data = "{author}\t{msg}".format(author=msg_author, msg=msg)
 
@@ -657,15 +712,18 @@ def matrix_handle_room_text_message(server, room_id, event, old=False):
     msg_date = date_from_age(event['unsigned']['age'])
 
     # TODO if this is an initial sync tag the messages as backlog
+    # TODO handle self messages from other devices
     if old:
-        tag = ("nick_{a},matrix_id_{event_id},"
+        tag = ("nick_{a},prefix_nick_{color},matrix_id_{event_id},"
                "matrix_message,notify_message,no_log,no_highlight").format(
                    a=msg_author,
+                   color=color_for_tags(nick_color_name),
                    event_id=event_id)
     else:
-        tag = ("nick_{a},matrix_id_{event_id},"
+        tag = ("nick_{a},prefix_nick_{color},matrix_id_{event_id},"
                "matrix_message,notify_message,log1").format(
                    a=msg_author,
+                   color=color_for_tags(nick_color_name),
                    event_id=event_id)
 
     buf = server.buffers[room_id]
@@ -675,12 +733,31 @@ def matrix_handle_room_text_message(server, room_id, event, old=False):
 def matrix_handle_redacted_message(server, room_id, event):
     # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
     reason = ""
+    room = server.rooms[room_id]
 
     # TODO check if the message is already printed out, in that case we got the
     # message a second time and a redaction event will take care of it.
-    censor = strip_matrix_server(
-        event['unsigned']['redacted_because']['sender']
-    )[1:]
+    censor = event['unsigned']['redacted_because']['sender']
+    nick_color_name = ""
+
+    if censor in room.users:
+        user = room.users[censor]
+        nick_color_name = user.nick_color
+        censor = ("{nick_color}{nick}{ncolor} {del_color}"
+                  "({host_color}{full_name}{ncolor}{del_color})").format(
+                      nick_color=W.color(nick_color_name),
+                      nick=user.display_name,
+                      ncolor=W.color("reset"),
+                      del_color=W.color("chat_delimiters"),
+                      host_color=W.color("chat_host"),
+                      full_name=censor)
+    else:
+        censor = strip_matrix_server(censor)[1:]
+        nick_color_name = W.info_get("nick_color_name", censor)
+        censor = "{color}{censor}{ncolor}".format(
+            color=W.color(nick_color_name),
+            censor=censor,
+            ncolor=W.color("reset"))
 
     if 'reason' in event['unsigned']['redacted_because']['content']:
         reason = ", reason: \"{reason}\"".format(
@@ -702,8 +779,12 @@ def matrix_handle_redacted_message(server, room_id, event):
 
     msg_date = date_from_age(event['unsigned']['age'])
 
-    tag = ("nick_{a},matrix_id_{event_id},matrix_message,matrix_redacted,"
-           "notify_message").format(a=msg_author, event_id=event_id)
+    tag = ("nick_{a},prefix_nick_{color},matrix_id_{event_id},"
+           "matrix_message,matrix_redacted,"
+           "notify_message,no_highlight").format(
+               a=msg_author,
+               color=color_for_tags(nick_color_name),
+               event_id=event_id)
 
     buf = server.buffers[room_id]
     W.prnt_date_tags(buf, msg_date, tag, data)
@@ -783,7 +864,6 @@ def matrix_handle_room_redaction(server, room_id, event):
 
     if own_lines:
         hdata_line = W.hdata_get('line')
-        hdata_line_data = W.hdata_get('line_data')
 
         line = W.hdata_pointer(
             W.hdata_get('lines'),
@@ -809,6 +889,55 @@ def matrix_handle_room_redaction(server, room_id, event):
             line = W.hdata_move(hdata_line, line, -1)
 
     return W.WEECHAT_RC_OK
+
+
+def get_prefix_for_level(level):
+    # type: (int) -> unicode
+    if level >= 100:
+        return "&"
+    elif level >= 50:
+        return "@"
+    elif level > 0:
+        return "+"
+    return ""
+
+
+def get_prefix_color(prefix):
+    # type: (unicode) -> unicode
+    if prefix == "&":
+        return "lightgreen"
+    elif prefix == "@":
+        return "lightgreen"
+    elif prefix == "+":
+        return "yellow"
+    return ""
+
+
+def update_nicklist_nick(buf, user, nick):
+    # type: (weechat.buffer, MatrixUser, weechat.nick) -> None
+    W.nicklist_nick_set(buf, nick, "prefix", user.prefix)
+    W.nicklist_nick_set(buf, nick, "prefix_color",
+                        get_prefix_color(user.prefix))
+
+
+def matrix_handle_room_power_levels(server, room_id, event):
+    if not event['content']['users']:
+        return
+
+    buf = server.buffers[room_id]
+    room = server.rooms[room_id]
+
+    for full_name, level in event['content']['users'].items():
+        if full_name not in room.users:
+            continue
+
+        user = room.users[full_name]
+        user.power_level = level
+        user.prefix = get_prefix_for_level(level)
+
+        W.nicklist_remove_nick(buf, user.name)
+        nick = W.nicklist_search_nick(buf, "", user.name)
+        update_nicklist_nick(buf, user, nick)
 
 
 def matrix_handle_room_events(server, room_id, room_events):
@@ -841,17 +970,33 @@ def matrix_handle_room_events(server, room_id, room_events):
 
             W.buffer_set(buf, "title", topic)
 
+            nick_color = W.info_get("nick_color_name", room.topic_author)
+            author = room.topic_author
+
+            if author in room.users:
+                user = room.users[author]
+                nick_color = user.nick_color
+                author = user.display_name
+
+            author = ("{nick_color}{user}{ncolor}").format(
+                nick_color=W.color(nick_color),
+                user=author,
+                ncolor=W.color("reset"))
+
             # TODO nick and topic color
             # TODO print old topic if configured so
             # TODO nick display name if configured so and found
-            message = ("{prefix}{nick} has changed the topic for {room} to "
-                       "\"{topic}\"").format(
+            message = ("{prefix}{nick} has changed "
+                       "the topic for {chan_color}{room}{ncolor} "
+                       "to \"{topic}\"").format(
                            prefix=W.prefix("network"),
-                           nick=room.topic_author,
-                           room=room.alias,
+                           nick=author,
+                           chan_color=W.color("chat_channel"),
+                           ncolor=W.color("reset"),
+                           room=strip_matrix_server(room.alias),
                            topic=topic)
 
-            tags = "matrix_topic,log3,matrix_id_{event_id}".format(
+            tags = "matrix_topic,no_highlight,log3,matrix_id_{event_id}".format(
                 event_id=event['event_id'])
 
             date = date_from_age(topic_age)
@@ -860,6 +1005,9 @@ def matrix_handle_room_events(server, room_id, room_events):
 
         elif event['type'] == "m.room.redaction":
             matrix_handle_room_redaction(server, room_id, event)
+
+        elif event["type"] == "m.room.power_levels":
+            matrix_handle_room_power_levels(server, room_id, event)
 
         else:
             message = ("{prefix}Handling of room event type "
@@ -977,6 +1125,7 @@ def matrix_handle_message(
 
     if message_type is MessageType.LOGIN:
         server.access_token = response["access_token"]
+        server.user_id = response["user_id"]
         message = MatrixMessage(server, MessageType.SYNC)
         send_or_queue(server, message)
 
@@ -1003,8 +1152,12 @@ def matrix_handle_message(
         # so ignore it in the sync.
         server.ignore_event_list.append(event_id)
 
-        tag = "nick_{a},matrix_id_{event_id},matrix_message".format(
-            a=author, event_id=event_id)
+        tag = ("notify_none,no_highlight,self_msg,log1,nick_{a},"
+               "prefix_nick_{color},matrix_id_{event_id},"
+               "matrix_message").format(
+                   a=author,
+                   color=color_for_tags(weechat.color.chat_nick_self),
+                   event_id=event_id)
 
         data = "{author}\t{msg}".format(author=author, msg=message)
 
@@ -2189,6 +2342,9 @@ def matrix_command_buf_clear_cb(data, buffer, command):
 
 @utf8_decode
 def matrix_command_pgup_cb(data, buffer, command):
+    # TODO the highlight status isn't allowed to be updated/changed via hdata,
+    # therefore the highlight status of a messages can't be reoredered this
+    # would need to be fixed in weechat
     # TODO we shouldn't fetch and print out more messages than
     # max_buffer_lines_number or older messages than max_buffer_lines_minutes
     for server in SERVERS.values():
@@ -2208,7 +2364,7 @@ def matrix_command_pgup_cb(data, buffer, command):
     return W.WEECHAT_RC_OK
 
 
-def tags_from_line_data(line_data, ):
+def tags_from_line_data(line_data):
     # type: (weechat.hdata) -> List[unicode]
     tags_count = W.hdata_get_var_array_size(
         W.hdata_get('line_data'),
