@@ -37,8 +37,6 @@ SERVERS        = dict()  # type: Dict[unicode, MatrixServer]
 CONFIG         = None    # type: weechat.config
 GLOBAL_OPTIONS = None    # type: PluginOptions
 
-NICK_GROUP_HERE = "0|Here"
-
 
 # Unicode handling
 def encode_to_utf8(data):
@@ -572,6 +570,29 @@ def strip_matrix_server(string):
     return string.rsplit(":", 1)[0]
 
 
+def add_user_to_nicklist(buf, user):
+    group_name = "999|..."
+
+    if user.power_level >= 100:
+        group_name = "000|o"
+    elif user.power_level >= 50:
+        group_name = "001|h"
+    elif user.power_level > 0:
+        group_name = "002|v"
+
+    group = W.nicklist_search_group(buf, "", group_name)
+    # TODO make it configurable so we can use a display name or user_id here
+    W.nicklist_add_nick(
+        buf,
+        group,
+        user.display_name,
+        user.nick_color,
+        user.prefix,
+        get_prefix_color(user.prefix),
+        1
+    )
+
+
 def matrix_create_room_buffer(server, room_id):
     # type: (MatrixServer, unicode) -> None
     buf = W.buffer_new(
@@ -593,13 +614,10 @@ def matrix_create_room_buffer(server, room_id):
     short_name = strip_matrix_server(room_id)
     W.buffer_set(buf, "short_name", short_name)
 
-    W.nicklist_add_group(
-        buf,
-        '',
-        NICK_GROUP_HERE,
-        "weechat.color.nicklist_group",
-        1
-    )
+    W.nicklist_add_group(buf, '', "000|o", "weechat.color.nicklist_group", 1)
+    W.nicklist_add_group(buf, '', "001|h", "weechat.color.nicklist_group", 1)
+    W.nicklist_add_group(buf, '', "002|v", "weechat.color.nicklist_group", 1)
+    W.nicklist_add_group(buf, '', "999|...", "weechat.color.nicklist_group", 1)
 
     W.buffer_set(buf, "nicklist", "1")
     W.buffer_set(buf, "nicklist_display_groups", "0")
@@ -630,7 +648,6 @@ def matrix_handle_room_members(server, room_id, event):
     # type: (MatrixServer, unicode, Dict[unicode, Any]) -> None
     buf = server.buffers[room_id]
     room = server.rooms[room_id]
-    here = W.nicklist_search_group(buf, '', NICK_GROUP_HERE)
 
     # TODO print out a informational message
     if event['membership'] == 'join':
@@ -652,17 +669,12 @@ def matrix_handle_room_members(server, room_id, event):
 
         room.users[full_name] = user
 
-        nick_pointer = W.nicklist_search_nick(buf, "", user.name)
+        nick_pointer = W.nicklist_search_nick(buf, "", user.display_name)
         if not nick_pointer:
-            W.nicklist_add_nick(
-                buf,
-                here,
-                user.display_name,
-                user.nick_color,
-                user.prefix,
-                "",
-                1
-            )
+            add_user_to_nicklist(buf, user)
+        else:
+            # TODO we can get duplicate display names
+            pass
 
     elif event['membership'] == 'leave':
         full_name = event['sender']
@@ -697,7 +709,7 @@ def matrix_handle_room_text_message(server, room_id, event, old=False):
     room = server.rooms[room_id]
     msg = event['content']['body']
 
-    if user in room.users:
+    if event['sender'] in room.users:
         user = room.users[event['sender']]
         msg_author = user.display_name
         nick_color_name = user.nick_color
@@ -902,6 +914,7 @@ def get_prefix_for_level(level):
     return ""
 
 
+# TODO make this configurable
 def get_prefix_color(prefix):
     # type: (unicode) -> unicode
     if prefix == "&":
@@ -911,13 +924,6 @@ def get_prefix_color(prefix):
     elif prefix == "+":
         return "yellow"
     return ""
-
-
-def update_nicklist_nick(buf, user, nick):
-    # type: (weechat.buffer, MatrixUser, weechat.nick) -> None
-    W.nicklist_nick_set(buf, nick, "prefix", user.prefix)
-    W.nicklist_nick_set(buf, nick, "prefix_color",
-                        get_prefix_color(user.prefix))
 
 
 def matrix_handle_room_power_levels(server, room_id, event):
@@ -935,9 +941,9 @@ def matrix_handle_room_power_levels(server, room_id, event):
         user.power_level = level
         user.prefix = get_prefix_for_level(level)
 
-        W.nicklist_remove_nick(buf, user.name)
-        nick = W.nicklist_search_nick(buf, "", user.name)
-        update_nicklist_nick(buf, user, nick)
+        nick_pointer = W.nicklist_search_nick(buf, "", user.display_name)
+        W.nicklist_remove_nick(buf, nick_pointer)
+        add_user_to_nicklist(buf, user)
 
 
 def matrix_handle_room_events(server, room_id, room_events):
@@ -1008,6 +1014,11 @@ def matrix_handle_room_events(server, room_id, room_events):
 
         elif event["type"] == "m.room.power_levels":
             matrix_handle_room_power_levels(server, room_id, event)
+
+        elif event["type"] in ["m.room.create", "m.room.join_rules",
+                               "m.room.history_visibility",
+                               "m.room.canonical_alias"]:
+            pass
 
         else:
             message = ("{prefix}Handling of room event type "
@@ -1602,7 +1613,6 @@ def matrix_config_change_cb(data, option):
     elif option_name == "max_backlog_sync_events":
         GLOBAL_OPTIONS.backlog_limit = W.config_integer(option)
     elif option_name == "fetch_backlog_on_pgup":
-        print("Turning off backlog thing")
         GLOBAL_OPTIONS.enable_backlog = W.config_boolean(option)
 
         if GLOBAL_OPTIONS.enable_backlog:
