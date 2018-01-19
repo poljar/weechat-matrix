@@ -401,6 +401,14 @@ def server_config_change_cb(server_name, option):
     elif option_name == "port":
         value = W.config_integer(option)
         server.port = value
+    elif option_name == "ssl_verify":
+        value = W.config_boolean(option)
+        if value:
+            server.ssl_context.check_hostname = True
+            server.ssl_context.verify_mode = ssl.CERT_REQUIRED
+        else:
+            server.ssl_context.check_hostname = False
+            server.ssl_context.verify_mode = ssl.CERT_NONE
     elif option_name == "username":
         value = W.config_string(option)
         server.user = value
@@ -456,14 +464,6 @@ class MatrixServer:
 
         self._create_options(config_file)
 
-        # FIXME Don't set insecure
-        self._set_insecure()
-
-    # TODO remove this
-    def _set_insecure(self):
-        self.ssl_context.check_hostname = False
-        self.ssl_context.verify_mode = ssl.CERT_NONE
-
     def _create_options(self, config_file):
         options = [
             Option(
@@ -480,6 +480,13 @@ class MatrixServer:
             Option(
                 'port', 'integer', '', 0, 65535, '8448',
                 "Port for the server"
+            ),
+            Option(
+                'ssl_verify', 'boolean', '', 0, 0, 'on',
+                (
+                    "Check that the SSL connection is fully trusted"
+                    "is starting"
+                )
             ),
             Option(
                 'username', 'string', '', 0, 0, '',
@@ -605,6 +612,7 @@ def matrix_create_room_buffer(server, room_id):
 
     W.buffer_set(buf, "localvar_set_type", 'channel')
     W.buffer_set(buf, "type", 'formated')
+
     W.buffer_set(buf, "localvar_set_channel", room_id)
 
     W.buffer_set(buf, "localvar_set_nick", server.user)
@@ -1428,7 +1436,6 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
 
 def reconnect(server):
     # type: (MatrixServer) -> None
-    # TODO this needs some more work, do we want a reconnecting flag?
     server.connecting = True
     timeout = server.reconnect_count * 5 * 1000
 
@@ -2251,7 +2258,8 @@ def create_default_server(config_file):
     SERVERS[server.name] = server
 
     # TODO set this to matrix.org
-    W.config_option_set(server.options["address"], "localhost", 1)
+    W.config_option_set(server.options["address"], "matrix.org", 1)
+    W.config_option_set(server.options["port"], "80", 1)
 
     return True
 
