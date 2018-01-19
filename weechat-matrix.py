@@ -2552,6 +2552,48 @@ def hook_page_up():
     )
 
 
+@utf8_decode
+def matrix_bar_item_plugin(data, item, window, buffer, extra_info):
+    for server in SERVERS.values():
+        if (buffer in server.buffers.values() or
+                buffer == server.server_buffer):
+            return "matrix{color}/{color_fg}{name}".format(
+                color=W.color("bar_delim"),
+                color_fg=W.color("bar_fg"),
+                name=server.name)
+
+    return ""
+
+
+@utf8_decode
+def matrix_bar_item_name(data, item, window, buffer, extra_info):
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            color = ("status_name_ssl"
+                     if server.ssl_context.check_hostname else
+                     "status_name")
+
+            room_id = key_from_value(server.buffers, buffer)
+
+            room = server.rooms[room_id]
+
+            return "{color}{name}".format(
+                color=W.color(color),
+                name=room.alias)
+
+        elif buffer in server.server_buffer:
+            color = ("status_name_ssl"
+                     if server.ssl_context.check_hostname else
+                     "status_name")
+
+            return "{color}server{del_color}[{color}{name}{del_color}]".format(
+                color=W.color(color),
+                del_color=W.color("bar_delim"),
+                name=server.name)
+
+    return ""
+
+
 def init_hooks():
     W.hook_completion(
         "matrix_server_commands",
@@ -2666,6 +2708,9 @@ if __name__ == "__main__":
         read_matrix_config()
 
         init_hooks()
+
+        W.bar_item_new("(extra)buffer_plugin",  "matrix_bar_item_plugin",  "")
+        W.bar_item_new("(extra)buffer_name", "matrix_bar_item_name", "")
 
         if not SERVERS:
             create_default_server(CONFIG)
