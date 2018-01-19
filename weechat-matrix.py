@@ -10,11 +10,6 @@ import datetime
 import pprint
 import re
 
-try:
-    from urllib import quote
-except ImportError:
-    from urllib.parse import quote
-
 # pylint: disable=redefined-builtin
 from builtins import bytes
 
@@ -202,7 +197,7 @@ class HttpRequest:
         payload       = None           # type: unicode
 
         if request_type == RequestType.GET:
-            get = 'GET {location} HTTP/1.1'.format(location=quote(location))
+            get = 'GET {location} HTTP/1.1'.format(location=location)
             request_list  = [get, host_header,
                              user_agent, accept_header, end_separator]
 
