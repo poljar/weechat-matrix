@@ -7,6 +7,7 @@ import socket
 import ssl
 import time
 import datetime
+import pprint
 import re
 
 try:
@@ -418,9 +419,11 @@ def server_config_change_cb(server_name, option):
     elif option_name == "username":
         value = W.config_string(option)
         server.user = value
+        server.access_token = ""
     elif option_name == "password":
         value = W.config_string(option)
         server.password = value
+        server.access_token = ""
     else:
         pass
 
@@ -556,14 +559,22 @@ def handle_http_response(server, message):
 
     status_code = message.response.status
 
-    if status_code == 200:
+    def decode_json(server, json_string):
         try:
-            response = json.loads(message.response.body, encoding='utf-8')
+            return json.loads(json_string, encoding='utf-8')
         except Exception as e:
             message = ("{prefix}matrix: Error decoding json response from "
-                       "server.").format(prefix=W.prefix("error"))
-            W.prnt(server.server_buffer, message)
+                       "server: {error}").format(
+                prefix=W.prefix("error"),
+                error=e)
 
+            W.prnt(server.server_buffer, message)
+            return None
+
+    if status_code == 200:
+        response = decode_json(server, message.response.body)
+
+        if not response:
             # Resend the message
             message.response = None
             send_or_queue(server, message)
@@ -580,15 +591,33 @@ def handle_http_response(server, message):
     elif status_code == 504:
         pass
     # TODO handle error responses
+    elif status_code == 401:
+        pass
+    elif status_code == 403:
+        if message.type == MessageType.LOGIN:
+            response = decode_json(server, message.response.body)
+            reason = ("." if not response or not response["error"] else
+                      ": {r}.".format(r=response["error"]))
+
+            message = ("{prefix}Login error{reason}").format(
+                prefix=W.prefix("error"),
+                reason=reason)
+            server_buffer_prnt(server, message)
+
+            W.unhook(server.timer_hook)
+            server.timer_hook = None
+
+            close_socket(server)
+            disconnect(server)
     else:
         server_buffer_prnt(
             server,
             "ERROR IN HTTP RESPONSE {status_code}".format(
                 status_code=status_code))
 
-        server_buffer_prnt(server, message.request.request)
-        server_buffer_prnt(server, message.request.payload)
-        server_buffer_prnt(server, message.response.body)
+        server_buffer_prnt(server, pprint.pformat(message.request.request))
+        server_buffer_prnt(server, pprint.pformat(message.request.payload))
+        server_buffer_prnt(server, pprint.pformat(message.response.body))
 
     return
 
@@ -1229,7 +1258,7 @@ def matrix_handle_message(
                "prefix_nick_{color},matrix_id_{event_id},"
                "matrix_message").format(
                    a=author,
-                   color=color_for_tags(weechat.color.chat_nick_self),
+                   color=color_for_tags("weechat.color.chat_nick_self"),
                    event_id=event_id)
 
         data = "{author}\t{msg}".format(author=author, msg=message)
@@ -1350,6 +1379,12 @@ def receive_cb(server_name, file_descriptor):
             break
 
     return W.WEECHAT_RC_OK
+
+
+def close_socket(server):
+    # type: (MatrixServer) -> None
+    server.socket.shutdown(socket.SHUT_RDWR)
+    server.socket.close()
 
 
 def disconnect(server):
@@ -2211,6 +2246,7 @@ def matrix_command_cb(data, buffer, args):
                 server = SERVERS[server_name]
                 W.unhook(server.timer_hook)
                 server.timer_hook = None
+                server.access_token = ""
                 disconnect(server)
 
     split_args = list(filter(bool, args.split(' ')))
