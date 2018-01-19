@@ -374,6 +374,7 @@ class MatrixRoom:
         self.topic_date   = None       # type: datetime.datetime
         self.prev_batch   = ""         # type: unicode
         self.users        = dict()     # type: Dict[unicode, MatrixUser]
+        self.encrypted    = False      # type: bool
 
 
 def key_from_value(dictionary, value):
@@ -521,7 +522,9 @@ def wrap_socket(server, file_descriptor):
         socket.SOCK_STREAM
     )
 
-    # TODO explain why these type gymnastics are needed
+    # For python 2.7 wrap_socket() doesn't work with sockets created from an
+    # file descriptor because fromfd() doesn't return a wrapped socket, the bug
+    # was fixed for python 3, more info https://bugs.python.org/issue13942
     # pylint: disable=protected-access
     if isinstance(temp_socket, socket._socket.socket):
         # pylint: disable=no-member
@@ -535,7 +538,7 @@ def wrap_socket(server, file_descriptor):
             server_hostname=server.address)  # type: ssl.SSLSocket
 
         return ssl_socket
-    # TODO add the other relevant exceptions
+    # TODO add finer grained error messages with the subclass exceptions
     except ssl.SSLError as error:
         server_buffer_prnt(server, str(error))
         return None
@@ -548,17 +551,30 @@ def handle_http_response(server, message):
 
     status_code = message.response.status
 
-    # TODO handle error responses
-    # TODO handle try again response
     if status_code == 200:
-        # TODO json.loads can fail
-        response = json.loads(message.response.body, encoding='utf-8')
+        try:
+            response = json.loads(message.response.body, encoding='utf-8')
+        except Exception as e:
+            message = ("{prefix}matrix: Error decoding json response from "
+                       "server.").format(prefix=W.prefix("error"))
+            W.prnt(server.server_buffer, message)
+
+            # Resend the message
+            message.response = None
+            send_or_queue(server, message)
+            return
+
         matrix_handle_message(
             server,
             message.type,
             response,
             message.extra_data
         )
+
+    # TODO handle try again response
+    elif status_code == 504:
+        pass
+    # TODO handle error responses
     else:
         server_buffer_prnt(
             server,
@@ -664,6 +680,9 @@ def matrix_handle_room_members(server, room_id, event):
         full_name = event['sender']
         short_name = strip_matrix_server(full_name)[1:]
 
+        if not display_name:
+            display_name = short_name
+
         user = MatrixUser(short_name, display_name)
 
         if full_name == server.user_id:
@@ -686,12 +705,13 @@ def matrix_handle_room_members(server, room_id, event):
 
     elif event['membership'] == 'leave':
         full_name = event['sender']
-        user = room.users[full_name]
-        nick_pointer = W.nicklist_search_nick(buf, "", user.display_name)
-        if nick_pointer:
-            W.nicklist_remove_nick(buf, nick_pointer)
+        if full_name in room.users:
+            user = room.users[full_name]
+            nick_pointer = W.nicklist_search_nick(buf, "", user.display_name)
+            if nick_pointer:
+                W.nicklist_remove_nick(buf, nick_pointer)
 
-        del room.users[full_name]
+            del room.users[full_name]
 
 
 def date_from_age(age):
@@ -997,7 +1017,6 @@ def matrix_handle_room_events(server, room_id, room_events):
                 user=author,
                 ncolor=W.color("reset"))
 
-            # TODO nick and topic color
             # TODO print old topic if configured so
             # TODO nick display name if configured so and found
             message = ("{prefix}{nick} has changed "
@@ -1023,9 +1042,39 @@ def matrix_handle_room_events(server, room_id, room_events):
         elif event["type"] == "m.room.power_levels":
             matrix_handle_room_power_levels(server, room_id, event)
 
+        # These events are unimportant for us.
         elif event["type"] in ["m.room.create", "m.room.join_rules",
                                "m.room.history_visibility",
-                               "m.room.canonical_alias"]:
+                               "m.room.canonical_alias",
+                               "m.room.guest_access",
+                               "m.room.third_party_invite"]:
+            pass
+
+        elif event["type"] == "m.room.name":
+            buf = server.buffers[room_id]
+            room = server.rooms[room_id]
+
+            name = event['content']['name']
+
+            if not name:
+                return
+
+            room.alias = name
+            W.buffer_set(buf, "name", name)
+            W.buffer_set(buf, "short_name", name)
+            W.buffer_set(buf, "localvar_set_channel", name)
+
+        elif event["type"] == "m.room.encryption":
+            buf = server.buffers[room_id]
+            room = server.rooms[room_id]
+            room.encrypted = True
+            message = ("{prefix}This room is encrypted, encryption is "
+                       "currently unsuported. Message sending is disabled for "
+                       "this room.").format(prefix=W.prefix("error"))
+            W.prnt(buf, message)
+
+        # TODO implement message decryption
+        elif event["type"] == "m.room.encrypted":
             pass
 
         else:
@@ -1252,15 +1301,9 @@ def send(server, message):
 def receive_cb(server_name, file_descriptor):
     server = SERVERS[server_name]
 
-    if not server.connected:
-        server_buffer_prnt(server, "NOT CONNECTED WHILE RECEIVING")
-        # can this happen?
-        # do reconnection
-
     while True:
         try:
             data = server.socket.recv(4096)
-        # TODO add the other relevant exceptions
         except ssl.SSLWantReadError:
             break
         except socket.error as error:
@@ -1364,8 +1407,6 @@ def create_server_buffer(server):
         pass
 
 
-# TODO if we're reconnecting we should retry even if there was an error on the
-# socket creation
 @utf8_decode
 def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
     # pylint: disable=too-many-arguments,too-many-branches
@@ -1398,39 +1439,50 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
                 matrix_login(server)
         else:
             reconnect(server)
+        return W.WEECHAT_RC_OK
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND:
-        W.prnt("", '{address} not found'.format(address=ip_address))
+        W.prnt(
+            server.server_buffer,
+            '{address} not found'.format(address=ip_address)
+        )
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND:
-        W.prnt("", 'IP address not found')
+        W.prnt(server.server_buffer, 'IP address not found')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED:
-        W.prnt("", 'Connection refused')
+        W.prnt(server.server_buffer, 'Connection refused')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_PROXY_ERROR:
-        W.prnt("", 'Proxy fails to establish connection to server')
+        W.prnt(
+            server.server_buffer,
+            'Proxy fails to establish connection to server'
+        )
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR:
-        W.prnt("", 'Unable to set local hostname')
+        W.prnt(server.server_buffer, 'Unable to set local hostname')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR:
-        W.prnt("", 'TLS init error')
+        W.prnt(server.server_buffer, 'TLS init error')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR:
-        W.prnt("", 'TLS Handshake failed')
+        W.prnt(server.server_buffer, 'TLS Handshake failed')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_MEMORY_ERROR:
-        W.prnt("", 'Not enough memory')
+        W.prnt(server.server_buffer, 'Not enough memory')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_TIMEOUT:
-        W.prnt("", 'Timeout')
+        W.prnt(server.server_buffer, 'Timeout')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_SOCKET_ERROR:
-        W.prnt("", 'Unable to create socket')
+        W.prnt(server.server_buffer, 'Unable to create socket')
     else:
-        W.prnt("", 'Unexpected error: {status}'.format(status=status_value))
+        W.prnt(
+            server.server_buffer,
+            'Unexpected error: {status}'.format(status=status_value)
+        )
 
+    reconnect(server)
     return W.WEECHAT_RC_OK
 
 
@@ -1505,6 +1557,11 @@ def room_input_cb(server_name, buffer, input_data):
         return W.WEECHAT_RC_ERROR
 
     room_id = key_from_value(server.buffers, buffer)
+    room = server.rooms[room_id]
+
+    if room.encrypted:
+        return W.WEECHAT_RC_OK
+
     body = {"msgtype": "m.text", "body": input_data}
     extra_data = {
         "author": server.user,
@@ -2257,9 +2314,7 @@ def create_default_server(config_file):
     server = MatrixServer('matrix.org', config_file)
     SERVERS[server.name] = server
 
-    # TODO set this to matrix.org
     W.config_option_set(server.options["address"], "matrix.org", 1)
-    W.config_option_set(server.options["port"], "80", 1)
 
     return True
 
@@ -2360,9 +2415,9 @@ def matrix_command_buf_clear_cb(data, buffer, command):
 
 @utf8_decode
 def matrix_command_pgup_cb(data, buffer, command):
-    # TODO the highlight status isn't allowed to be updated/changed via hdata,
-    # therefore the highlight status of a messages can't be reoredered this
-    # would need to be fixed in weechat
+    # TODO the highlight status of a line isn't allowed to be updated/changed
+    # via hdata, therefore the highlight status of a messages can't be
+    # reoredered this would need to be fixed in weechat
     # TODO we shouldn't fetch and print out more messages than
     # max_buffer_lines_number or older messages than max_buffer_lines_minutes
     for server in SERVERS.values():
