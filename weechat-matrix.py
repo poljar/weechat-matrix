@@ -585,9 +585,6 @@ def handle_http_response(server, message):
     # TODO handle try again response
     elif status_code == 504:
         pass
-    # TODO handle error responses
-    elif status_code == 401:
-        pass
     elif status_code == 403:
         if message.type == MessageType.LOGIN:
             response = decode_json(server, message.response.body)
@@ -604,13 +601,31 @@ def handle_http_response(server, message):
 
             close_socket(server)
             disconnect(server)
+        elif message.type == MessageType.STATE:
+            response = decode_json(server, message.response.body)
+            reason = ("." if not response or not response["error"] else
+                      ": {r}.".format(r=response["error"]))
+
+            message = ("{prefix}Can't set state{reason}").format(
+                prefix=W.prefix("network"),
+                reason=reason)
+            server_buffer_prnt(server, message)
+        else:
+            message = ("{prefix}Unhandled 403 error, please inform the "
+                       "developers about this: {error}").format(
+                prefix=W.prefix("error"),
+                error=message.response.body)
+            server_buffer_prnt(server, message)
+
     else:
         server_buffer_prnt(
             server,
-            "ERROR IN HTTP RESPONSE {status_code}".format(
+            ("{prefix}Unhandled {status_code} error, please inform "
+             "the developers about this.").format(
+                prefix=W.prefix("error"),
                 status_code=status_code))
 
-        server_buffer_prnt(server, pprint.pformat(message.request.request))
+        server_buffer_prnt(server, pprint.pformat(message.type))
         server_buffer_prnt(server, pprint.pformat(message.request.payload))
         server_buffer_prnt(server, pprint.pformat(message.response.body))
 
