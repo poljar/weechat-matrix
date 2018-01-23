@@ -9,9 +9,10 @@ import time
 import datetime
 import pprint
 import re
+import sys
 
 # pylint: disable=redefined-builtin
-from builtins import bytes
+from builtins import bytes, str
 
 from collections import deque, Mapping, Iterable, namedtuple
 from operator import itemgetter
@@ -26,27 +27,27 @@ from http_parser.pyparser import HttpParser
 # pylint: disable=import-error
 import weechat
 
-WEECHAT_SCRIPT_NAME        = "matrix"                               # type: unicode
-WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"                   # type: unicode
-WEECHAT_SCRIPT_AUTHOR      = "Damir Jelić <poljar@termina.org.uk>"  # type: unicode
-WEECHAT_SCRIPT_VERSION     = "0.1"                                  # type: unicode
-WEECHAT_SCRIPT_LICENSE     = "MIT"                                  # type: unicode
+WEECHAT_SCRIPT_NAME        = "matrix"                               # type: str
+WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"                   # type: str
+WEECHAT_SCRIPT_AUTHOR      = "Damir Jelić <poljar@termina.org.uk>"  # type: str
+WEECHAT_SCRIPT_VERSION     = "0.1"                                  # type: str
+WEECHAT_SCRIPT_LICENSE     = "MIT"                                  # type: str
 
-MATRIX_API_PATH = "/_matrix/client/r0"  # type: unicode
+MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
 
-SERVERS        = dict()  # type: Dict[unicode, MatrixServer]
+SERVERS        = dict()  # type: Dict[str, MatrixServer]
 CONFIG         = None    # type: weechat.config
 GLOBAL_OPTIONS = None    # type: PluginOptions
 
 
 # Unicode handling
 def encode_to_utf8(data):
-    if isinstance(data, unicode):
+    if isinstance(data, str):
         return data.encode('utf-8')
     if isinstance(data, bytes):
         return data
     elif isinstance(data, Mapping):
-        return type(data)(map(encode_to_utf8, data.iteritems()))
+        return type(data)(map(encode_to_utf8, data.items()))
     elif isinstance(data, Iterable):
         return type(data)(map(encode_to_utf8, data))
     return data
@@ -55,10 +56,10 @@ def encode_to_utf8(data):
 def decode_from_utf8(data):
     if isinstance(data, bytes):
         return data.decode('utf-8')
-    if isinstance(data, unicode):
+    if isinstance(data, str):
         return data
     elif isinstance(data, Mapping):
-        return type(data)(map(decode_from_utf8, data.iteritems()))
+        return type(data)(map(decode_from_utf8, data.items()))
     elif isinstance(data, Iterable):
         return type(data)(map(decode_from_utf8, data))
     return data
@@ -165,13 +166,13 @@ class PluginOptions:
 
         self.redaction_comp_len = 50    # type: int
 
-        self.options = dict()  # type: Dict[unicode, weechat.config_option]
+        self.options = dict()  # type: Dict[str, weechat.config_option]
 
 
 class HttpResponse:
     def __init__(self, status, headers, body):
         self.status  = status   # type: int
-        self.headers = headers  # type: Dict[unicode, unicode]
+        self.headers = headers  # type: Dict[str, str]
         self.body    = body     # type: bytes
 
 
@@ -179,22 +180,22 @@ class HttpRequest:
     def __init__(
             self,
             request_type,                        # type: RequestType
-            host,                                # type: unicode
+            host,                                # type: str
             port,                                # type: int
-            location,                            # type: unicode
-            data=None,                           # type: Dict[unicode, Any]
+            location,                            # type: str
+            data=None,                           # type: Dict[str, Any]
             user_agent='weechat-matrix/{version}'.format(
-                version=WEECHAT_SCRIPT_VERSION)  # type: unicode
+                version=WEECHAT_SCRIPT_VERSION)  # type: str
     ):
         # type: (...) -> None
         host_string   = ':'.join([host, str(port)])
 
         user_agent    = 'User-Agent: {agent}'.format(agent=user_agent)
         host_header   = 'Host: {host}'.format(host=host_string)
-        request_list  = []             # type: List[unicode]
-        accept_header = 'Accept: */*'  # type: unicode
-        end_separator = '\r\n'         # type: unicode
-        payload       = None           # type: unicode
+        request_list  = []             # type: List[str]
+        accept_header = 'Accept: */*'  # type: str
+        end_separator = '\r\n'         # type: str
+        payload       = None           # type: str
 
         if request_type == RequestType.GET:
             get = 'GET {location} HTTP/1.1'.format(location=location)
@@ -244,16 +245,16 @@ class MatrixMessage:
             self,
             server,           # type: MatrixServer
             message_type,     # type: MessageType
-            room_id=None,     # type: unicode
-            extra_id=None,  # type: unicode
-            data=None,        # type: Dict[unicode, Any]
-            extra_data=None   # type: Dict[unicode, Any]
+            room_id=None,     # type: str
+            extra_id=None,  # type: str
+            data=None,        # type: Dict[str, Any]
+            extra_data=None   # type: Dict[str, Any]
     ):
         # type: (...) -> None
         self.type       = message_type  # MessageType
         self.request    = None          # HttpRequest
         self.response   = None          # HttpResponse
-        self.extra_data = extra_data    # Dict[unicode, Any]
+        self.extra_data = extra_data    # Dict[str, Any]
 
         if message_type == MessageType.LOGIN:
             path = ("{api}/login").format(api=MATRIX_API_PATH)
@@ -358,34 +359,34 @@ class MatrixMessage:
 
 class MatrixUser:
     def __init__(self, name, display_name):
-        self.name         = name          # type: unicode
-        self.display_name = display_name  # type: unicode
+        self.name         = name          # type: str
+        self.display_name = display_name  # type: str
         self.power_level  = 0             # type: int
-        self.nick_color   = ""            # type: unicode
-        self.prefix       = ""            # type: unicode
+        self.nick_color   = ""            # type: str
+        self.prefix       = ""            # type: str
 
 
 class MatrixRoom:
     def __init__(self, room_id):
-        # type: (unicode) -> None
-        self.room_id      = room_id    # type: unicode
-        self.alias        = room_id    # type: unicode
-        self.topic        = ""         # type: unicode
-        self.topic_author = ""         # type: unicode
+        # type: (str) -> None
+        self.room_id      = room_id    # type: str
+        self.alias        = room_id    # type: str
+        self.topic        = ""         # type: str
+        self.topic_author = ""         # type: str
         self.topic_date   = None       # type: datetime.datetime
-        self.prev_batch   = ""         # type: unicode
-        self.users        = dict()     # type: Dict[unicode, MatrixUser]
+        self.prev_batch   = ""         # type: str
+        self.users        = dict()     # type: Dict[str, MatrixUser]
         self.encrypted    = False      # type: bool
 
 
 def key_from_value(dictionary, value):
-    # type: (Dict[unicode, Any], Any) -> unicode
+    # type: (Dict[str, Any], Any) -> str
     return list(dictionary.keys())[list(dictionary.values()).index(value)]
 
 
 @utf8_decode
 def server_config_change_cb(server_name, option):
-    # type: (unicode, weechat.config_option) -> int
+    # type: (str, weechat.config_option) -> int
     server = SERVERS[server_name]
     option_name = None
 
@@ -428,22 +429,22 @@ def server_config_change_cb(server_name, option):
 class MatrixServer:
     # pylint: disable=too-many-instance-attributes
     def __init__(self, name, config_file):
-        # type: (unicode, weechat.config) -> None
-        self.name            = name     # type: unicode
+        # type: (str, weechat.config) -> None
+        self.name            = name     # type: str
         self.user_id         = ""
-        self.address         = ""       # type: unicode
+        self.address         = ""       # type: str
         self.port            = 8448     # type: int
-        self.options         = dict()   # type: Dict[unicode, weechat.config]
+        self.options         = dict()   # type: Dict[str, weechat.config]
 
-        self.user            = ""       # type: unicode
-        self.password        = ""       # type: unicode
+        self.user            = ""       # type: str
+        self.password        = ""       # type: str
 
-        self.rooms           = dict()   # type: Dict[unicode, MatrixRoom]
-        self.buffers         = dict()   # type: Dict[unicode, weechat.buffer]
+        self.rooms           = dict()   # type: Dict[str, MatrixRoom]
+        self.buffers         = dict()   # type: Dict[str, weechat.buffer]
         self.server_buffer   = None     # type: weechat.buffer
         self.fd_hook         = None     # type: weechat.hook
         self.timer_hook      = None     # type: weechat.hook
-        self.numeric_address = ""       # type: unicode
+        self.numeric_address = ""       # type: str
 
         self.autoconnect     = False                         # type: bool
         self.connected       = False                         # type: bool
@@ -452,8 +453,8 @@ class MatrixServer:
         self.socket          = None                          # type: ssl.SSLSocket
         self.ssl_context     = ssl.create_default_context()  # type: ssl.SSLContext
 
-        self.access_token    = None                          # type: unicode
-        self.next_batch      = None                          # type: unicode
+        self.access_token    = None                          # type: str
+        self.next_batch      = None                          # type: str
         self.transaction_id  = 0                             # type: int
 
         self.http_parser = HttpParser()                  # type: HttpParser
@@ -464,7 +465,7 @@ class MatrixServer:
         # Queue of messages we send off and are waiting a response for
         self.receive_queue = deque()  # type: Deque[MatrixMessage]
         self.message_queue = deque()  # type: Deque[MatrixMessage]
-        self.ignore_event_list = []   # type: List[unicode]
+        self.ignore_event_list = []   # type: List[str]
 
         self._create_options(config_file)
 
@@ -528,8 +529,8 @@ def wrap_socket(server, file_descriptor):
     # For python 2.7 wrap_socket() doesn't work with sockets created from an
     # file descriptor because fromfd() doesn't return a wrapped socket, the bug
     # was fixed for python 3, more info https://bugs.python.org/issue13942
-    # pylint: disable=protected-access
-    if isinstance(temp_socket, socket._socket.socket):
+    # pylint: disable=protected-access,unidiomatic-typecheck
+    if type(temp_socket) == socket._socket.socket:
         # pylint: disable=no-member
         sock = socket._socketobject(_sock=temp_socket)
     else:
@@ -557,11 +558,11 @@ def handle_http_response(server, message):
     def decode_json(server, json_string):
         try:
             return json.loads(json_string, encoding='utf-8')
-        except Exception as e:
+        except Exception as error:
             message = ("{prefix}matrix: Error decoding json response from "
                        "server: {error}").format(
-                prefix=W.prefix("error"),
-                error=e)
+                           prefix=W.prefix("error"),
+                           error=error)
 
             W.prnt(server.server_buffer, message)
             return None
@@ -613,8 +614,8 @@ def handle_http_response(server, message):
         else:
             message = ("{prefix}Unhandled 403 error, please inform the "
                        "developers about this: {error}").format(
-                prefix=W.prefix("error"),
-                error=message.response.body)
+                           prefix=W.prefix("error"),
+                           error=message.response.body)
             server_buffer_prnt(server, message)
 
     else:
@@ -622,8 +623,8 @@ def handle_http_response(server, message):
             server,
             ("{prefix}Unhandled {status_code} error, please inform "
              "the developers about this.").format(
-                prefix=W.prefix("error"),
-                status_code=status_code))
+                 prefix=W.prefix("error"),
+                 status_code=status_code))
 
         server_buffer_prnt(server, pprint.pformat(message.type))
         server_buffer_prnt(server, pprint.pformat(message.request.payload))
@@ -633,7 +634,7 @@ def handle_http_response(server, message):
 
 
 def strip_matrix_server(string):
-    # type: (unicode) -> unicode
+    # type: (str) -> str
     return string.rsplit(":", 1)[0]
 
 
@@ -661,7 +662,7 @@ def add_user_to_nicklist(buf, user):
 
 
 def matrix_create_room_buffer(server, room_id):
-    # type: (MatrixServer, unicode) -> None
+    # type: (MatrixServer, str) -> None
     buf = W.buffer_new(
         room_id,
         "room_input_cb",
@@ -695,7 +696,7 @@ def matrix_create_room_buffer(server, room_id):
 
 
 def matrix_handle_room_aliases(server, room_id, event):
-    # type: (MatrixServer, unicode, Dict[unicode, Any]) -> None
+    # type: (MatrixServer, str, Dict[str, Any]) -> None
     buf = server.buffers[room_id]
     room = server.rooms[room_id]
 
@@ -713,7 +714,7 @@ def matrix_handle_room_aliases(server, room_id, event):
 
 
 def matrix_handle_room_members(server, room_id, event):
-    # type: (MatrixServer, unicode, Dict[unicode, Any]) -> None
+    # type: (MatrixServer, str, Dict[str, Any]) -> None
     buf = server.buffers[room_id]
     room = server.rooms[room_id]
 
@@ -773,7 +774,7 @@ def color_for_tags(color):
 
 
 def matrix_handle_room_text_message(server, room_id, event, old=False):
-    # type: (MatrixServer, unicode, Dict[unicode, Any], bool) -> None
+    # type: (MatrixServer, str, Dict[str, Any], bool) -> None
     tag = ""
     msg_author = ""
     nick_color_name = ""
@@ -815,7 +816,7 @@ def matrix_handle_room_text_message(server, room_id, event, old=False):
 
 
 def matrix_handle_redacted_message(server, room_id, event):
-    # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
+    # type: (MatrixServer, str, Dict[Any, Any]) -> None
     reason = ""
     room = server.rooms[room_id]
 
@@ -875,7 +876,7 @@ def matrix_handle_redacted_message(server, room_id, event):
 
 
 def matrix_handle_room_messages(server, room_id, event, old=False):
-    # type: (MatrixServer, unicode, Dict[unicode, Any], bool) -> None
+    # type: (MatrixServer, str, Dict[str, Any], bool) -> None
     if event['type'] == 'm.room.message':
         if 'redacted_by' in event['unsigned']:
             matrix_handle_redacted_message(server, room_id, event)
@@ -894,7 +895,7 @@ def matrix_handle_room_messages(server, room_id, event, old=False):
 
 
 def event_id_from_tags(tags):
-    # type: (List[unicode]) -> unicode
+    # type: (List[str]) -> str
     for tag in tags:
         if tag.startswith("matrix_id"):
             return tag[10:]
@@ -976,7 +977,7 @@ def matrix_handle_room_redaction(server, room_id, event):
 
 
 def get_prefix_for_level(level):
-    # type: (int) -> unicode
+    # type: (int) -> str
     if level >= 100:
         return "&"
     elif level >= 50:
@@ -988,7 +989,7 @@ def get_prefix_for_level(level):
 
 # TODO make this configurable
 def get_prefix_color(prefix):
-    # type: (unicode) -> unicode
+    # type: (str) -> str
     if prefix == "&":
         return "lightgreen"
     elif prefix == "@":
@@ -1019,7 +1020,7 @@ def matrix_handle_room_power_levels(server, room_id, event):
 
 
 def matrix_handle_room_events(server, room_id, room_events):
-    # type: (MatrixServer, unicode, Dict[Any, Any]) -> None
+    # type: (MatrixServer, str, Dict[Any, Any]) -> None
     for event in room_events:
         if event['event_id'] in server.ignore_event_list:
             server.ignore_event_list.remove(event['event_id'])
@@ -1131,7 +1132,7 @@ def matrix_handle_room_events(server, room_id, room_events):
 
 def matrix_handle_room_info(server, room_info):
     # type: (MatrixServer, Dict) -> None
-    for room_id, room in room_info['join'].iteritems():
+    for room_id, room in room_info['join'].items():
         if not room_id:
             continue
 
@@ -1191,7 +1192,7 @@ def matrix_sort_old_messages(server, room_id):
         # will reverse the list at the same time
         while sorted_lines:
             line = sorted_lines.pop()
-            new_line = {k: unicode(v) for k, v in line.items()}
+            new_line = {k: str(v) for k, v in line.items()}
             lines.append(new_line)
 
         matrix_update_buffer_lines(lines, own_lines)
@@ -1230,8 +1231,8 @@ def matrix_handle_old_messages(server, room_id, events):
 def matrix_handle_message(
         server,        # type: MatrixServer
         message_type,  # type: MessageType
-        response,      # type: Dict[unicode, Any]
-        extra_data     # type: Dict[unicode, Any]
+        response,      # type: Dict[str, Any]
+        extra_data     # type: Dict[str, Any]
 ):
     # type: (...) -> None
 
@@ -1410,7 +1411,7 @@ def disconnect(server):
 
 
 def server_buffer_prnt(server, string):
-    # type: (MatrixServer, unicode) -> None
+    # type: (MatrixServer, str) -> None
     assert server.server_buffer
     buffer = server.server_buffer
     now = int(time.time())
@@ -1562,7 +1563,7 @@ def reconnect_cb(server_name, remaining):
 
 
 def connect(server):
-    # type: (MatrixServer) -> bool
+    # type: (MatrixServer) -> int
     if not server.address or not server.port:
         message = "{prefix}Server address or port not set".format(
             prefix=W.prefix("error"))
@@ -2489,7 +2490,7 @@ def matrix_command_pgup_cb(data, buffer, command):
 
 
 def tags_from_line_data(line_data):
-    # type: (weechat.hdata) -> List[unicode]
+    # type: (weechat.hdata) -> List[str]
     tags_count = W.hdata_get_var_array_size(
         W.hdata_get('line_data'),
         line_data,
@@ -2506,7 +2507,7 @@ def tags_from_line_data(line_data):
 
 
 def event_id_from_line(buf, target_number):
-    # type: (weechat.buffer, int) -> unicode
+    # type: (weechat.buffer, int) -> str
     own_lines = W.hdata_pointer(W.hdata_get('buffer'), buf, 'own_lines')
     if own_lines:
         line = W.hdata_pointer(
@@ -2660,6 +2661,7 @@ def hook_page_up():
 
 @utf8_decode
 def matrix_bar_item_plugin(data, item, window, buffer, extra_info):
+    # pylint: disable=unused-argument
     for server in SERVERS.values():
         if (buffer in server.buffers.values() or
                 buffer == server.server_buffer):
@@ -2673,6 +2675,7 @@ def matrix_bar_item_plugin(data, item, window, buffer, extra_info):
 
 @utf8_decode
 def matrix_bar_item_name(data, item, window, buffer, extra_info):
+    # pylint: disable=unused-argument
     for server in SERVERS.values():
         if buffer in server.buffers.values():
             color = ("status_name_ssl"
@@ -2797,7 +2800,7 @@ def autoconnect(servers):
 
 
 if __name__ == "__main__":
-    W = WeechatWrapper(weechat)
+    W = weechat if sys.hexversion >= 0x3000000 else WeechatWrapper(weechat)
 
     if W.register(WEECHAT_SCRIPT_NAME,
                   WEECHAT_SCRIPT_AUTHOR,
