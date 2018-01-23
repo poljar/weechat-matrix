@@ -119,6 +119,7 @@ class MessageType(Enum):
     STATE    = 3
     REDACT   = 4
     ROOM_MSG = 5
+    JOIN     = 6
 
 
 @unique
@@ -246,8 +247,8 @@ class MatrixMessage:
             server,           # type: MatrixServer
             message_type,     # type: MessageType
             room_id=None,     # type: str
-            extra_id=None,  # type: str
-            data=None,        # type: Dict[str, Any]
+            extra_id=None,    # type: str
+            data={},          # type: Dict[str, Any]
             extra_data=None   # type: Dict[str, Any]
     ):
         # type: (...) -> None
@@ -354,6 +355,21 @@ class MatrixMessage:
                 server.address,
                 server.port,
                 path,
+            )
+
+        elif message_type == MessageType.JOIN:
+            path = ("{api}/rooms/{room_id}/join?"
+                    "access_token={access_token}").format(
+                api=MATRIX_API_PATH,
+                room_id=room_id,
+                access_token=server.access_token)
+
+            self.request = HttpRequest(
+                RequestType.POST,
+                server.address,
+                server.port,
+                path,
+                data
             )
 
 
@@ -518,8 +534,7 @@ class MatrixServer:
 
 FormatedString = namedtuple(
     'FormatedString',
-    ['text', 'attributes'],
-    verbose=True
+    ['text', 'attributes']
 )
 
 Default_format_attributes = {
@@ -1451,6 +1466,29 @@ def matrix_handle_room_events(server, room_id, room_events):
             W.prnt(server.server_buffer, message)
 
 
+def matrix_handle_invite_events(server, room_id, events):
+    # type: (MatrixServer, str, List[Dict[str, Any]]) -> None
+    for event in events:
+        if event["type"] != "m.room.member":
+            continue
+
+        if 'membership' not in event:
+            continue
+
+        if event["membership"] == "invite":
+            sender = event["sender"]
+            # TODO does this go to the server buffer or to the channel buffer?
+            message = ("{prefix}You have been invited to {chan_color}{channel}"
+                       "{ncolor} by {nick_color}{nick}{ncolor}").format(
+                            prefix=W.prefix("network"),
+                            chan_color=W.color("chat_channel"),
+                            channel=room_id,
+                            ncolor=W.color("reset"),
+                            nick_color=W.color("chat_nick"),
+                            nick=sender)
+            W.prnt(server.server_buffer, message)
+
+
 def matrix_handle_room_info(server, room_info):
     # type: (MatrixServer, Dict) -> None
     for room_id, room in room_info['join'].items():
@@ -1465,6 +1503,13 @@ def matrix_handle_room_info(server, room_info):
 
         matrix_handle_room_events(server, room_id, room['state']['events'])
         matrix_handle_room_events(server, room_id, room['timeline']['events'])
+
+    for room_id, room in room_info['invite'].items():
+        matrix_handle_invite_events(
+            server,
+            room_id,
+            room['invite_state']['events']
+        )
 
 
 def matrix_sort_old_messages(server, room_id):
@@ -2814,6 +2859,34 @@ def matrix_command_pgup_cb(data, buffer, command):
     return W.WEECHAT_RC_OK
 
 
+@utf8_decode
+def matrix_command_join_cb(data, buffer, command):
+    def join(args):
+        split_args = args.split(" ", 1)
+
+        # TODO handle join for non public rooms
+        if len(split_args) != 2:
+            message = ("{prefix}Error with command \"/join\" (help on "
+                       "command: /help join)").format(
+                           prefix=W.prefix("error"))
+            W.prnt("", message)
+            return
+
+        _, room_id = split_args
+        message = MatrixMessage(server, MessageType.JOIN, room_id=room_id)
+        send_or_queue(server, message)
+
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            join(command)
+            return W.WEECHAT_RC_OK_EAT
+        elif buffer == server.server_buffer:
+            join(command)
+            return W.WEECHAT_RC_OK_EAT
+
+    return W.WEECHAT_RC_OK
+
+
 def tags_from_line_data(line_data):
     # type: (weechat.hdata) -> List[str]
     tags_count = W.hdata_get_var_array_size(
@@ -3113,6 +3186,7 @@ def init_hooks():
 
     W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
+    W.hook_command_run('/join', 'matrix_command_join_cb', '')
 
     if GLOBAL_OPTIONS.enable_backlog:
         hook_page_up()
