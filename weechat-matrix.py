@@ -120,6 +120,7 @@ class MessageType(Enum):
     REDACT   = 4
     ROOM_MSG = 5
     JOIN     = 6
+    PART     = 7
 
 
 @unique
@@ -371,6 +372,22 @@ class MatrixMessage:
                 path,
                 data
             )
+
+        elif message_type == MessageType.PART:
+            path = ("{api}/rooms/{room_id}/leave?"
+                    "access_token={access_token}").format(
+                api=MATRIX_API_PATH,
+                room_id=room_id,
+                access_token=server.access_token)
+
+            self.request = HttpRequest(
+                RequestType.POST,
+                server.address,
+                server.port,
+                path,
+                data
+            )
+
 
 
 class MatrixUser:
@@ -906,11 +923,11 @@ def handle_http_response(server, message):
     if status_code == 200:
         response = decode_json(server, message.response.body)
 
-        if not response:
-            # Resend the message
-            message.response = None
-            send_or_queue(server, message)
-            return
+        # if not response:
+        #     # Resend the message
+        #     message.response = None
+        #     send_or_queue(server, message)
+        #     return
 
         matrix_handle_message(
             server,
@@ -2158,7 +2175,6 @@ def init_matrix_config():
         )
     ]
 
-
     def add_global_options(section, options):
         for option in options:
             GLOBAL_OPTIONS.options[option.name] = W.config_new_option(
@@ -2887,6 +2903,43 @@ def matrix_command_join_cb(data, buffer, command):
     return W.WEECHAT_RC_OK
 
 
+@utf8_decode
+def matrix_command_part_cb(data, buffer, command):
+    def part(server, buffer, args):
+        rooms = []
+
+        split_args = args.split(" ", 1)
+
+        if len(split_args) == 1:
+            if buffer == server.server_buffer:
+                message = ("{prefix}Error with command \"/part\" (help on "
+                           "command: /help part)").format(
+                               prefix=W.prefix("error"))
+                W.prnt("", message)
+                return
+
+            rooms = [key_from_value(server.buffers, buffer)]
+
+        else:
+            _, rooms = split_args
+            rooms = rooms.split(" ")
+
+        for room_id in rooms:
+            message = MatrixMessage(server, MessageType.PART, room_id=room_id)
+            send_or_queue(server, message)
+
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            part(server, buffer, command)
+            return W.WEECHAT_RC_OK_EAT
+        elif buffer == server.server_buffer:
+            part(server, buffer, command)
+            return W.WEECHAT_RC_OK_EAT
+
+    return W.WEECHAT_RC_OK
+
+
+
 def tags_from_line_data(line_data):
     # type: (weechat.hdata) -> List[str]
     tags_count = W.hdata_get_var_array_size(
@@ -3187,6 +3240,7 @@ def init_hooks():
     W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
     W.hook_command_run('/join', 'matrix_command_join_cb', '')
+    W.hook_command_run('/part', 'matrix_command_part_cb', '')
 
     if GLOBAL_OPTIONS.enable_backlog:
         hook_page_up()
