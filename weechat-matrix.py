@@ -144,6 +144,18 @@ class ServerBufferType(Enum):
     INDEPENDENT = 2
 
 
+@unique
+class DebugType(Enum):
+    MESSAGING = 0
+    NETWORK   = 1
+    TIMING    = 2
+
+
+def prnt_debug(debug_type, server, message):
+    if debug_type in GLOBAL_OPTIONS.debug:
+        W.prnt(server.server_buffer, message)
+
+
 Option = namedtuple(
     'Option', [
         'name',
@@ -169,6 +181,7 @@ class PluginOptions:
         self.redaction_comp_len = 50    # type: int
 
         self.options = dict()  # type: Dict[str, weechat.config_option]
+        self.debug   = []      # type: DebugType
 
 
 class HttpResponse:
@@ -257,6 +270,10 @@ class MatrixMessage:
         self.request    = None          # HttpRequest
         self.response   = None          # HttpResponse
         self.extra_data = extra_data    # Dict[str, Any]
+
+        self.creation_time = time.time()
+        self.send_time     = None
+        self.receive_time  = None
 
         if message_type == MessageType.LOGIN:
             path = ("{api}/login").format(api=MATRIX_API_PATH)
@@ -938,7 +955,9 @@ def handle_http_response(server, message):
 
     # TODO handle try again response
     elif status_code == 504:
-        pass
+        if message.type == MessageType.SYNC:
+            matrix_sync(server)
+
     elif status_code == 403:
         if message.type == MessageType.LOGIN:
             response = decode_json(server, message.response.body)
@@ -982,6 +1001,23 @@ def handle_http_response(server, message):
         server_buffer_prnt(server, pprint.pformat(message.type))
         server_buffer_prnt(server, pprint.pformat(message.request.payload))
         server_buffer_prnt(server, pprint.pformat(message.response.body))
+
+    creation_date = datetime.datetime.fromtimestamp(message.creation_time)
+    done_time = time.time()
+    message = ("Message of type {t} created at {c}."
+               "\nMessage lifetime information:"
+               "\n    Send delay: {s} ms"
+               "\n    Receive delay: {r} ms"
+               "\n    Handling time: {h} ms"
+               "\n    Total time: {total} ms"
+               ).format(
+        t=message.type,
+        c=creation_date,
+        s=(message.send_time - message.creation_time) * 1000,
+        r=(message.receive_time - message.send_time) * 1000,
+        h=(done_time - message.receive_time) * 1000,
+        total=(done_time - message.creation_time) * 1000,)
+    prnt_debug(DebugType.TIMING, server, message)
 
     return
 
@@ -1630,12 +1666,16 @@ def matrix_handle_message(
 
         # we got the same batch again, nothing to do
         if next_batch == server.next_batch:
+            matrix_sync(server)
             return
 
         room_info = response['rooms']
         matrix_handle_room_info(server, room_info)
 
         server.next_batch = next_batch
+
+        # TODO add a delay to this
+        matrix_sync(server)
 
     elif message_type is MessageType.SEND:
         author   = extra_data["author"]
@@ -1685,6 +1725,11 @@ def matrix_handle_message(
                 type=message_type))
 
 
+def matrix_sync(server):
+    message = MatrixMessage(server, MessageType.SYNC)
+    server.send_queue.append(message)
+
+
 def matrix_login(server):
     # type: (MatrixServer) -> None
     post_data = {"type": "m.login.password",
@@ -1702,6 +1747,11 @@ def matrix_login(server):
 def send_or_queue(server, message):
     # type: (MatrixServer, MatrixMessage) -> None
     if not send(server, message):
+        prnt_debug(DebugType.MESSAGING, server,
+                   ("{prefix} Failed sending message of type {t}. "
+                    "Adding to queue").format(
+                       prefix=W.prefix("error"),
+                       t=message.type))
         server.send_queue.append(message)
 
 
@@ -1711,10 +1761,24 @@ def send(server, message):
     request = message.request.request
     payload = message.request.payload
 
+    prnt_debug(DebugType.MESSAGING, server,
+               "{prefix} Sending message of type {t}.".format(
+                   prefix=W.prefix("error"),
+                   t=message.type))
+
     try:
+        start = time.time()
+
         server.socket.sendall(bytes(request, 'utf-8'))
         if payload:
             server.socket.sendall(bytes(payload, 'utf-8'))
+
+        end = time.time()
+        message.send_time = end
+        send_time = (end - start) * 1000
+        prnt_debug(DebugType.NETWORK, server,
+                   ("Message done sending ({t}ms), putting message in the "
+                    "receive queue.").format(t=send_time))
 
         server.receive_queue.append(message)
         return True
@@ -1738,14 +1802,21 @@ def receive_cb(server_name, file_descriptor):
             disconnect(server)
 
             # Queue the failed message for resending
-            message = server.receive_queue.popleft()
-            server.send_queue.appendleft(message)
+            if server.receive_queue:
+                message = server.receive_queue.popleft()
+                server.send_queue.appendleft(message)
 
             server_buffer_prnt(server, error)
             return W.WEECHAT_RC_OK
 
         if not data:
             server_buffer_prnt(server, "No data while reading")
+
+            # Queue the failed message for resending
+            if server.receive_queue:
+                message = server.receive_queue.popleft()
+                server.send_queue.appendleft(message)
+
             disconnect(server)
             break
 
@@ -1764,6 +1835,15 @@ def receive_cb(server_name, file_descriptor):
 
             message = server.receive_queue.popleft()
             message.response = HttpResponse(status, headers, body)
+            receive_time = time.time()
+            message.receive_time = receive_time
+
+            prnt_debug(DebugType.MESSAGING, server,
+                       ("{prefix}Received message of type {t} and "
+                        "status {s}").format(
+                            prefix=W.prefix("error"),
+                            t=message.type,
+                            s=status))
 
             # Message done, reset the parser state.
             server.http_parser = HttpParser()
@@ -2034,6 +2114,9 @@ def matrix_timer_cb(server_name, remaining_calls):
 
     while server.send_queue:
         message = server.send_queue.popleft()
+        prnt_debug(DebugType.MESSAGING, server,
+                   ("Timer hook found message of type {t} in queue. Sending "
+                    "out.".format(t=message.type)))
 
         if not send(server, message):
             # We got an error while sending the last message return the message
@@ -2045,13 +2128,6 @@ def matrix_timer_cb(server_name, remaining_calls):
         server_buffer_prnt(
             server,
             "Handling message: {message}".format(message=message))
-
-    # TODO don't send this out here, if a SYNC fails for some reason (504 try
-    # again!) we'll hammer the server unnecessarily, send it out after a
-    # successful sync or after a 504 sync with a proper timeout
-    if server.next_batch:
-        message = MatrixMessage(server, MessageType.SYNC)
-        server.send_queue.append(message)
 
     return W.WEECHAT_RC_OK
 
@@ -2243,6 +2319,45 @@ def check_server_existence(server_name, servers):
     return True
 
 
+def matrix_command_debug(args):
+    if not args:
+        message = ("{prefix}matrix: Too few arguments for command "
+                   "\"/matrix debug\" (see the help for the command: "
+                   "/matrix help debug").format(prefix=W.prefix("error"))
+        W.prnt("", message)
+        return
+
+    def toggle_debug(debug_type):
+        if debug_type in GLOBAL_OPTIONS.debug:
+            message = ("{prefix}matrix: Disabling matrix {t} "
+                       "debugging.").format(
+                               prefix=W.prefix("error"),
+                               t=debug_type)
+            W.prnt("", message)
+            GLOBAL_OPTIONS.debug.remove(debug_type)
+        else:
+            message = ("{prefix}matrix: Enabling matrix {t} "
+                       "debugging.").format(
+                               prefix=W.prefix("error"),
+                               t=debug_type)
+            W.prnt("", message)
+            GLOBAL_OPTIONS.debug.append(debug_type)
+
+    for command in args:
+        if command == "network":
+            toggle_debug(DebugType.NETWORK)
+        elif command == "messaging":
+            toggle_debug(DebugType.MESSAGING)
+        elif command == "timing":
+            toggle_debug(DebugType.TIMING)
+        else:
+            message = ("{prefix}matrix: Unknown matrix debug "
+                       "type \"{t}\".").format(
+                               prefix=W.prefix("error"),
+                               t=command)
+            W.prnt("", message)
+
+
 def matrix_command_help(args):
     if not args:
         message = ("{prefix}matrix: Too few arguments for command "
@@ -2329,6 +2444,19 @@ def matrix_command_help(args):
                        "\n\n"
                        "matrix-command: a Matrix command name"
                        "(internal name)").format(
+                           delimiter_color=W.color("chat_delimiters"),
+                           cmd_color=W.color("chat_buffer"),
+                           ncolor=W.color("reset"))
+
+        elif command == "debug":
+            message = ("{delimiter_color}[{ncolor}matrix{delimiter_color}]  "
+                       "{ncolor}{cmd_color}/debug{ncolor} "
+                       "<debug-type> [<debug-type>...]"
+                       "\n\n"
+                       "enable/disable degugging for a Matrix subsystem"
+                       "\n\n"
+                       "debug-type: a Matrix debug type, one of messaging, "
+                       "timing, network").format(
                            delimiter_color=W.color("chat_delimiters"),
                            cmd_color=W.color("chat_buffer"),
                            ncolor=W.color("reset"))
@@ -2641,10 +2769,11 @@ def matrix_command_cb(data, buffer, args):
         for server_name in args:
             if check_server_existence(server_name, SERVERS):
                 server = SERVERS[server_name]
-                W.unhook(server.timer_hook)
-                server.timer_hook = None
-                server.access_token = ""
-                disconnect(server)
+                if server.connected:
+                    W.unhook(server.timer_hook)
+                    server.timer_hook = None
+                    server.access_token = ""
+                    disconnect(server)
 
     split_args = list(filter(bool, args.split(' ')))
 
@@ -2676,6 +2805,9 @@ def matrix_command_cb(data, buffer, args):
 
     elif command == 'help':
         matrix_command_help(args)
+
+    elif command == 'debug':
+        matrix_command_debug(args)
 
     else:
         message = ("{prefix}matrix: Error: unknown matrix command, "
@@ -2739,7 +2871,14 @@ def matrix_server_completion_cb(data, completion_item, buffer, completion):
 
 @utf8_decode
 def matrix_command_completion_cb(data, completion_item, buffer, completion):
-    for command in ["connect", "disconnect", "reconnect", "server", "help"]:
+    for command in [
+        "connect",
+        "disconnect",
+        "reconnect",
+        "server",
+        "help",
+        "debug"
+    ]:
         W.hook_completion_list_add(
             completion,
             command,
@@ -3052,6 +3191,17 @@ def matrix_redact_command_cb(data, buffer, args):
 
 
 @utf8_decode
+def matrix_debug_completion_cb(data, completion_item, buffer, completion):
+    for debug_type in ["messaging", "network", "timing"]:
+        W.hook_completion_list_add(
+            completion,
+            debug_type,
+            0,
+            weechat.WEECHAT_LIST_POS_SORT)
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
 def matrix_message_completion_cb(data, completion_item, buffer, completion):
     own_lines = W.hdata_pointer(W.hdata_get('buffer'), buffer, 'own_lines')
     if own_lines:
@@ -3183,6 +3333,13 @@ def init_hooks():
         ""
     )
 
+    W.hook_completion(
+        "matrix_debug_types",
+        "Matrix debugging type completion",
+        "matrix_debug_completion_cb",
+        ""
+    )
+
     W.hook_command(
         # Command name and short description
         'matrix', 'Matrix chat protocol command',
@@ -3193,6 +3350,7 @@ def init_hooks():
             'connect <server-name> ||'
             'disconnect <server-name> ||'
             'reconnect <server-name> ||'
+            'debug <debug-type> ||'
             'help <matrix-command>'
         ),
         # Description
@@ -3202,6 +3360,7 @@ def init_hooks():
             'disconnect: disconnect from one or all Matrix servers\n'
             ' reconnect: reconnect to server(s)\n\n'
             '      help: show detailed command help\n\n'
+            '     debug: enable or disable debugging\n\n'
             'Use /matrix help [command] to find out more\n'
         ),
         # Completions
@@ -3210,6 +3369,7 @@ def init_hooks():
             'connect %(matrix_servers) ||'
             'disconnect %(matrix_servers) ||'
             'reconnect %(matrix_servers) ||'
+            'debug %(matrix_debug_types) ||'
             'help %(matrix_commands)'
         ),
         # Function name
