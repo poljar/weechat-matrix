@@ -24,6 +24,12 @@ from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 
 from http_parser.pyparser import HttpParser
 
+try:
+    from HTMLParser import HTMLParser
+except ImportError:
+    from html.parser import HTMLParser
+
+
 # pylint: disable=import-error
 import weechat
 
@@ -566,8 +572,8 @@ class MatrixServer:
                 "", "server_config_change_cb", self.name, "", "")
 
 
-FormatedString = namedtuple(
-    'FormatedString',
+FormattedString = namedtuple(
+    'FormattedString',
     ['text', 'attributes']
 )
 
@@ -575,6 +581,8 @@ Default_format_attributes = {
     "bold": False,
     "italic": False,
     "underline": False,
+    "strikethrough": False,
+    "quote": False,
     "fgcolor": None,
     "bgcolor": None
 }
@@ -700,12 +708,12 @@ def sgr_to_rgb(color):
 
 # TODO reverse video
 def parse_input_line(line):
-    """Parses the weechat input line and produces formated strings that can be
+    """Parses the weechat input line and produces formatted strings that can be
     later converted to HTML or to a string for weechat's print functions
     """
-    # type: (str) -> List[FormatedString]
+    # type: (str) -> List[FormattedString]
     text = ""        # type: str
-    substrings = []  # type: List[FormatedString]
+    substrings = []  # type: List[FormattedString]
     attributes = Default_format_attributes.copy()
 
     i = 0
@@ -713,7 +721,7 @@ def parse_input_line(line):
         # Bold
         if line[i] == "\x02":
             if text:
-                substrings.append(FormatedString(text, attributes.copy()))
+                substrings.append(FormattedString(text, attributes.copy()))
             text = ""
             attributes["bold"] = not attributes["bold"]
             i = i + 1
@@ -721,7 +729,7 @@ def parse_input_line(line):
         # Color
         elif line[i] == "\x03":
             if text:
-                substrings.append(FormatedString(text, attributes.copy()))
+                substrings.append(FormattedString(text, attributes.copy()))
             text = ""
             i = i + 1
 
@@ -759,7 +767,7 @@ def parse_input_line(line):
         # Reset
         elif line[i] == "\x0F":
             if text:
-                substrings.append(FormatedString(text, attributes.copy()))
+                substrings.append(FormattedString(text, attributes.copy()))
             text = ""
             # Reset all the attributes
             attributes = Default_format_attributes.copy()
@@ -767,7 +775,7 @@ def parse_input_line(line):
         # Italic
         elif line[i] == "0\x1D":
             if text:
-                substrings.append(FormatedString(text, attributes.copy()))
+                substrings.append(FormattedString(text, attributes.copy()))
             text = ""
             attributes["italic"] = not attributes["italic"]
             i = i + 1
@@ -775,7 +783,7 @@ def parse_input_line(line):
         # Underline
         elif line[i] == "0\x1F":
             if text:
-                substrings.append(FormatedString(text, attributes.copy()))
+                substrings.append(FormattedString(text, attributes.copy()))
             text = ""
             attributes["underline"] = not attributes["underline"]
             i = i + 1
@@ -785,19 +793,19 @@ def parse_input_line(line):
             text = text + line[i]
             i = i + 1
 
-    substrings.append(FormatedString(text, attributes))
+    substrings.append(FormattedString(text, attributes))
     return substrings
 
 
-def formated(strings):
+def formatted(strings):
     for string in strings:
         if string.attributes != Default_format_attributes:
             return True
     return False
 
 
-def formated_to_weechat(strings):
-    # type: (List[FormatedString]) -> str
+def formatted_to_weechat(strings):
+    # type: (List[FormattedString]) -> str
     # TODO BG COLOR
     def add_attribute(string, name, value):
         if name == "bold" and value:
@@ -805,21 +813,31 @@ def formated_to_weechat(strings):
                 bold_on=W.color("bold"),
                 text=string,
                 bold_off=W.color("-bold"))
+
         elif name == "italic" and value:
             return "{italic_on}{text}{italic_off}".format(
                 italic_on=W.color("italic"),
                 text=string,
                 italic_off=W.color("-italic"))
+
         elif name == "underline" and value:
             return "{underline_on}{text}{underline_off}".format(
                 underline_on=W.color("underline"),
                 text=string,
                 underline_off=W.color("-underline"))
+
+        elif name == "strikethrough" and value:
+            return string_strikethrough(string)
+
+        elif name == "quote" and value:
+            return "“{text}”".format(text=string)
+
         elif name == "fgcolor" and value:
             return "{color_on}{text}{color_off}".format(
                 color_on=W.color(value),
                 text=string,
                 color_off=W.color("resetcolor"))
+
         elif name == "bgcolor" and value:
             return "{color_on}{text}{color_off}".format(
                 color_on=W.color("," + value),
@@ -828,9 +846,9 @@ def formated_to_weechat(strings):
 
         return string
 
-    def format_string(formated_string):
-        text = formated_string.text
-        attributes = formated_string.attributes
+    def format_string(formatted_string):
+        text = formatted_string.text
+        attributes = formatted_string.attributes
 
         for key, value in attributes.items():
             text = add_attribute(text, key, value)
@@ -840,9 +858,10 @@ def formated_to_weechat(strings):
     return "".join(weechat_strings)
 
 
-def formated_to_html(strings):
-    # type: (List[FormatedString]) -> str
+def formatted_to_html(strings):
+    # type: (List[FormattedString]) -> str
     # TODO BG COLOR
+    # TODO color conversion SGR -> HTML
     def add_attribute(string, name, value):
         if name == "bold" and value:
             return "{bold_on}{text}{bold_off}".format(
@@ -859,6 +878,16 @@ def formated_to_html(strings):
                 underline_on="<u>",
                 text=string,
                 underline_off="</u>")
+        elif name == "strikethrough" and value:
+            return "{strike_on}{text}{strike_off}".format(
+                strike_on="<del>",
+                text=string,
+                strike_off="</del>")
+        elif name == "quote" and value:
+            return "{quote_on}{text}{quote_off}".format(
+                quote_on="<blockquote>",
+                text=string,
+                quote_off="</blockquote>")
         elif name == "fgcolor" and value:
             return "{underline_on}{text}{underline_off}".format(
                 underline_on="<font color={color}>".format(color=value),
@@ -867,23 +896,100 @@ def formated_to_html(strings):
 
         return string
 
-    def strip_atribute(string, name, value):
-        return string
-
-    def format_string(formated_string):
-        text = formated_string.text
-        attributes = formated_string.attributes
+    def format_string(formatted_string):
+        text = formatted_string.text
+        attributes = formatted_string.attributes
 
         for key, value in attributes.items():
-            text = strip_atribute(text, key, value)
+            text = add_attribute(text, key, value)
         return text
 
     html_string = map(format_string, strings)
     return "".join(html_string)
 
 
-def html_to_formated():
-    pass
+# TODO do we want at least some formating using unicode
+# (strikethrough, quotes)?
+def formatted_to_plain(strings):
+    # type: (List[FormattedString]) -> str
+    def strip_atribute(string, name, value):
+        return string
+
+    def format_string(formatted_string):
+        text = formatted_string.text
+        attributes = formatted_string.attributes
+
+        for key, value in attributes.items():
+            text = strip_atribute(text, key, value)
+        return text
+
+    plain_string = map(format_string, strings)
+    return "".join(plain_string)
+
+
+class MatrixHtmlParser(HTMLParser):
+    # TODO colors
+    # TODO bullets
+    def __init__(self):
+        HTMLParser.__init__(self)
+        self.text = ""        # type: str
+        self.substrings = []  # type: List[FormattedString]
+        self.attributes = Default_format_attributes.copy()
+
+    def _toggle_attribute(self, attribute):
+        if self.text:
+            self.substrings.append(
+                FormattedString(self.text, self.attributes.copy())
+            )
+        self.text = ""
+        self.attributes[attribute] = not self.attributes[attribute]
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "strong":
+            self._toggle_attribute("bold")
+        elif tag == "em":
+            self._toggle_attribute("italic")
+        elif tag == "u":
+            self._toggle_attribute("underline")
+        elif tag == "del":
+            self._toggle_attribute("strikethrough")
+        elif tag == "blockquote":
+            self._toggle_attribute("quote")
+        elif tag == "blockquote":
+            self._toggle_attribute("quote")
+        else:
+            W.prnt("", "Unhandled tag {t}".format(t=tag))
+
+    def handle_endtag(self, tag):
+        if tag == "strong":
+            self._toggle_attribute("bold")
+        elif tag == "em":
+            self._toggle_attribute("italic")
+        elif tag == "u":
+            self._toggle_attribute("underline")
+        elif tag == "del":
+            self._toggle_attribute("strikethrough")
+        elif tag == "blockquote":
+            self._toggle_attribute("quote")
+        else:
+            pass
+
+    def handle_data(self, data):
+        self.text = self.text + data
+
+    def get_substrings(self):
+        if self.text:
+            self.substrings.append(
+                FormattedString(self.text, self.attributes.copy())
+            )
+
+        return self.substrings
+
+
+def html_to_formatted(html):
+    parser = MatrixHtmlParser()
+    parser.feed(html)
+    return parser.get_substrings()
 
 
 def wrap_socket(server, file_descriptor):
@@ -898,7 +1004,7 @@ def wrap_socket(server, file_descriptor):
 
     # For python 2.7 wrap_socket() doesn't work with sockets created from an
     # file descriptor because fromfd() doesn't return a wrapped socket, the bug
-    # was fixed for python 3, more info https://bugs.python.org/issue13942
+    # was fixed for python 3, more info: https://bugs.python.org/issue13942
     # pylint: disable=protected-access,unidiomatic-typecheck
     if type(temp_socket) == socket._socket.socket:
         # pylint: disable=no-member
@@ -1061,7 +1167,7 @@ def matrix_create_room_buffer(server, room_id):
     )
 
     W.buffer_set(buf, "localvar_set_type", 'channel')
-    W.buffer_set(buf, "type", 'formated')
+    W.buffer_set(buf, "type", 'formatted')
 
     W.buffer_set(buf, "localvar_set_channel", room_id)
 
@@ -1170,6 +1276,12 @@ def matrix_handle_room_text_message(server, room_id, event, old=False):
 
     room = server.rooms[room_id]
     msg = event['content']['body']
+
+    if 'format' in event['content'] and 'formatted_body' in event['content']:
+        if event['content']['format'] == "org.matrix.custom.html":
+            formatted_data = html_to_formatted(
+                event['content']['formatted_body'])
+            msg = formatted_to_weechat(formatted_data)
 
     if event['sender'] in room.users:
         user = room.users[event['sender']]
@@ -1292,6 +1404,10 @@ def event_id_from_tags(tags):
     return ""
 
 
+def string_strikethrough(string):
+    return "".join(["{}\u0336".format(c) for c in string])
+
+
 def matrix_redact_line(data, tags, event):
     reason = ""
 
@@ -1313,7 +1429,7 @@ def matrix_redact_line(data, tags, event):
                          reason=reason)
 
     if GLOBAL_OPTIONS.redaction_type == RedactType.STRIKETHROUGH:
-        message = "".join(["{}\u0336".format(c) for c in message])
+        message = string_strikethrough(message)
         message = message + " " + redaction_msg
     elif GLOBAL_OPTIONS.redaction_type == RedactType.DELETE:
         message = redaction_msg
@@ -1769,6 +1885,7 @@ def send(server, message):
     try:
         start = time.time()
 
+        # TODO we probably shouldn't use sendall here.
         server.socket.sendall(bytes(request, 'utf-8'))
         if payload:
             server.socket.sendall(bytes(payload, 'utf-8'))
@@ -2076,14 +2193,17 @@ def room_input_cb(server_name, buffer, input_data):
     if room.encrypted:
         return W.WEECHAT_RC_OK
 
-    # TODO if the input line contains any formating we need to send out a
-    # message of type html
-    formated_data = parse_input_line(input_data)
+    formatted_data = parse_input_line(input_data)
 
-    body = {"msgtype": "m.text", "body": formated_to_html(formated_data)}
+    body = {"msgtype": "m.text", "body": formatted_to_plain(formatted_data)}
+
+    if formatted(formatted_data):
+        body["format"] = "org.matrix.custom.html"
+        body["formatted_body"] = formatted_to_html(formatted_data)
+
     extra_data = {
         "author": server.user,
-        "message": formated_to_weechat(formated_data),
+        "message": formatted_to_weechat(formatted_data),
         "room_id": room_id
     }
 
