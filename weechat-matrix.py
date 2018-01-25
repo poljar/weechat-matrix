@@ -491,7 +491,9 @@ def server_config_change_cb(server_name, option):
     elif option_name == "password":
         value = W.config_string(option)
         server.password = value
-        server.access_token = ""
+    elif option_name == "device_name":
+        value = W.config_string(option)
+        server.device_name = value
     else:
         pass
 
@@ -507,6 +509,7 @@ class MatrixServer:
         self.address         = ""       # type: str
         self.port            = 8448     # type: int
         self.options         = dict()   # type: Dict[str, weechat.config]
+        self.device_name     = "Weechat Matrix"  # type: str
 
         self.user            = ""       # type: str
         self.password        = ""       # type: str
@@ -572,6 +575,10 @@ class MatrixServer:
             Option(
                 'password', 'string', '', 0, 0, '',
                 "Password for server"
+            ),
+            Option(
+                'device_name', 'string', '', 0, 0, 'Weechat Matrix',
+                "Device name to use while logging in to the matrix server"
             ),
         ]
 
@@ -2274,7 +2281,8 @@ def matrix_login(server):
     # type: (MatrixServer) -> None
     post_data = {"type": "m.login.password",
                  "user": server.user,
-                 "password": server.password}
+                 "password": server.password,
+                 "initial_device_display_name": server.device_name}
 
     message = MatrixMessage(
         server,
