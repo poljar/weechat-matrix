@@ -10,7 +10,6 @@ import datetime
 import pprint
 import re
 import sys
-import webcolors
 
 # pylint: disable=redefined-builtin
 from builtins import bytes, str
@@ -23,6 +22,7 @@ from functools import wraps
 # pylint: disable=unused-import
 from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 
+import webcolors
 from http_parser.pyparser import HttpParser
 
 try:
@@ -274,6 +274,7 @@ class MatrixMessage:
             extra_data=None   # type: Dict[str, Any]
     ):
         # type: (...) -> None
+        # pylint: disable=dangerous-default-value
         self.type       = message_type  # MessageType
         self.request    = None          # HttpRequest
         self.response   = None          # HttpResponse
@@ -386,9 +387,9 @@ class MatrixMessage:
         elif message_type == MessageType.JOIN:
             path = ("{api}/rooms/{room_id}/join?"
                     "access_token={access_token}").format(
-                api=MATRIX_API_PATH,
-                room_id=room_id,
-                access_token=server.access_token)
+                        api=MATRIX_API_PATH,
+                        room_id=room_id,
+                        access_token=server.access_token)
 
             self.request = HttpRequest(
                 RequestType.POST,
@@ -401,9 +402,9 @@ class MatrixMessage:
         elif message_type == MessageType.PART:
             path = ("{api}/rooms/{room_id}/leave?"
                     "access_token={access_token}").format(
-                api=MATRIX_API_PATH,
-                room_id=room_id,
-                access_token=server.access_token)
+                        api=MATRIX_API_PATH,
+                        room_id=room_id,
+                        access_token=server.access_token)
 
             self.request = HttpRequest(
                 RequestType.POST,
@@ -600,7 +601,7 @@ FormattedString = namedtuple(
     ['text', 'attributes']
 )
 
-Default_format_attributes = {
+DEFAULT_ATRIBUTES = {
     "bold": False,
     "italic": False,
     "underline": False,
@@ -1121,7 +1122,7 @@ def parse_input_line(line):
     # type: (str) -> List[FormattedString]
     text = ""        # type: str
     substrings = []  # type: List[FormattedString]
-    attributes = Default_format_attributes.copy()
+    attributes = DEFAULT_ATRIBUTES.copy()
 
     i = 0
     while i < len(line):
@@ -1177,7 +1178,7 @@ def parse_input_line(line):
                 substrings.append(FormattedString(text, attributes.copy()))
             text = ""
             # Reset all the attributes
-            attributes = Default_format_attributes.copy()
+            attributes = DEFAULT_ATRIBUTES.copy()
             i = i + 1
         # Italic
         elif line[i] == "\x1D":
@@ -1206,7 +1207,7 @@ def parse_input_line(line):
 
 def formatted(strings):
     for string in strings:
-        if string.attributes != Default_format_attributes:
+        if string.attributes != DEFAULT_ATRIBUTES:
             return True
     return False
 
@@ -1320,7 +1321,7 @@ def formatted_to_html(strings):
 # (strikethrough, quotes)?
 def formatted_to_plain(strings):
     # type: (List[FormattedString]) -> str
-    def strip_atribute(string, name, value):
+    def strip_atribute(string, _, __):
         return string
 
     def format_string(formatted_string):
@@ -1342,7 +1343,7 @@ class MatrixHtmlParser(HTMLParser):
         HTMLParser.__init__(self)
         self.text = ""        # type: str
         self.substrings = []  # type: List[FormattedString]
-        self.attributes = Default_format_attributes.copy()
+        self.attributes = DEFAULT_ATRIBUTES.copy()
 
     def _toggle_attribute(self, attribute):
         if self.text:
@@ -1544,14 +1545,13 @@ def handle_http_response(server, message):
                "\n    Send delay: {s} ms"
                "\n    Receive delay: {r} ms"
                "\n    Handling time: {h} ms"
-               "\n    Total time: {total} ms"
-               ).format(
-        t=message.type,
-        c=creation_date,
-        s=(message.send_time - message.creation_time) * 1000,
-        r=(message.receive_time - message.send_time) * 1000,
-        h=(done_time - message.receive_time) * 1000,
-        total=(done_time - message.creation_time) * 1000,)
+               "\n    Total time: {total} ms").format(
+                   t=message.type,
+                   c=creation_date,
+                   s=(message.send_time - message.creation_time) * 1000,
+                   r=(message.receive_time - message.send_time) * 1000,
+                   h=(done_time - message.receive_time) * 1000,
+                   total=(done_time - message.creation_time) * 1000,)
     prnt_debug(DebugType.TIMING, server, message)
 
     return
@@ -2078,12 +2078,12 @@ def matrix_handle_invite_events(server, room_id, events):
             # TODO does this go to the server buffer or to the channel buffer?
             message = ("{prefix}You have been invited to {chan_color}{channel}"
                        "{ncolor} by {nick_color}{nick}{ncolor}").format(
-                            prefix=W.prefix("network"),
-                            chan_color=W.color("chat_channel"),
-                            channel=room_id,
-                            ncolor=W.color("reset"),
-                            nick_color=W.color("chat_nick"),
-                            nick=sender)
+                           prefix=W.prefix("network"),
+                           chan_color=W.color("chat_channel"),
+                           channel=room_id,
+                           ncolor=W.color("reset"),
+                           nick_color=W.color("chat_nick"),
+                           nick=sender)
             W.prnt(server.server_buffer, message)
 
 
@@ -2298,8 +2298,8 @@ def send_or_queue(server, message):
         prnt_debug(DebugType.MESSAGING, server,
                    ("{prefix} Failed sending message of type {t}. "
                     "Adding to queue").format(
-                       prefix=W.prefix("error"),
-                       t=message.type))
+                        prefix=W.prefix("error"),
+                        t=message.type))
         server.send_queue.append(message)
 
 
@@ -2883,15 +2883,15 @@ def matrix_command_debug(args):
         if debug_type in GLOBAL_OPTIONS.debug:
             message = ("{prefix}matrix: Disabling matrix {t} "
                        "debugging.").format(
-                               prefix=W.prefix("error"),
-                               t=debug_type)
+                           prefix=W.prefix("error"),
+                           t=debug_type)
             W.prnt("", message)
             GLOBAL_OPTIONS.debug.remove(debug_type)
         else:
             message = ("{prefix}matrix: Enabling matrix {t} "
                        "debugging.").format(
-                               prefix=W.prefix("error"),
-                               t=debug_type)
+                           prefix=W.prefix("error"),
+                           t=debug_type)
             W.prnt("", message)
             GLOBAL_OPTIONS.debug.append(debug_type)
 
@@ -2905,8 +2905,8 @@ def matrix_command_debug(args):
         else:
             message = ("{prefix}matrix: Unknown matrix debug "
                        "type \"{t}\".").format(
-                               prefix=W.prefix("error"),
-                               t=command)
+                           prefix=W.prefix("error"),
+                           t=command)
             W.prnt("", message)
 
 
@@ -3424,12 +3424,12 @@ def matrix_server_completion_cb(data, completion_item, buffer, completion):
 @utf8_decode
 def matrix_command_completion_cb(data, completion_item, buffer, completion):
     for command in [
-        "connect",
-        "disconnect",
-        "reconnect",
-        "server",
-        "help",
-        "debug"
+            "connect",
+            "disconnect",
+            "reconnect",
+            "server",
+            "help",
+            "debug"
     ]:
         W.hook_completion_list_add(
             completion,
@@ -3568,7 +3568,7 @@ def matrix_command_pgup_cb(data, buffer, command):
 
 @utf8_decode
 def matrix_command_join_cb(data, buffer, command):
-    def join(args):
+    def join(server, args):
         split_args = args.split(" ", 1)
 
         # TODO handle join for non public rooms
@@ -3585,10 +3585,10 @@ def matrix_command_join_cb(data, buffer, command):
 
     for server in SERVERS.values():
         if buffer in server.buffers.values():
-            join(command)
+            join(server, command)
             return W.WEECHAT_RC_OK_EAT
         elif buffer == server.server_buffer:
-            join(command)
+            join(server, command)
             return W.WEECHAT_RC_OK_EAT
 
     return W.WEECHAT_RC_OK
