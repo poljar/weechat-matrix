@@ -1381,7 +1381,8 @@ class MatrixHtmlParser(HTMLParser):
                     self.text = ""
                     self.attributes["fgcolor"] = color
         else:
-            W.prnt("", "Unhandled tag {t}".format(t=tag))
+            # W.prnt("", "Unhandled tag {t}".format(t=tag))
+            pass
 
     def handle_endtag(self, tag):
         if tag == "strong":
