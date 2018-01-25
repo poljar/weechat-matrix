@@ -773,7 +773,7 @@ def parse_input_line(line):
             attributes = Default_format_attributes.copy()
             i = i + 1
         # Italic
-        elif line[i] == "0\x1D":
+        elif line[i] == "\x1D":
             if text:
                 substrings.append(FormattedString(text, attributes.copy()))
             text = ""
@@ -781,7 +781,7 @@ def parse_input_line(line):
             i = i + 1
 
         # Underline
-        elif line[i] == "0\x1F":
+        elif line[i] == "\x1F":
             if text:
                 substrings.append(FormattedString(text, attributes.copy()))
             text = ""
@@ -889,10 +889,10 @@ def formatted_to_html(strings):
                 text=string,
                 quote_off="</blockquote>")
         elif name == "fgcolor" and value:
-            return "{underline_on}{text}{underline_off}".format(
-                underline_on="<font color={color}>".format(color=value),
+            return "{color_on}{text}{color_off}".format(
+                color_on="<font color={color}>".format(color=value),
                 text=string,
-                underline_off="</font>")
+                color_off="</font>")
 
         return string
 
