@@ -2205,6 +2205,8 @@ def matrix_handle_message(
         message  = extra_data["message"]
         room_id  = extra_data["room_id"]
         date     = int(time.time())
+        # TODO the event_id can be missing if sending has failed for
+        # some reason
         event_id = response["event_id"]
 
         # This message will be part of the next sync, we already printed it out
@@ -2330,7 +2332,7 @@ def receive_cb(server_name, file_descriptor):
                 message = server.receive_queue.popleft()
                 server.send_queue.appendleft(message)
 
-            server_buffer_prnt(server, error)
+            server_buffer_prnt(server, pprint.pformat(error))
             return W.WEECHAT_RC_OK
 
         if not data:
