@@ -128,6 +128,7 @@ class MessageType(Enum):
     ROOM_MSG = 5
     JOIN     = 6
     PART     = 7
+    INVITE   = 8
 
 
 @unique
@@ -412,6 +413,20 @@ class MatrixMessage:
                 data
             )
 
+        elif message_type == MessageType.INVITE:
+            path = ("{api}/rooms/{room}/invite?"
+                    "access_token={access_token}").format(
+                        api=MATRIX_API_PATH,
+                        room=room_id,
+                        access_token=server.access_token)
+
+            self.request = HttpRequest(
+                RequestType.POST,
+                server.address,
+                server.port,
+                path,
+                data
+            )
 
 
 class MatrixUser:
@@ -3607,6 +3622,39 @@ def matrix_command_part_cb(data, buffer, command):
     return W.WEECHAT_RC_OK
 
 
+@utf8_decode
+def matrix_command_invite_cb(data, buffer, command):
+    def invite(server, buf, args):
+        split_args = args.split(" ", 1)
+
+        # TODO handle join for non public rooms
+        if len(split_args) != 2:
+            message = ("{prefix}Error with command \"/invite\" (help on "
+                       "command: /help invite)").format(
+                           prefix=W.prefix("error"))
+            W.prnt("", message)
+            return
+
+        _, invitee = split_args
+        room_id = key_from_value(server.buffers, buf)
+
+        body = {"user_id": invitee}
+
+        message = MatrixMessage(
+            server,
+            MessageType.INVITE,
+            room_id=room_id,
+            data=body
+        )
+        send_or_queue(server, message)
+
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            invite(server, buffer, command)
+            return W.WEECHAT_RC_OK_EAT
+
+    return W.WEECHAT_RC_OK
+
 
 def tags_from_line_data(line_data):
     # type: (weechat.hdata) -> List[str]
@@ -3930,6 +3978,7 @@ def init_hooks():
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
     W.hook_command_run('/join', 'matrix_command_join_cb', '')
     W.hook_command_run('/part', 'matrix_command_part_cb', '')
+    W.hook_command_run('/invite', 'matrix_command_invite_cb', '')
 
     if GLOBAL_OPTIONS.enable_backlog:
         hook_page_up()
