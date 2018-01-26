@@ -2,6 +2,8 @@
 
 from __future__ import unicode_literals
 
+# pylint: disable=redefined-builtin
+from builtins import str
 from collections import namedtuple
 
 import webcolors

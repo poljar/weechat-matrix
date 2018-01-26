@@ -5,9 +5,7 @@ from __future__ import unicode_literals
 import ssl
 
 from collections import deque
-
 from http_parser.pyparser import HttpParser
-
 
 from matrix.config import Option
 
