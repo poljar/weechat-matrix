@@ -14,17 +14,17 @@ import sys
 # pylint: disable=redefined-builtin
 from builtins import bytes, str
 
-from collections import deque, Mapping, Iterable, namedtuple
+from collections import deque, namedtuple
 from operator import itemgetter
 from enum import Enum, unique
-from functools import wraps
 
 # pylint: disable=unused-import
 from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 
 from http_parser.pyparser import HttpParser
-from matrix import colors
 
+from matrix import colors
+from matrix.utf import WeechatWrapper, utf8_decode
 
 # pylint: disable=import-error
 import weechat
@@ -40,77 +40,6 @@ MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
 SERVERS        = dict()  # type: Dict[str, MatrixServer]
 CONFIG         = None    # type: weechat.config
 GLOBAL_OPTIONS = None    # type: PluginOptions
-
-
-# Unicode handling
-def encode_to_utf8(data):
-    if isinstance(data, str):
-        return data.encode('utf-8')
-    if isinstance(data, bytes):
-        return data
-    elif isinstance(data, Mapping):
-        return type(data)(map(encode_to_utf8, data.items()))
-    elif isinstance(data, Iterable):
-        return type(data)(map(encode_to_utf8, data))
-    return data
-
-
-def decode_from_utf8(data):
-    if isinstance(data, bytes):
-        return data.decode('utf-8')
-    if isinstance(data, str):
-        return data
-    elif isinstance(data, Mapping):
-        return type(data)(map(decode_from_utf8, data.items()))
-    elif isinstance(data, Iterable):
-        return type(data)(map(decode_from_utf8, data))
-    return data
-
-
-def utf8_decode(function):
-    """
-    Decode all arguments from byte strings to unicode strings. Use this for
-    functions called from outside of this script, e.g. callbacks from weechat.
-    """
-    @wraps(function)
-    def wrapper(*args, **kwargs):
-        return function(*decode_from_utf8(args), **decode_from_utf8(kwargs))
-    return wrapper
-
-
-class WeechatWrapper(object):
-    def __init__(self, wrapped_class):
-        self.wrapped_class = wrapped_class
-
-    # Helper method used to encode/decode method calls.
-    def wrap_for_utf8(self, method):
-        def hooked(*args, **kwargs):
-            result = method(*encode_to_utf8(args), **encode_to_utf8(kwargs))
-            # Prevent wrapped_class from becoming unwrapped
-            if result == self.wrapped_class:
-                return self
-            return decode_from_utf8(result)
-        return hooked
-
-    # Encode and decode everything sent to/received from weechat. We use the
-    # unicode type internally in wee-slack, but has to send utf8 to weechat.
-    def __getattr__(self, attr):
-        orig_attr = self.wrapped_class.__getattribute__(attr)
-        if callable(orig_attr):
-            return self.wrap_for_utf8(orig_attr)
-        return decode_from_utf8(orig_attr)
-
-    # Ensure all lines sent to weechat specify a prefix. For lines after the
-    # first, we want to disable the prefix, which is done by specifying a
-    # space.
-    def prnt_date_tags(self, buffer, date, tags, message):
-        message = message.replace("\n", "\n \t")
-        return self.wrap_for_utf8(self.wrapped_class.prnt_date_tags)(
-            buffer,
-            date,
-            tags,
-            message
-        )
 
 
 @unique
