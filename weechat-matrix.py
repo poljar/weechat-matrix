@@ -25,6 +25,7 @@ from http_parser.pyparser import HttpParser
 
 from matrix import colors
 from matrix.utf import WeechatWrapper, utf8_decode
+from matrix.http import HttpRequest, HttpResponse, RequestType
 
 # pylint: disable=import-error
 import weechat
@@ -53,13 +54,6 @@ class MessageType(Enum):
     JOIN     = 6
     PART     = 7
     INVITE   = 8
-
-
-@unique
-class RequestType(Enum):
-    GET    = 0
-    POST   = 1
-    PUT    = 2
 
 
 @unique
@@ -114,70 +108,6 @@ class PluginOptions:
 
         self.options = dict()  # type: Dict[str, weechat.config_option]
         self.debug   = []      # type: DebugType
-
-
-class HttpResponse:
-    def __init__(self, status, headers, body):
-        self.status  = status   # type: int
-        self.headers = headers  # type: Dict[str, str]
-        self.body    = body     # type: bytes
-
-
-class HttpRequest:
-    def __init__(
-            self,
-            request_type,                        # type: RequestType
-            host,                                # type: str
-            port,                                # type: int
-            location,                            # type: str
-            data=None,                           # type: Dict[str, Any]
-            user_agent='weechat-matrix/{version}'.format(
-                version=WEECHAT_SCRIPT_VERSION)  # type: str
-    ):
-        # type: (...) -> None
-        host_string   = ':'.join([host, str(port)])
-
-        user_agent    = 'User-Agent: {agent}'.format(agent=user_agent)
-        host_header   = 'Host: {host}'.format(host=host_string)
-        request_list  = []             # type: List[str]
-        accept_header = 'Accept: */*'  # type: str
-        end_separator = '\r\n'         # type: str
-        payload       = None           # type: str
-
-        if request_type == RequestType.GET:
-            get = 'GET {location} HTTP/1.1'.format(location=location)
-            request_list  = [get, host_header,
-                             user_agent, accept_header, end_separator]
-
-        elif (request_type == RequestType.POST or
-              request_type == RequestType.PUT):
-
-            json_data     = json.dumps(data, separators=(',', ':'))
-
-            if request_type == RequestType.POST:
-                method = "POST"
-            else:
-                method = "PUT"
-
-            request_line = '{method} {location} HTTP/1.1'.format(
-                method=method,
-                location=location
-            )
-
-            type_header   = 'Content-Type: application/x-www-form-urlencoded'
-            length_header = 'Content-Length: {length}'.format(
-                length=len(json_data)
-            )
-
-            request_list  = [request_line, host_header,
-                             user_agent, accept_header,
-                             length_header, type_header, end_separator]
-            payload       = json_data
-
-        request = '\r\n'.join(request_list)
-
-        self.request = request
-        self.payload = payload
 
 
 def get_transaction_id(server):
