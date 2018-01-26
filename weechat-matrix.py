@@ -14,18 +14,23 @@ import sys
 # pylint: disable=redefined-builtin
 from builtins import bytes, str
 
-from collections import deque, namedtuple
 from operator import itemgetter
-from enum import Enum, unique
 
 # pylint: disable=unused-import
 from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 
-from http_parser.pyparser import HttpParser
-
 from matrix import colors
 from matrix.utf import WeechatWrapper, utf8_decode
-from matrix.http import HttpRequest, HttpResponse, RequestType
+from matrix.http import HttpResponse
+from matrix.api import MatrixMessage, MessageType
+from matrix.server import MatrixServer
+from matrix.config import (
+    PluginOptions,
+    Option,
+    DebugType,
+    RedactType,
+    ServerBufferType
+)
 
 # pylint: disable=import-error
 import weechat
@@ -36,252 +41,14 @@ WEECHAT_SCRIPT_AUTHOR      = "Damir Jelić <poljar@termina.org.uk>"  # type: str
 WEECHAT_SCRIPT_VERSION     = "0.1"                                  # type: str
 WEECHAT_SCRIPT_LICENSE     = "MIT"                                  # type: str
 
-MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
-
 SERVERS        = dict()  # type: Dict[str, MatrixServer]
 CONFIG         = None    # type: weechat.config
 GLOBAL_OPTIONS = None    # type: PluginOptions
 
 
-@unique
-class MessageType(Enum):
-    LOGIN    = 0
-    SYNC     = 1
-    SEND     = 2
-    STATE    = 3
-    REDACT   = 4
-    ROOM_MSG = 5
-    JOIN     = 6
-    PART     = 7
-    INVITE   = 8
-
-
-@unique
-class RedactType(Enum):
-    STRIKETHROUGH = 0
-    NOTICE        = 1
-    DELETE        = 2
-
-
-@unique
-class ServerBufferType(Enum):
-    MERGE_CORE  = 0
-    MERGE       = 1
-    INDEPENDENT = 2
-
-
-@unique
-class DebugType(Enum):
-    MESSAGING = 0
-    NETWORK   = 1
-    TIMING    = 2
-
-
 def prnt_debug(debug_type, server, message):
     if debug_type in GLOBAL_OPTIONS.debug:
         W.prnt(server.server_buffer, message)
-
-
-Option = namedtuple(
-    'Option', [
-        'name',
-        'type',
-        'string_values',
-        'min',
-        'max',
-        'value',
-        'description'
-    ])
-
-
-class PluginOptions:
-    def __init__(self):
-        self.redaction_type  = RedactType.STRIKETHROUGH     # type: RedactType
-        self.look_server_buf = ServerBufferType.MERGE_CORE  # type: ServerBufferType
-
-        self.sync_limit         = 30    # type: int
-        self.backlog_limit      = 10    # type: int
-        self.enable_backlog     = True  # type: bool
-        self.page_up_hook       = None  # type: weechat.hook
-
-        self.redaction_comp_len = 50    # type: int
-
-        self.options = dict()  # type: Dict[str, weechat.config_option]
-        self.debug   = []      # type: DebugType
-
-
-def get_transaction_id(server):
-    # type: (MatrixServer) -> int
-    transaction_id = server.transaction_id
-    server.transaction_id += 1
-    return transaction_id
-
-
-class MatrixMessage:
-    def __init__(
-            self,
-            server,           # type: MatrixServer
-            message_type,     # type: MessageType
-            room_id=None,     # type: str
-            extra_id=None,    # type: str
-            data={},          # type: Dict[str, Any]
-            extra_data=None   # type: Dict[str, Any]
-    ):
-        # type: (...) -> None
-        # pylint: disable=dangerous-default-value
-        self.type       = message_type  # type: MessageType
-        self.request    = None          # type: HttpRequest
-        self.response   = None          # type: HttpResponse
-        self.extra_data = extra_data    # type: Dict[str, Any]
-
-        self.creation_time = time.time()  # type: float
-        self.send_time     = None         # type: float
-        self.receive_time  = None         # type: float
-
-        if message_type == MessageType.LOGIN:
-            path = ("{api}/login").format(api=MATRIX_API_PATH)
-            self.request = HttpRequest(
-                RequestType.POST,
-                server.address,
-                server.port,
-                path,
-                data
-            )
-
-        elif message_type == MessageType.SYNC:
-            sync_filter = {
-                "room": {
-                    "timeline": {"limit": GLOBAL_OPTIONS.sync_limit}
-                }
-            }
-
-            path = ("{api}/sync?access_token={access_token}&"
-                    "filter={sync_filter}").format(
-                        api=MATRIX_API_PATH,
-                        access_token=server.access_token,
-                        sync_filter=json.dumps(sync_filter,
-                                               separators=(',', ':')))
-
-            if server.next_batch:
-                path = path + '&since={next_batch}'.format(
-                    next_batch=server.next_batch)
-
-            self.request = HttpRequest(
-                RequestType.GET,
-                server.address,
-                server.port,
-                path
-            )
-
-        elif message_type == MessageType.SEND:
-            path = ("{api}/rooms/{room}/send/m.room.message/{tx_id}?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        tx_id=get_transaction_id(server),
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.PUT,
-                server.address,
-                server.port,
-                path,
-                data
-            )
-
-        elif message_type == MessageType.STATE:
-            path = ("{api}/rooms/{room}/state/{event_type}?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        event_type=extra_id,
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.PUT,
-                server.address,
-                server.port,
-                path,
-                data
-            )
-
-        elif message_type == MessageType.REDACT:
-            path = ("{api}/rooms/{room}/redact/{event_id}/{tx_id}?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        event_id=extra_id,
-                        tx_id=get_transaction_id(server),
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.PUT,
-                server.address,
-                server.port,
-                path,
-                data
-            )
-
-        elif message_type == MessageType.ROOM_MSG:
-            path = ("{api}/rooms/{room}/messages?from={prev_batch}&"
-                    "dir=b&limit={message_limit}&"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        prev_batch=extra_id,
-                        message_limit=GLOBAL_OPTIONS.backlog_limit,
-                        access_token=server.access_token)
-            self.request = HttpRequest(
-                RequestType.GET,
-                server.address,
-                server.port,
-                path,
-            )
-
-        elif message_type == MessageType.JOIN:
-            path = ("{api}/rooms/{room_id}/join?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room_id=room_id,
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.POST,
-                server.address,
-                server.port,
-                path,
-                data
-            )
-
-        elif message_type == MessageType.PART:
-            path = ("{api}/rooms/{room_id}/leave?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room_id=room_id,
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.POST,
-                server.address,
-                server.port,
-                path,
-                data
-            )
-
-        elif message_type == MessageType.INVITE:
-            path = ("{api}/rooms/{room}/invite?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.POST,
-                server.address,
-                server.port,
-                path,
-                data
-            )
 
 
 class MatrixUser:
@@ -353,101 +120,6 @@ def server_config_change_cb(server_name, option):
         pass
 
     return 1
-
-
-class MatrixServer:
-    # pylint: disable=too-many-instance-attributes
-    def __init__(self, name, config_file):
-        # type: (str, weechat.config) -> None
-        self.name            = name     # type: str
-        self.user_id         = ""
-        self.address         = ""       # type: str
-        self.port            = 8448     # type: int
-        self.options         = dict()   # type: Dict[str, weechat.config]
-        self.device_name     = "Weechat Matrix"  # type: str
-
-        self.user            = ""       # type: str
-        self.password        = ""       # type: str
-
-        self.rooms           = dict()   # type: Dict[str, MatrixRoom]
-        self.buffers         = dict()   # type: Dict[str, weechat.buffer]
-        self.server_buffer   = None     # type: weechat.buffer
-        self.fd_hook         = None     # type: weechat.hook
-        self.timer_hook      = None     # type: weechat.hook
-        self.numeric_address = ""       # type: str
-
-        self.autoconnect     = False                         # type: bool
-        self.connected       = False                         # type: bool
-        self.connecting      = False                         # type: bool
-        self.reconnect_count = 0                             # type: int
-        self.socket          = None                          # type: ssl.SSLSocket
-        self.ssl_context     = ssl.create_default_context()  # type: ssl.SSLContext
-
-        self.access_token    = None                          # type: str
-        self.next_batch      = None                          # type: str
-        self.transaction_id  = 0                             # type: int
-
-        self.http_parser = HttpParser()                  # type: HttpParser
-        self.http_buffer = []                            # type: List[bytes]
-
-        # Queue of messages we need to send off.
-        self.send_queue    = deque()  # type: Deque[MatrixMessage]
-        # Queue of messages we send off and are waiting a response for
-        self.receive_queue = deque()  # type: Deque[MatrixMessage]
-        self.message_queue = deque()  # type: Deque[MatrixMessage]
-        self.ignore_event_list = []   # type: List[str]
-
-        self._create_options(config_file)
-
-    def _create_options(self, config_file):
-        options = [
-            Option(
-                'autoconnect', 'boolean', '', 0, 0, 'off',
-                (
-                    "automatically connect to the matrix server when weechat "
-                    "is starting"
-                )
-            ),
-            Option(
-                'address', 'string', '', 0, 0, '',
-                "Hostname or IP address for the server"
-            ),
-            Option(
-                'port', 'integer', '', 0, 65535, '8448',
-                "Port for the server"
-            ),
-            Option(
-                'ssl_verify', 'boolean', '', 0, 0, 'on',
-                (
-                    "Check that the SSL connection is fully trusted"
-                    "is starting"
-                )
-            ),
-            Option(
-                'username', 'string', '', 0, 0, '',
-                "Username to use on server"
-            ),
-            Option(
-                'password', 'string', '', 0, 0, '',
-                "Password for server"
-            ),
-            Option(
-                'device_name', 'string', '', 0, 0, 'Weechat Matrix',
-                "Device name to use while logging in to the matrix server"
-            ),
-        ]
-
-        section = W.config_search_section(config_file, 'server')
-
-        for option in options:
-            option_name = "{server}.{option}".format(
-                server=self.name, option=option.name)
-
-            self.options[option.name] = W.config_new_option(
-                config_file, section, option_name,
-                option.type, option.description, option.string_values,
-                option.min, option.max, option.value, option.value, 0, "",
-                "", "server_config_change_cb", self.name, "", "")
 
 
 def wrap_socket(server, file_descriptor):
@@ -1231,7 +903,7 @@ def matrix_handle_message(
     if message_type is MessageType.LOGIN:
         server.access_token = response["access_token"]
         server.user_id = response["user_id"]
-        message = MatrixMessage(server, MessageType.SYNC)
+        message = MatrixMessage(server, GLOBAL_OPTIONS, MessageType.SYNC)
         send_or_queue(server, message)
 
     elif message_type is MessageType.SYNC:
@@ -1301,7 +973,7 @@ def matrix_handle_message(
 
 
 def matrix_sync(server):
-    message = MatrixMessage(server, MessageType.SYNC)
+    message = MatrixMessage(server, GLOBAL_OPTIONS, MessageType.SYNC)
     server.send_queue.append(message)
 
 
@@ -1314,6 +986,7 @@ def matrix_login(server):
 
     message = MatrixMessage(
         server,
+        GLOBAL_OPTIONS,
         MessageType.LOGIN,
         data=post_data
     )
@@ -1423,8 +1096,7 @@ def receive_cb(server_name, file_descriptor):
                             s=status))
 
             # Message done, reset the parser state.
-            server.http_parser = HttpParser()
-            server.http_buffer = []
+            server.reset_parser()
 
             handle_http_response(server, message)
             break
@@ -1670,7 +1342,7 @@ def room_input_cb(server_name, buffer, input_data):
         "room_id": room_id
     }
 
-    message = MatrixMessage(server, MessageType.SEND,
+    message = MatrixMessage(server, GLOBAL_OPTIONS, MessageType.SEND,
                             data=body, room_id=room_id,
                             extra_data=extra_data)
 
@@ -1735,7 +1407,7 @@ def matrix_config_server_read_cb(
         if server_name in SERVERS:
             server = SERVERS[server_name]
         else:
-            server = MatrixServer(server_name, config_file)
+            server = MatrixServer(server_name, W, config_file)
             SERVERS[server.name] = server
 
         # Ignore invalid options
@@ -2212,7 +1884,7 @@ def matrix_server_command_add(args):
         W.prnt("", message)
         return
 
-    server = MatrixServer(args[0], CONFIG)
+    server = MatrixServer(args[0], W, CONFIG)
     SERVERS[server.name] = server
 
     if len(args) >= 2:
@@ -2471,7 +2143,7 @@ def matrix_command_completion_cb(data, completion_item, buffer, completion):
 
 
 def create_default_server(config_file):
-    server = MatrixServer('matrix.org', config_file)
+    server = MatrixServer('matrix.org', W, config_file)
     SERVERS[server.name] = server
 
     W.config_option_set(server.options["address"], "matrix.org", 1)
@@ -2527,6 +2199,7 @@ def matrix_command_topic_cb(data, buffer, command):
 
             message = MatrixMessage(
                 server,
+                GLOBAL_OPTIONS,
                 MessageType.STATE,
                 data=body,
                 room_id=room_id,
@@ -2553,7 +2226,7 @@ def matrix_fetch_old_messages(server, room_id):
     if not prev_batch:
         return
 
-    message = MatrixMessage(server, MessageType.ROOM_MSG,
+    message = MatrixMessage(server, GLOBAL_OPTIONS, MessageType.ROOM_MSG,
                             room_id=room_id, extra_id=prev_batch)
 
     send_or_queue(server, message)
@@ -2611,7 +2284,12 @@ def matrix_command_join_cb(data, buffer, command):
             return
 
         _, room_id = split_args
-        message = MatrixMessage(server, MessageType.JOIN, room_id=room_id)
+        message = MatrixMessage(
+            server,
+            GLOBAL_OPTIONS,
+            MessageType.JOIN,
+            room_id=room_id
+        )
         send_or_queue(server, message)
 
     for server in SERVERS.values():
@@ -2647,7 +2325,12 @@ def matrix_command_part_cb(data, buffer, command):
             rooms = rooms.split(" ")
 
         for room_id in rooms:
-            message = MatrixMessage(server, MessageType.PART, room_id=room_id)
+            message = MatrixMessage(
+                server,
+                GLOBAL_OPTIONS,
+                MessageType.PART,
+                room_id=room_id
+            )
             send_or_queue(server, message)
 
     for server in SERVERS.values():
@@ -2681,6 +2364,7 @@ def matrix_command_invite_cb(data, buffer, command):
 
         message = MatrixMessage(
             server,
+            GLOBAL_OPTIONS,
             MessageType.INVITE,
             room_id=room_id,
             data=body
@@ -2787,6 +2471,7 @@ def matrix_redact_command_cb(data, buffer, args):
 
             message = MatrixMessage(
                 server,
+                GLOBAL_OPTIONS,
                 MessageType.REDACT,
                 data=body,
                 room_id=room_id,
