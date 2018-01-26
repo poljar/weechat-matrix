@@ -109,3 +109,34 @@ class MatrixServer:
     def reset_parser(self):
         self.http_parser = HttpParser()
         self.http_buffer = []
+
+    def update_option(self, option, option_name, W):
+        if option_name == "address":
+            value = W.config_string(option)
+            self.address = value
+        elif option_name == "autoconnect":
+            value = W.config_boolean(option)
+            self.autoconnect = value
+        elif option_name == "port":
+            value = W.config_integer(option)
+            self.port = value
+        elif option_name == "ssl_verify":
+            value = W.config_boolean(option)
+            if value:
+                self.ssl_context.check_hostname = True
+                self.ssl_context.verify_mode = ssl.CERT_REQUIRED
+            else:
+                self.ssl_context.check_hostname = False
+                self.ssl_context.verify_mode = ssl.CERT_NONE
+        elif option_name == "username":
+            value = W.config_string(option)
+            self.user = value
+            self.access_token = ""
+        elif option_name == "password":
+            value = W.config_string(option)
+            self.password = value
+        elif option_name == "device_name":
+            value = W.config_string(option)
+            self.device_name = value
+        else:
+            pass

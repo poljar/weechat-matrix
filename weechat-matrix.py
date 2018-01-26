@@ -88,36 +88,7 @@ def server_config_change_cb(server_name, option):
     # properties from a config option, sadly it's only available in the plugin
     # API of weechat.
     option_name = key_from_value(server.options, option)
-
-    if option_name == "address":
-        value = W.config_string(option)
-        server.address = value
-    elif option_name == "autoconnect":
-        value = W.config_boolean(option)
-        server.autoconnect = value
-    elif option_name == "port":
-        value = W.config_integer(option)
-        server.port = value
-    elif option_name == "ssl_verify":
-        value = W.config_boolean(option)
-        if value:
-            server.ssl_context.check_hostname = True
-            server.ssl_context.verify_mode = ssl.CERT_REQUIRED
-        else:
-            server.ssl_context.check_hostname = False
-            server.ssl_context.verify_mode = ssl.CERT_NONE
-    elif option_name == "username":
-        value = W.config_string(option)
-        server.user = value
-        server.access_token = ""
-    elif option_name == "password":
-        value = W.config_string(option)
-        server.password = value
-    elif option_name == "device_name":
-        value = W.config_string(option)
-        server.device_name = value
-    else:
-        pass
+    server.update_option(option, option_name, W)
 
     return 1
 
