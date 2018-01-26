@@ -75,7 +75,6 @@ class MatrixHtmlParser(HTMLParser):
                     self.text = ""
                     self.attributes["fgcolor"] = color
         else:
-            # W.prnt("", "Unhandled tag {t}".format(t=tag))
             pass
 
     def handle_endtag(self, tag):
@@ -325,6 +324,7 @@ def color_html_to_weechat(color):
 
 
 def color_weechat_to_html(color):
+    # type: (str) -> str
     first_16 = {
         "black":        "black",    # 0
         "red":          "maroon",   # 1
@@ -705,6 +705,7 @@ def parse_input_line(line):
 
 
 def formatted(strings):
+    # type: (List[FormattedString]) -> bool
     for string in strings:
         if string.attributes != DEFAULT_ATRIBUTES:
             return True
@@ -782,17 +783,19 @@ def formatted_to_plain(strings):
 
 
 def html_to_formatted(html):
+    # type: (str) -> FormattedString
     parser = MatrixHtmlParser()
     parser.feed(html)
     return parser.get_substrings()
 
 
 def string_strikethrough(string):
+    # type (str) -> str
     return "".join(["{}\u0336".format(c) for c in string])
 
 
 def formatted_to_weechat(W, strings):
-    # type: (weechat, List[colors.FormattedString]) -> str
+    # type: (weechat, List[FormattedString]) -> str
     # TODO BG COLOR
     def add_attribute(string, name, value):
         if name == "bold" and value:
