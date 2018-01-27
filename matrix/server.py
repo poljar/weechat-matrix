@@ -135,8 +135,8 @@ class MatrixServer:
         elif option_name == "ssl_verify":
             value = W.config_boolean(option)
             if value:
-                self.ssl_context.check_hostname = True
                 self.ssl_context.verify_mode = ssl.CERT_REQUIRED
+                self.ssl_context.check_hostname = True
             else:
                 self.ssl_context.check_hostname = False
                 self.ssl_context.verify_mode = ssl.CERT_NONE
