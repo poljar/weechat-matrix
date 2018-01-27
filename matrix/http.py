@@ -22,16 +22,16 @@ from enum import Enum, unique
 
 @unique
 class RequestType(Enum):
-    GET    = 0
-    POST   = 1
-    PUT    = 2
+    GET = 0
+    POST = 1
+    PUT = 2
 
 
 class HttpResponse:
     def __init__(self, status, headers, body):
-        self.status  = status   # type: int
+        self.status = status    # type: int
         self.headers = headers  # type: Dict[str, str]
-        self.body    = body     # type: bytes
+        self.body = body        # type: bytes
 
 
 class HttpRequest:
@@ -46,24 +46,24 @@ class HttpRequest:
                 version="0.1")  # type: str
     ):
         # type: (...) -> None
-        host_string   = ':'.join([host, str(port)])
+        host_string = ':'.join([host, str(port)])
 
-        user_agent    = 'User-Agent: {agent}'.format(agent=user_agent)
-        host_header   = 'Host: {host}'.format(host=host_string)
-        request_list  = []             # type: List[str]
+        user_agent = 'User-Agent: {agent}'.format(agent=user_agent)
+        host_header = 'Host: {host}'.format(host=host_string)
+        request_list = []              # type: List[str]
         accept_header = 'Accept: */*'  # type: str
         end_separator = '\r\n'         # type: str
-        payload       = None           # type: str
+        payload = None                 # type: str
 
         if request_type == RequestType.GET:
             get = 'GET {location} HTTP/1.1'.format(location=location)
-            request_list  = [get, host_header,
-                             user_agent, accept_header, end_separator]
+            request_list = [get, host_header,
+                            user_agent, accept_header, end_separator]
 
         elif (request_type == RequestType.POST or
               request_type == RequestType.PUT):
 
-            json_data     = json.dumps(data, separators=(',', ':'))
+            json_data = json.dumps(data, separators=(',', ':'))
 
             if request_type == RequestType.POST:
                 method = "POST"
@@ -75,15 +75,15 @@ class HttpRequest:
                 location=location
             )
 
-            type_header   = 'Content-Type: application/x-www-form-urlencoded'
+            type_header = 'Content-Type: application/x-www-form-urlencoded'
             length_header = 'Content-Length: {length}'.format(
                 length=len(json_data)
             )
 
-            request_list  = [request_line, host_header,
-                             user_agent, accept_header,
-                             length_header, type_header, end_separator]
-            payload       = json_data
+            request_list = [request_line, host_header,
+                            user_agent, accept_header,
+                            length_header, type_header, end_separator]
+            payload = json_data
 
         request = '\r\n'.join(request_list)
 

@@ -28,41 +28,43 @@ class MatrixServer:
     # pylint: disable=too-many-instance-attributes
     def __init__(self, name, w, config_file):
         # type: (str, weechat, weechat.config) -> None
-        self.name            = name     # type: str
-        self.user_id         = ""
-        self.address         = ""       # type: str
-        self.port            = 8448     # type: int
-        self.options         = dict()   # type: Dict[str, weechat.config]
-        self.device_name     = "Weechat Matrix"  # type: str
+        self.name = name                     # type: str
+        self.user_id = ""
+        self.address = ""                    # type: str
+        self.port = 8448                     # type: int
+        self.options = dict()                # type: Dict[str, weechat.config]
+        self.device_name = "Weechat Matrix"  # type: str
 
-        self.user            = ""       # type: str
-        self.password        = ""       # type: str
+        self.user = ""                       # type: str
+        self.password = ""                   # type: str
 
-        self.rooms           = dict()   # type: Dict[str, MatrixRoom]
-        self.buffers         = dict()   # type: Dict[str, weechat.buffer]
-        self.server_buffer   = None     # type: weechat.buffer
-        self.fd_hook         = None     # type: weechat.hook
-        self.timer_hook      = None     # type: weechat.hook
-        self.numeric_address = ""       # type: str
+        self.rooms = dict()                  # type: Dict[str, MatrixRoom]
+        self.buffers = dict()                # type: Dict[str, weechat.buffer]
+        self.server_buffer = None            # type: weechat.buffer
+        self.fd_hook = None                  # type: weechat.hook
+        self.timer_hook = None               # type: weechat.hook
+        self.numeric_address = ""            # type: str
 
-        self.autoconnect     = False                         # type: bool
-        self.connected       = False                         # type: bool
-        self.connecting      = False                         # type: bool
-        self.reconnect_count = 0                             # type: int
-        self.socket          = None                          # type: ssl.SSLSocket
-        self.ssl_context     = ssl.create_default_context()  # type: ssl.SSLContext
+        self.autoconnect = False                         # type: bool
+        self.connected = False                           # type: bool
+        self.connecting = False                          # type: bool
+        self.reconnect_count = 0                         # type: int
+        self.socket = None                               # type: ssl.SSLSocket
+        self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
 
-        self.access_token    = None                          # type: str
-        self.next_batch      = None                          # type: str
-        self.transaction_id  = 0                             # type: int
+        self.access_token = None                         # type: str
+        self.next_batch = None                           # type: str
+        self.transaction_id = 0                          # type: int
 
         self.http_parser = HttpParser()                  # type: HttpParser
         self.http_buffer = []                            # type: List[bytes]
 
         # Queue of messages we need to send off.
-        self.send_queue    = deque()  # type: Deque[MatrixMessage]
+        self.send_queue = deque()     # type: Deque[MatrixMessage]
+
         # Queue of messages we send off and are waiting a response for
         self.receive_queue = deque()  # type: Deque[MatrixMessage]
+
         self.message_queue = deque()  # type: Deque[MatrixMessage]
         self.ignore_event_list = []   # type: List[str]
 

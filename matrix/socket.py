@@ -33,9 +33,9 @@ def disconnect(server):
     if server.fd_hook:
         W.unhook(server.fd_hook)
 
-    server.fd_hook    = None
-    server.socket     = None
-    server.connected  = False
+    server.fd_hook = None
+    server.socket = None
+    server.connected = False
 
     server_buffer_prnt(server, "Disconnected")
 

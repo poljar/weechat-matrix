@@ -28,15 +28,15 @@ MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
 
 @unique
 class MessageType(Enum):
-    LOGIN    = 0
-    SYNC     = 1
-    SEND     = 2
-    STATE    = 3
-    REDACT   = 4
+    LOGIN = 0
+    SYNC = 1
+    SEND = 2
+    STATE = 3
+    REDACT = 4
     ROOM_MSG = 5
-    JOIN     = 6
-    PART     = 7
-    INVITE   = 8
+    JOIN = 6
+    PART = 7
+    INVITE = 8
 
 
 class MatrixMessage:
@@ -52,14 +52,14 @@ class MatrixMessage:
     ):
         # type: (...) -> None
         # pylint: disable=dangerous-default-value
-        self.type       = message_type  # type: MessageType
-        self.request    = None          # type: HttpRequest
-        self.response   = None          # type: HttpResponse
-        self.extra_data = extra_data    # type: Dict[str, Any]
+        self.type = message_type          # type: MessageType
+        self.request = None               # type: HttpRequest
+        self.response = None              # type: HttpResponse
+        self.extra_data = extra_data      # type: Dict[str, Any]
 
         self.creation_time = time.time()  # type: float
-        self.send_time     = None         # type: float
-        self.receive_time  = None         # type: float
+        self.send_time = None             # type: float
+        self.receive_time = None          # type: float
 
         if message_type == MessageType.LOGIN:
             path = ("{api}/login").format(api=MATRIX_API_PATH)

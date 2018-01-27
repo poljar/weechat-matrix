@@ -76,33 +76,33 @@ CONFIG = matrix.globals.CONFIG
 SERVERS = matrix.globals.SERVERS
 
 
-WEECHAT_SCRIPT_NAME        = "matrix"                               # type: str
-WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"                   # type: str
-WEECHAT_SCRIPT_AUTHOR      = "Damir Jelić <poljar@termina.org.uk>"  # type: str
-WEECHAT_SCRIPT_VERSION     = "0.1"                                  # type: str
-WEECHAT_SCRIPT_LICENSE     = "ISC"                                  # type: str
+WEECHAT_SCRIPT_NAME = "matrix"                                 # type: str
+WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"              # type: str
+WEECHAT_SCRIPT_AUTHOR = "Damir Jelić <poljar@termina.org.uk>"  # type: str
+WEECHAT_SCRIPT_VERSION = "0.1"                                 # type: str
+WEECHAT_SCRIPT_LICENSE = "ISC"                                 # type: str
 
 
 class MatrixUser:
     def __init__(self, name, display_name):
-        self.name         = name          # type: str
+        self.name = name                  # type: str
         self.display_name = display_name  # type: str
-        self.power_level  = 0             # type: int
-        self.nick_color   = ""            # type: str
-        self.prefix       = ""            # type: str
+        self.power_level = 0              # type: int
+        self.nick_color = ""              # type: str
+        self.prefix = ""                  # type: str
 
 
 class MatrixRoom:
     def __init__(self, room_id):
         # type: (str) -> None
-        self.room_id      = room_id    # type: str
-        self.alias        = room_id    # type: str
-        self.topic        = ""         # type: str
-        self.topic_author = ""         # type: str
-        self.topic_date   = None       # type: datetime.datetime
-        self.prev_batch   = ""         # type: str
-        self.users        = dict()     # type: Dict[str, MatrixUser]
-        self.encrypted    = False      # type: bool
+        self.room_id = room_id  # type: str
+        self.alias = room_id    # type: str
+        self.topic = ""         # type: str
+        self.topic_author = ""  # type: str
+        self.topic_date = None  # type: datetime.datetime
+        self.prev_batch = ""    # type: str
+        self.users = dict()     # type: Dict[str, MatrixUser]
+        self.encrypted = False  # type: bool
 
 
 @utf8_decode
@@ -921,10 +921,10 @@ def matrix_handle_message(
         matrix_sync(server)
 
     elif message_type is MessageType.SEND:
-        author   = extra_data["author"]
-        message  = extra_data["message"]
-        room_id  = extra_data["room_id"]
-        date     = int(time.time())
+        author = extra_data["author"]
+        message = extra_data["message"]
+        room_id = extra_data["room_id"]
+        date = int(time.time())
         # TODO the event_id can be missing if sending has failed for
         # some reason
         event_id = response["event_id"]
@@ -1121,9 +1121,9 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
                 server.name
             )
 
-            server.fd_hook         = hook
-            server.connected       = True
-            server.connecting      = False
+            server.fd_hook = hook
+            server.connected = True
+            server.connecting = False
             server.reconnect_count = 0
             server.numeric_address = ip_address
 

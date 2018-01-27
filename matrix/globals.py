@@ -108,6 +108,6 @@ def init_matrix_config():
 
 W = weechat if sys.hexversion >= 0x3000000 else WeechatWrapper(weechat)
 
-OPTIONS = PluginOptions()                # type: PluginOptions
-SERVERS        = dict()                  # type: Dict[str, MatrixServer]
-CONFIG         = None                    # type: weechat.config
+OPTIONS = PluginOptions()  # type: PluginOptions
+SERVERS = dict()           # type: Dict[str, MatrixServer]
+CONFIG = None              # type: weechat.config
