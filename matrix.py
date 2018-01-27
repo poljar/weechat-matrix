@@ -40,8 +40,8 @@ from matrix.server import MatrixServer
 from matrix.socket import disconnect, send_or_queue, send
 
 
-# Weechat searches for the registered callbacks in the global scope, import the
-# callbacks here so weechat can find them.
+# Weechat searches for the registered callbacks in the scope of the main script
+# file, import the callbacks here so weechat can find them.
 from matrix.commands import (
     hook_commands,
     hook_page_up,
