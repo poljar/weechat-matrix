@@ -100,7 +100,8 @@ class MatrixServer:
             ),
             Option(
                 'password', 'string', '', 0, 0, '',
-                "Password for server"
+                ("Password for server (note: content is evaluated, see /help "
+                 "eval)")
             ),
             Option(
                 'device_name', 'string', '', 0, 0, 'Weechat Matrix',
@@ -148,7 +149,7 @@ class MatrixServer:
             self.access_token = ""
         elif option_name == "password":
             value = W.config_string(option)
-            self.password = value
+            self.password = W.string_eval_expression(value, {}, {}, {})
         elif option_name == "device_name":
             value = W.config_string(option)
             self.device_name = value
