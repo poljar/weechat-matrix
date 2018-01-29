@@ -74,18 +74,21 @@ from matrix.utils import (
     server_buffer_set_title
 )
 
-from matrix.config import (
+from matrix.plugin_options import (
     DebugType,
     RedactType,
-    ServerBufferType
+    ServerBufferType,
 )
 
-import matrix.globals
+from matrix.config import (
+    matrix_config_init,
+    matrix_config_read,
+    matrix_config_free,
+    matrix_config_change_cb,
+    matrix_config_reload_cb
+)
 
-W = matrix.globals.W
-GLOBAL_OPTIONS = matrix.globals.OPTIONS
-CONFIG = matrix.globals.CONFIG
-SERVERS = matrix.globals.SERVERS
+from matrix.globals import W, OPTIONS, CONFIG, SERVERS
 
 
 WEECHAT_SCRIPT_NAME = "matrix"                                 # type: str
@@ -344,7 +347,7 @@ def room_input_cb(server_name, buffer, input_data):
         "room_id": room_id
     }
 
-    message = MatrixMessage(server, GLOBAL_OPTIONS, MessageType.SEND,
+    message = MatrixMessage(server, OPTIONS, MessageType.SEND,
                             data=body, room_id=room_id,
                             extra_data=extra_data)
 
@@ -390,11 +393,6 @@ def matrix_timer_cb(server_name, remaining_calls):
 
 
 @utf8_decode
-def matrix_config_reload_cb(data, config_file):
-    return W.WEECHAT_RC_OK
-
-
-@utf8_decode
 def matrix_config_server_read_cb(
         data, config_file, section,
         option_name, value
@@ -435,53 +433,8 @@ def matrix_config_server_write_cb(data, config_file, section_name):
 
 
 @utf8_decode
-def matrix_config_change_cb(data, option):
-    option_name = key_from_value(GLOBAL_OPTIONS.options, option)
-
-    if option_name == "redactions":
-        GLOBAL_OPTIONS.redaction_type = RedactType(W.config_integer(option))
-    elif option_name == "server_buffer":
-        GLOBAL_OPTIONS.look_server_buf = ServerBufferType(
-            W.config_integer(option))
-    elif option_name == "max_initial_sync_events":
-        GLOBAL_OPTIONS.sync_limit = W.config_integer(option)
-    elif option_name == "max_backlog_sync_events":
-        GLOBAL_OPTIONS.backlog_limit = W.config_integer(option)
-    elif option_name == "fetch_backlog_on_pgup":
-        GLOBAL_OPTIONS.enable_backlog = W.config_boolean(option)
-
-        if GLOBAL_OPTIONS.enable_backlog:
-            if not GLOBAL_OPTIONS.page_up_hook:
-                hook_page_up(CONFIG)
-        else:
-            if GLOBAL_OPTIONS.page_up_hook:
-                W.unhook(GLOBAL_OPTIONS.page_up_hook)
-                GLOBAL_OPTIONS.page_up_hook = None
-
-    return 1
-
-
-def read_matrix_config():
-    # type: () -> bool
-    return_code = W.config_read(CONFIG)
-    if return_code == W.WEECHAT_CONFIG_READ_OK:
-        return True
-    elif return_code == W.WEECHAT_CONFIG_READ_MEMORY_ERROR:
-        return False
-    elif return_code == W.WEECHAT_CONFIG_READ_FILE_NOT_FOUND:
-        return True
-    return False
-
-
-@utf8_decode
 def matrix_unload_cb():
-    for section in ["network", "look", "color", "server"]:
-        section_pointer = W.config_search_section(CONFIG, section)
-        W.config_section_free_options(section_pointer)
-        W.config_section_free(section_pointer)
-
-    W.config_free(CONFIG)
-
+    matrix_config_free(CONFIG)
     return W.WEECHAT_RC_OK
 
 
@@ -510,8 +463,8 @@ if __name__ == "__main__":
                   ''):
 
         # TODO if this fails we should abort and unload the script.
-        CONFIG = matrix.globals.init_matrix_config()
-        read_matrix_config()
+        CONFIG = matrix_config_init()
+        matrix_config_read(CONFIG)
 
         hook_commands()
         init_bar_items()

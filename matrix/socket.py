@@ -22,7 +22,7 @@ import socket
 from builtins import bytes, str
 
 import matrix.globals
-from matrix.config import DebugType
+from matrix.plugin_options import DebugType
 from matrix.utils import prnt_debug, server_buffer_prnt, create_server_buffer
 
 

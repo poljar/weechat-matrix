@@ -37,7 +37,7 @@ from matrix.api import (
 
 from matrix.socket import send_or_queue, disconnect, close_socket
 from matrix.utils import server_buffer_prnt, tags_from_line_data, prnt_debug
-from matrix.config import RedactType, DebugType
+from matrix.plugin_options import RedactType, DebugType
 
 def strip_matrix_server(string):
     # type: (str) -> str

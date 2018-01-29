@@ -20,7 +20,7 @@ import time
 
 import matrix.globals
 
-from matrix.config import ServerBufferType
+from matrix.plugin_options import ServerBufferType
 
 W = matrix.globals.W
 GLOBAL_OPTIONS = matrix.globals.OPTIONS

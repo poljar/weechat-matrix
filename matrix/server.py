@@ -21,7 +21,7 @@ import ssl
 from collections import deque
 from http_parser.pyparser import HttpParser
 
-from matrix.config import Option
+from matrix.plugin_options import Option
 
 
 class MatrixServer:

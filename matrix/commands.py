@@ -25,7 +25,7 @@ from matrix.utf import utf8_decode
 from matrix.api import MatrixMessage, MessageType
 from matrix.utils import key_from_value, tags_from_line_data
 from matrix.socket import send_or_queue, disconnect, connect
-from matrix.config import DebugType
+from matrix.plugin_options import DebugType
 from matrix.server import MatrixServer
 
 
