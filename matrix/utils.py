@@ -20,6 +20,7 @@ import time
 
 import matrix.globals
 
+from matrix.config import ServerBufferType
 
 W = matrix.globals.W
 GLOBAL_OPTIONS = matrix.globals.OPTIONS
@@ -58,3 +59,43 @@ def tags_from_line_data(line_data):
         ) for i in range(tags_count)]
 
     return tags
+
+
+def create_server_buffer(server):
+    # type: (MatrixServer) -> None
+    server.server_buffer = W.buffer_new(
+        server.name,
+        "server_buffer_cb",
+        server.name,
+        "",
+        ""
+    )
+
+    server_buffer_set_title(server)
+    W.buffer_set(server.server_buffer, "localvar_set_type", 'server')
+    W.buffer_set(server.server_buffer, "localvar_set_nick", server.user)
+    W.buffer_set(server.server_buffer, "localvar_set_server", server.name)
+    W.buffer_set(server.server_buffer, "localvar_set_channel", server.name)
+
+    # TODO merge without core
+    if GLOBAL_OPTIONS.look_server_buf == ServerBufferType.MERGE_CORE:
+        W.buffer_merge(server.server_buffer, W.buffer_search_main())
+    elif GLOBAL_OPTIONS.look_server_buf == ServerBufferType.MERGE:
+        pass
+    else:
+        pass
+
+
+def server_buffer_set_title(server):
+    # type: (MatrixServer) -> None
+    if server.numeric_address:
+        ip_string = " ({address})".format(address=server.numeric_address)
+    else:
+        ip_string = ""
+
+    title = ("Matrix: {address}/{port}{ip}").format(
+        address=server.address,
+        port=server.port,
+        ip=ip_string)
+
+    W.buffer_set(server.server_buffer, "title", title)

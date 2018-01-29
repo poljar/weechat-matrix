@@ -20,8 +20,10 @@ import time
 import json
 from enum import Enum, unique
 
-from matrix.http import RequestType, HttpRequest
+from matrix.globals import OPTIONS
 
+from matrix.socket import send_or_queue
+from matrix.http import RequestType, HttpRequest
 
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
 
@@ -207,8 +209,51 @@ class MatrixMessage:
             )
 
 
+class MatrixUser:
+    def __init__(self, name, display_name):
+        self.name = name                  # type: str
+        self.display_name = display_name  # type: str
+        self.power_level = 0              # type: int
+        self.nick_color = ""              # type: str
+        self.prefix = ""                  # type: str
+
+
+class MatrixRoom:
+    def __init__(self, room_id):
+        # type: (str) -> None
+        self.room_id = room_id  # type: str
+        self.alias = room_id    # type: str
+        self.topic = ""         # type: str
+        self.topic_author = ""  # type: str
+        self.topic_date = None  # type: datetime.datetime
+        self.prev_batch = ""    # type: str
+        self.users = dict()     # type: Dict[str, MatrixUser]
+        self.encrypted = False  # type: bool
+
+
 def get_transaction_id(server):
     # type: (MatrixServer) -> int
     transaction_id = server.transaction_id
     server.transaction_id += 1
     return transaction_id
+
+
+def matrix_sync(server):
+    message = MatrixMessage(server, OPTIONS, MessageType.SYNC)
+    server.send_queue.append(message)
+
+
+def matrix_login(server):
+    # type: (MatrixServer) -> None
+    post_data = {"type": "m.login.password",
+                 "user": server.user,
+                 "password": server.password,
+                 "initial_device_display_name": server.device_name}
+
+    message = MatrixMessage(
+        server,
+        OPTIONS,
+        MessageType.LOGIN,
+        data=post_data
+    )
+    send_or_queue(server, message)

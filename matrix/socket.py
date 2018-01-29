@@ -17,15 +17,22 @@
 from __future__ import unicode_literals
 
 import time
+import socket
 
 from builtins import bytes, str
 
 import matrix.globals
 from matrix.config import DebugType
-from matrix.utils import prnt_debug, server_buffer_prnt
+from matrix.utils import prnt_debug, server_buffer_prnt, create_server_buffer
 
 
 W = matrix.globals.W
+
+
+def close_socket(server):
+    # type: (MatrixServer) -> None
+    server.socket.shutdown(socket.SHUT_RDWR)
+    server.socket.close()
 
 
 def disconnect(server):
@@ -49,6 +56,41 @@ def send_or_queue(server, message):
                         prefix=W.prefix("error"),
                         t=message.type))
         server.send_queue.append(message)
+
+
+def connect(server):
+    # type: (MatrixServer) -> int
+    if not server.address or not server.port:
+        message = "{prefix}Server address or port not set".format(
+            prefix=W.prefix("error"))
+        W.prnt("", message)
+        return False
+
+    if not server.user or not server.password:
+        message = "{prefix}User or password not set".format(
+            prefix=W.prefix("error"))
+        W.prnt("", message)
+        return False
+
+    if server.connected:
+        return True
+
+    if not server.server_buffer:
+        create_server_buffer(server)
+
+    if not server.timer_hook:
+        server.timer_hook = W.hook_timer(
+            1 * 1000,
+            0,
+            0,
+            "matrix_timer_cb",
+            server.name
+        )
+
+    W.hook_connect("", server.address, server.port, 1, 0, "",
+                   "connect_cb", server.name)
+
+    return W.WEECHAT_RC_OK
 
 
 def send(server, message):

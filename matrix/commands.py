@@ -17,19 +17,22 @@
 from __future__ import unicode_literals
 
 import re
+import time
 
 import matrix.globals
 
 from matrix.utf import utf8_decode
 from matrix.api import MatrixMessage, MessageType
 from matrix.utils import key_from_value, tags_from_line_data
-from matrix.socket import send_or_queue
+from matrix.socket import send_or_queue, disconnect, connect
+from matrix.config import DebugType
+from matrix.server import MatrixServer
 
 
 W = matrix.globals.W
 GLOBAL_OPTIONS = matrix.globals.OPTIONS
 SERVERS = matrix.globals.SERVERS
-
+CONFIG = matrix.globals.CONFIG
 
 def hook_commands():
     W.hook_completion(
@@ -147,6 +150,15 @@ def matrix_fetch_old_messages(server, room_id):
     send_or_queue(server, message)
 
     return
+
+
+def check_server_existence(server_name, servers):
+    if server_name not in servers:
+        message = "{prefix}matrix: No such server: {server} found".format(
+            prefix=W.prefix("error"), server=server_name)
+        W.prnt("", message)
+        return False
+    return True
 
 
 def hook_page_up():
