@@ -35,41 +35,6 @@ SERVERS = matrix.globals.SERVERS
 CONFIG = matrix.globals.CONFIG
 
 def hook_commands():
-    W.hook_completion(
-        "matrix_server_commands",
-        "Matrix server completion",
-        "server_command_completion_cb",
-        ""
-    )
-
-    W.hook_completion(
-        "matrix_servers",
-        "Matrix server completion",
-        "matrix_server_completion_cb",
-        ""
-    )
-
-    W.hook_completion(
-        "matrix_commands",
-        "Matrix command completion",
-        "matrix_command_completion_cb",
-        ""
-    )
-
-    W.hook_completion(
-        "matrix_messages",
-        "Matrix message completion",
-        "matrix_message_completion_cb",
-        ""
-    )
-
-    W.hook_completion(
-        "matrix_debug_types",
-        "Matrix debugging type completion",
-        "matrix_debug_completion_cb",
-        ""
-    )
-
     W.hook_command(
         # Command name and short description
         'matrix', 'Matrix chat protocol command',
@@ -167,17 +132,6 @@ def hook_page_up():
         'matrix_command_pgup_cb',
         ''
     )
-
-
-@utf8_decode
-def matrix_debug_completion_cb(data, completion_item, buffer, completion):
-    for debug_type in ["messaging", "network", "timing"]:
-        W.hook_completion_list_add(
-            completion,
-            debug_type,
-            0,
-            W.WEECHAT_LIST_POS_SORT)
-    return W.WEECHAT_RC_OK
 
 
 @utf8_decode
@@ -416,57 +370,6 @@ def matrix_redact_command_cb(data, buffer, args):
                            prefix=W.prefix("error"))
             W.prnt("", message)
             return W.WEECHAT_RC_OK
-
-    return W.WEECHAT_RC_OK
-
-
-@utf8_decode
-def matrix_message_completion_cb(data, completion_item, buffer, completion):
-    own_lines = W.hdata_pointer(W.hdata_get('buffer'), buffer, 'own_lines')
-    if own_lines:
-        line = W.hdata_pointer(
-            W.hdata_get('lines'),
-            own_lines,
-            'last_line'
-        )
-
-        line_number = 1
-
-        while line:
-            line_data = W.hdata_pointer(
-                W.hdata_get('line'),
-                line,
-                'data'
-            )
-
-            if line_data:
-                message = W.hdata_string(W.hdata_get('line_data'), line_data,
-                                         'message')
-
-                tags = tags_from_line_data(line_data)
-
-                # Only add non redacted user messages to the completion
-                if (message
-                        and 'matrix_message' in tags
-                        and 'matrix_redacted' not in tags):
-
-                    if len(message) > GLOBAL_OPTIONS.redaction_comp_len + 2:
-                        message = (
-                            message[:GLOBAL_OPTIONS.redaction_comp_len]
-                            + '..')
-
-                    item = ("{number}:\"{message}\"").format(
-                        number=line_number,
-                        message=message)
-
-                    W.hook_completion_list_add(
-                        completion,
-                        item,
-                        0,
-                        W.WEECHAT_LIST_POS_END)
-                    line_number += 1
-
-            line = W.hdata_move(W.hdata_get('line'), line, -1)
 
     return W.WEECHAT_RC_OK
 

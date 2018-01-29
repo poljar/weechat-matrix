@@ -49,15 +49,21 @@ from matrix.commands import (
     matrix_command_topic_cb,
     matrix_command_pgup_cb,
     matrix_redact_command_cb,
-    matrix_command_buf_clear_cb,
-    matrix_debug_completion_cb,
-    matrix_message_completion_cb
+    matrix_command_buf_clear_cb
 )
 
 from matrix.bar_items import (
     init_bar_items,
     matrix_bar_item_name,
     matrix_bar_item_plugin
+)
+
+from matrix.completion import (
+    init_completion,
+    matrix_command_completion_cb,
+    matrix_debug_completion_cb,
+    matrix_message_completion_cb,
+    matrix_server_completion_cb
 )
 
 from matrix.utils import (
@@ -479,74 +485,6 @@ def matrix_unload_cb():
     return W.WEECHAT_RC_OK
 
 
-def add_servers_to_completion(completion):
-    for server_name in SERVERS:
-        W.hook_completion_list_add(
-            completion,
-            server_name,
-            0,
-            W.WEECHAT_LIST_POS_SORT
-        )
-
-
-@utf8_decode
-def server_command_completion_cb(data, completion_item, buffer, completion):
-    buffer_input = W.buffer_get_string(buffer, "input").split()
-
-    args = buffer_input[1:]
-    commands = ['add', 'delete', 'list', 'listfull']
-
-    def complete_commands():
-        for command in commands:
-            W.hook_completion_list_add(
-                completion,
-                command,
-                0,
-                W.WEECHAT_LIST_POS_SORT
-            )
-
-    if len(args) == 1:
-        complete_commands()
-
-    elif len(args) == 2:
-        if args[1] not in commands:
-            complete_commands()
-        else:
-            if args[1] == 'delete' or args[1] == 'listfull':
-                add_servers_to_completion(completion)
-
-    elif len(args) == 3:
-        if args[1] == 'delete' or args[1] == 'listfull':
-            if args[2] not in SERVERS:
-                add_servers_to_completion(completion)
-
-    return W.WEECHAT_RC_OK
-
-
-@utf8_decode
-def matrix_server_completion_cb(data, completion_item, buffer, completion):
-    add_servers_to_completion(completion)
-    return W.WEECHAT_RC_OK
-
-
-@utf8_decode
-def matrix_command_completion_cb(data, completion_item, buffer, completion):
-    for command in [
-            "connect",
-            "disconnect",
-            "reconnect",
-            "server",
-            "help",
-            "debug"
-    ]:
-        W.hook_completion_list_add(
-            completion,
-            command,
-            0,
-            W.WEECHAT_LIST_POS_SORT)
-    return W.WEECHAT_RC_OK
-
-
 def create_default_server(config_file):
     server = MatrixServer('matrix.org', W, config_file)
     SERVERS[server.name] = server
@@ -577,6 +515,7 @@ if __name__ == "__main__":
 
         hook_commands()
         init_bar_items()
+        init_completion()
 
         if not SERVERS:
             create_default_server(CONFIG)
