@@ -14,6 +14,7 @@
 # CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+
 from __future__ import unicode_literals
 
 import ssl
@@ -22,11 +23,14 @@ from collections import deque
 from http_parser.pyparser import HttpParser
 
 from matrix.plugin_options import Option
+from matrix.utils import key_from_value
+from matrix.utf import utf8_decode
+from matrix.globals import W, SERVERS
 
 
 class MatrixServer:
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, name, w, config_file):
+    def __init__(self, name, config_file):
         # type: (str, weechat, weechat.config) -> None
         self.name = name                     # type: str
         self.user_id = ""
@@ -68,9 +72,9 @@ class MatrixServer:
         self.message_queue = deque()  # type: Deque[MatrixMessage]
         self.ignore_event_list = []   # type: List[str]
 
-        self._create_options(w, config_file)
+        self._create_options(config_file)
 
-    def _create_options(self, w, config_file):
+    def _create_options(self, config_file):
         options = [
             Option(
                 'autoconnect', 'boolean', '', 0, 0, 'off',
@@ -109,23 +113,23 @@ class MatrixServer:
             ),
         ]
 
-        section = w.config_search_section(config_file, 'server')
+        section = W.config_search_section(config_file, 'server')
 
         for option in options:
             option_name = "{server}.{option}".format(
                 server=self.name, option=option.name)
 
-            self.options[option.name] = w.config_new_option(
+            self.options[option.name] = W.config_new_option(
                 config_file, section, option_name,
                 option.type, option.description, option.string_values,
                 option.min, option.max, option.value, option.value, 0, "",
-                "", "server_config_change_cb", self.name, "", "")
+                "", "matrix_config_server_change_cb", self.name, "", "")
 
     def reset_parser(self):
         self.http_parser = HttpParser()
         self.http_buffer = []
 
-    def update_option(self, option, option_name, W):
+    def update_option(self, option, option_name):
         if option_name == "address":
             value = W.config_string(option)
             self.address = value
@@ -155,3 +159,58 @@ class MatrixServer:
             self.device_name = value
         else:
             pass
+
+
+@utf8_decode
+def matrix_config_server_read_cb(
+        data, config_file, section,
+        option_name, value
+):
+
+    return_code = W.WEECHAT_CONFIG_OPTION_SET_ERROR
+
+    if option_name:
+        server_name, option = option_name.rsplit('.', 1)
+        server = None
+
+        if server_name in SERVERS:
+            server = SERVERS[server_name]
+        else:
+            server = MatrixServer(server_name, config_file)
+            SERVERS[server.name] = server
+
+        # Ignore invalid options
+        if option in server.options:
+            return_code = W.config_option_set(server.options[option], value, 1)
+
+    # TODO print out error message in case of erroneous return_code
+
+    return return_code
+
+
+@utf8_decode
+def matrix_config_server_write_cb(data, config_file, section_name):
+    if not W.config_write_line(config_file, section_name, ""):
+        return W.WECHAT_CONFIG_WRITE_ERROR
+
+    for server in SERVERS.values():
+        for option in server.options.values():
+            if not W.config_write_option(config_file, option):
+                return W.WECHAT_CONFIG_WRITE_ERROR
+
+    return W.WEECHAT_CONFIG_WRITE_OK
+
+
+@utf8_decode
+def matrix_config_server_change_cb(server_name, option):
+    # type: (str, weechat.config_option) -> int
+    server = SERVERS[server_name]
+    option_name = None
+
+    # The function config_option_get_string() is used to get differing
+    # properties from a config option, sadly it's only available in the plugin
+    # API of weechat.
+    option_name = key_from_value(server.options, option)
+    server.update_option(option, option_name)
+
+    return 1

@@ -32,10 +32,8 @@ from matrix import colors
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
 from matrix.api import MatrixMessage, MessageType, matrix_login
-from matrix.server import MatrixServer
 from matrix.socket import disconnect, send_or_queue, send, connect
 from matrix.messages import handle_http_response
-
 
 # Weechat searches for the registered callbacks in the scope of the main script
 # file, import the callbacks here so weechat can find them.
@@ -50,6 +48,13 @@ from matrix.commands import (
     matrix_command_pgup_cb,
     matrix_redact_command_cb,
     matrix_command_buf_clear_cb
+)
+
+from matrix.server import (
+    MatrixServer,
+    matrix_config_server_read_cb,
+    matrix_config_server_write_cb,
+    matrix_config_server_change_cb,
 )
 
 from matrix.bar_items import (
@@ -96,21 +101,6 @@ WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"              # type: str
 WEECHAT_SCRIPT_AUTHOR = "Damir Jelić <poljar@termina.org.uk>"  # type: str
 WEECHAT_SCRIPT_VERSION = "0.1"                                 # type: str
 WEECHAT_SCRIPT_LICENSE = "ISC"                                 # type: str
-
-
-@utf8_decode
-def server_config_change_cb(server_name, option):
-    # type: (str, weechat.config_option) -> int
-    server = SERVERS[server_name]
-    option_name = None
-
-    # The function config_option_get_string() is used to get differing
-    # properties from a config option, sadly it's only available in the plugin
-    # API of weechat.
-    option_name = key_from_value(server.options, option)
-    server.update_option(option, option_name, W)
-
-    return 1
 
 
 def wrap_socket(server, file_descriptor):
@@ -390,46 +380,6 @@ def matrix_timer_cb(server_name, remaining_calls):
             "Handling message: {message}".format(message=message))
 
     return W.WEECHAT_RC_OK
-
-
-@utf8_decode
-def matrix_config_server_read_cb(
-        data, config_file, section,
-        option_name, value
-):
-
-    return_code = W.WEECHAT_CONFIG_OPTION_SET_ERROR
-
-    if option_name:
-        server_name, option = option_name.rsplit('.', 1)
-        server = None
-
-        if server_name in SERVERS:
-            server = SERVERS[server_name]
-        else:
-            server = MatrixServer(server_name, W, config_file)
-            SERVERS[server.name] = server
-
-        # Ignore invalid options
-        if option in server.options:
-            return_code = W.config_option_set(server.options[option], value, 1)
-
-    # TODO print out error message in case of erroneous return_code
-
-    return return_code
-
-
-@utf8_decode
-def matrix_config_server_write_cb(data, config_file, section_name):
-    if not W.config_write_line(config_file, section_name, ""):
-        return W.WECHAT_CONFIG_WRITE_ERROR
-
-    for server in SERVERS.values():
-        for option in server.options.values():
-            if not W.config_write_option(config_file, option):
-                return W.WECHAT_CONFIG_WRITE_ERROR
-
-    return W.WEECHAT_CONFIG_WRITE_OK
 
 
 @utf8_decode
