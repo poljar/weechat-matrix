@@ -60,6 +60,7 @@ class MatrixServer:
         self.access_token = None                         # type: str
         self.next_batch = None                           # type: str
         self.transaction_id = 0                          # type: int
+        self.lag = 0                                     # type: int
 
         self.http_parser = HttpParser()                  # type: HttpParser
         self.http_buffer = []                            # type: List[bytes]

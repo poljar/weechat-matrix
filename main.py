@@ -63,7 +63,8 @@ from matrix.server import (
 from matrix.bar_items import (
     init_bar_items,
     matrix_bar_item_name,
-    matrix_bar_item_plugin
+    matrix_bar_item_plugin,
+    matrix_bar_item_lag
 )
 
 from matrix.completion import (
@@ -185,6 +186,8 @@ def receive_cb(server_name, file_descriptor):
             message = server.receive_queue.popleft()
             message.response = HttpResponse(status, headers, body)
             receive_time = time.time()
+            server.lag = (receive_time - message.send_time) * 1000
+            W.bar_item_update("lag")
             message.receive_time = receive_time
 
             prnt_debug(DebugType.MESSAGING, server,

@@ -66,6 +66,24 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
     return ""
 
 
+@utf8_decode
+def matrix_bar_item_lag(data, item, window, buffer, extra_info):
+    # pylint: disable=unused-argument
+    for server in SERVERS.values():
+        if (buffer in server.buffers.values() or
+                buffer == server.server_buffer):
+            if server.lag >= 500:
+                lag = "{0:.3f}" if server.lag < 1000 else "{0:.0f}"
+                lag_string = "Lag: {lag}".format(
+                    lag=lag.format(server.lag / 1000)
+                )
+                return lag_string
+            return ""
+
+    return ""
+
+
 def init_bar_items():
     W.bar_item_new("(extra)buffer_plugin",  "matrix_bar_item_plugin",  "")
     W.bar_item_new("(extra)buffer_name", "matrix_bar_item_name", "")
+    W.bar_item_new("(extra)lag", "matrix_bar_item_lag", "")
