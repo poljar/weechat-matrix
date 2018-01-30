@@ -93,7 +93,7 @@ def server_buffer_set_title(server):
     else:
         ip_string = ""
 
-    title = ("Matrix: {address}/{port}{ip}").format(
+    title = ("Matrix: {address}:{port}{ip}").format(
         address=server.address,
         port=server.port,
         ip=ip_string)

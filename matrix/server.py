@@ -48,6 +48,7 @@ class MatrixServer:
         self.buffers = dict()                # type: Dict[str, weechat.buffer]
         self.server_buffer = None            # type: weechat.buffer
         self.fd_hook = None                  # type: weechat.hook
+        self.ssl_hook = None                 # type: weechat.hook
         self.timer_hook = None               # type: weechat.hook
         self.numeric_address = ""            # type: str
 
