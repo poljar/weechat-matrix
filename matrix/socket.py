@@ -115,10 +115,15 @@ def send(server, message):
 
         end = time.time()
         message.send_time = end
-        send_time = (end - start) * 1000
-        prnt_debug(DebugType.NETWORK, server,
-                   ("Message done sending ({t}ms), putting message in the "
-                    "receive queue.").format(t=send_time))
+
+        send_lag = (end - start) * 1000
+        lag_string = "{0:.3f}" if send_lag < 1000 else "{0:.1f}"
+
+        prnt_debug(DebugType.NETWORK, server.server_buffer,
+                   ("{prefix}matrix: Message done sending (Lag: {t}s), putting"
+                    " message in the receive queue.").format(
+                        prefix=W.prefix("network"),
+                        t=lag_string.format(send_lag)))
 
         server.receive_queue.append(message)
         return True

@@ -128,9 +128,33 @@ def wrap_socket(server, file_descriptor):
         sock = temp_socket
 
     try:
+        start = time.time()
+        message = "{prefix}matrix: Doing SSL handshake...".format(
+                prefix=W.prefix("network"))
+
+        W.prnt(server.server_buffer, message)
+
+        # TODO this blocks currently
         ssl_socket = server.ssl_context.wrap_socket(
             sock,
             server_hostname=server.address)  # type: ssl.SSLSocket
+
+        cipher = ssl_socket.cipher()
+        cipher_message = ("{prefix}matrix: Connected using {tls}, and "
+                          "{bit} bit {cipher} cipher suite.").format(
+            prefix=W.prefix("network"),
+            tls=cipher[1],
+            bit=cipher[2],
+            cipher=cipher[0])
+
+        W.prnt(server.server_buffer, cipher_message)
+
+        # TODO print out the certificates
+        # cert = ssl_socket.getpeercert()
+        # W.prnt(server.server_buffer, pprint.pformat(cert))
+
+        server.lag = (time.time() - start) * 1000
+        W.bar_item_update("lag")
 
         return ssl_socket
     # TODO add finer grained error messages with the subclass exceptions
@@ -241,7 +265,6 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
             server.numeric_address = ip_address
 
             server_buffer_set_title(server)
-            server_buffer_prnt(server, "Connected")
 
             if not server.access_token:
                 matrix_login(server)
