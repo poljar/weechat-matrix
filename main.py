@@ -225,6 +225,15 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
                 server.name
             )
 
+            if not server.timer_hook:
+                server.timer_hook = W.hook_timer(
+                    1 * 1000,
+                    0,
+                    0,
+                    "matrix_timer_cb",
+                    server.name
+                )
+
             server.fd_hook = hook
             server.connected = True
             server.connecting = False

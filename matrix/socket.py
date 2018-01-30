@@ -78,14 +78,15 @@ def connect(server):
     if not server.server_buffer:
         create_server_buffer(server)
 
-    if not server.timer_hook:
-        server.timer_hook = W.hook_timer(
-            1 * 1000,
-            0,
-            0,
-            "matrix_timer_cb",
-            server.name
-        )
+    ssl_message = " (SSL)" if server.ssl_context.check_hostname else ""
+
+    message = "{prefix}matrix: Connecting to {server}:{port}{ssl}...".format(
+        prefix=W.prefix("network"),
+        server=server.address,
+        port=server.port,
+        ssl=ssl_message)
+
+    W.prnt(server.server_buffer, message)
 
     W.hook_connect("", server.address, server.port, 1, 0, "",
                    "connect_cb", server.name)
