@@ -22,10 +22,11 @@ import ssl
 from collections import deque
 from http_parser.pyparser import HttpParser
 
-from matrix.plugin_options import Option
-from matrix.utils import key_from_value
+from matrix.plugin_options import Option, DebugType
+from matrix.utils import key_from_value, prnt_debug, server_buffer_prnt
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS
+from matrix.socket import send, connect
 
 
 class MatrixServer:
@@ -214,3 +215,59 @@ def matrix_config_server_change_cb(server_name, option):
     server.update_option(option, option_name)
 
     return 1
+
+
+@utf8_decode
+def matrix_timer_cb(server_name, remaining_calls):
+    server = SERVERS[server_name]
+
+    if not server.connected:
+        if not server.connecting:
+            server_buffer_prnt(server, "Reconnecting timeout blaaaa")
+            matrix_server_reconnect(server)
+        return W.WEECHAT_RC_OK
+
+    while server.send_queue:
+        message = server.send_queue.popleft()
+        prnt_debug(DebugType.MESSAGING, server,
+                   ("Timer hook found message of type {t} in queue. Sending "
+                    "out.".format(t=message.type)))
+
+        if not send(server, message):
+            # We got an error while sending the last message return the message
+            # to the queue and exit the loop
+            server.send_queue.appendleft(message)
+            break
+
+    for message in server.message_queue:
+        server_buffer_prnt(
+            server,
+            "Handling message: {message}".format(message=message))
+
+    return W.WEECHAT_RC_OK
+
+
+def create_default_server(config_file):
+    server = MatrixServer('matrix.org', W, config_file)
+    SERVERS[server.name] = server
+
+    W.config_option_set(server.options["address"], "matrix.org", 1)
+
+    return True
+
+
+def matrix_server_reconnect(server):
+    # type: (MatrixServer) -> None
+    server.connecting = True
+    timeout = server.reconnect_count * 5 * 1000
+
+    if timeout > 0:
+        server_buffer_prnt(
+            server,
+            "Reconnecting in {timeout} seconds.".format(
+                timeout=timeout / 1000))
+        W.hook_timer(timeout, 0, 1, "reconnect_cb", server.name)
+    else:
+        connect(server)
+
+    server.reconnect_count += 1

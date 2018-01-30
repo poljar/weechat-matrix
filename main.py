@@ -52,6 +52,9 @@ from matrix.commands import (
 
 from matrix.server import (
     MatrixServer,
+    create_default_server,
+    matrix_server_reconnect,
+    matrix_timer_cb,
     matrix_config_server_read_cb,
     matrix_config_server_write_cb,
     matrix_config_server_change_cb,
@@ -231,7 +234,7 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
             if not server.access_token:
                 matrix_login(server)
         else:
-            reconnect(server)
+            matrix_server_reconnect(server)
         return W.WEECHAT_RC_OK
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND:
@@ -275,25 +278,8 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
             'Unexpected error: {status}'.format(status=status_value)
         )
 
-    reconnect(server)
+    matrix_server_reconnect(server)
     return W.WEECHAT_RC_OK
-
-
-def reconnect(server):
-    # type: (MatrixServer) -> None
-    server.connecting = True
-    timeout = server.reconnect_count * 5 * 1000
-
-    if timeout > 0:
-        server_buffer_prnt(
-            server,
-            "Reconnecting in {timeout} seconds.".format(
-                timeout=timeout / 1000))
-        W.hook_timer(timeout, 0, 1, "reconnect_cb", server.name)
-    else:
-        connect(server)
-
-    server.reconnect_count += 1
 
 
 @utf8_decode
@@ -353,48 +339,9 @@ def room_close_cb(data, buffer):
 
 
 @utf8_decode
-def matrix_timer_cb(server_name, remaining_calls):
-    server = SERVERS[server_name]
-
-    if not server.connected:
-        if not server.connecting:
-            server_buffer_prnt(server, "Reconnecting timeout blaaaa")
-            reconnect(server)
-        return W.WEECHAT_RC_OK
-
-    while server.send_queue:
-        message = server.send_queue.popleft()
-        prnt_debug(DebugType.MESSAGING, server,
-                   ("Timer hook found message of type {t} in queue. Sending "
-                    "out.".format(t=message.type)))
-
-        if not send(server, message):
-            # We got an error while sending the last message return the message
-            # to the queue and exit the loop
-            server.send_queue.appendleft(message)
-            break
-
-    for message in server.message_queue:
-        server_buffer_prnt(
-            server,
-            "Handling message: {message}".format(message=message))
-
-    return W.WEECHAT_RC_OK
-
-
-@utf8_decode
 def matrix_unload_cb():
     matrix_config_free(CONFIG)
     return W.WEECHAT_RC_OK
-
-
-def create_default_server(config_file):
-    server = MatrixServer('matrix.org', W, config_file)
-    SERVERS[server.name] = server
-
-    W.config_option_set(server.options["address"], "matrix.org", 1)
-
-    return True
 
 
 def autoconnect(servers):
