@@ -17,13 +17,16 @@
 from __future__ import unicode_literals
 
 import time
+import ssl
 import socket
+import pprint
 
 from builtins import bytes, str
 
 import matrix.globals
 from matrix.plugin_options import DebugType
 from matrix.utils import prnt_debug, server_buffer_prnt, create_server_buffer
+from matrix.utf import utf8_decode
 
 
 W = matrix.globals.W
@@ -45,17 +48,6 @@ def disconnect(server):
     server.connected = False
 
     server_buffer_prnt(server, "Disconnected")
-
-
-def send_or_queue(server, message):
-    # type: (MatrixServer, MatrixMessage) -> None
-    if not send(server, message):
-        prnt_debug(DebugType.MESSAGING, server,
-                   ("{prefix} Failed sending message of type {t}. "
-                    "Adding to queue").format(
-                        prefix=W.prefix("error"),
-                        t=message.type))
-        server.send_queue.append(message)
 
 
 def connect(server):
@@ -94,41 +86,100 @@ def connect(server):
     return W.WEECHAT_RC_OK
 
 
+@utf8_decode
+def send_cb(server_name, file_descriptor):
+    # type: (str, int) -> int
+
+    server = SERVERS[server_name]
+
+    if server.send_fd_hook:
+        W.unhook(server.send_fd_hook)
+        server.send_fd_hook = None
+
+    if server.send_buffer:
+        try_send(server, send_buffer)
+
+    return W.WEECHAT_RC_OK
+
+
+def send_or_queue(server, message):
+    # type: (MatrixServer, MatrixMessage) -> None
+    if not send(server, message):
+        prnt_debug(DebugType.MESSAGING, server,
+                   ("{prefix} Failed sending message of type {t}. "
+                    "Adding to queue").format(
+                        prefix=W.prefix("error"),
+                        t=message.type))
+        server.send_queue.append(message)
+
+
+def try_send(server, message):
+    # type: (MatrixServer, bytes) -> bool
+
+    socket = server.socket
+    total_sent = 0
+    message_length = len(message)
+
+    while total_sent < message_length:
+        try:
+            sent = socket.send(message[total_sent:])
+
+        except ssl.SSLWantWriteError:
+            hook = W.hook_fd(
+                server.socket.fileno(),
+                0, 1, 0,
+                "send_cb",
+                server.name
+            )
+            server.send_fd_hook = hook
+            server.send_buffer = message[total_sent:]
+            return True
+
+        except OSError as error:
+            disconnect(server)
+            abort_send(server)
+            server_buffer_prnt(server, str(error))
+            return False
+
+        if sent == 0:
+            disconnect(server)
+            abort_send(server)
+            server_buffer_prnt(server, "Socket closed while sending data.")
+            return False
+
+        total_sent = total_sent + sent
+
+    finalize_send(server)
+    return True
+
+
+def abort_send(server):
+    server.send_queue.appendleft(server.current_message)
+    server.current_message = None
+    server.send_buffer = ""
+
+
+def finalize_send(server):
+    # type: (MatrixServer) -> None
+    server.current_message.send_time = time.time()
+    server.receive_queue.append(server.current_message)
+
+    server.send_buffer = ""
+    server.current_message = None
+
+
 def send(server, message):
     # type: (MatrixServer, MatrixMessage) -> bool
+    if server.current_message:
+        return False
+
+    server.current_message = message
 
     request = message.request.request
     payload = message.request.payload
 
-    prnt_debug(DebugType.MESSAGING, server,
-               "{prefix} Sending message of type {t}.".format(
-                   prefix=W.prefix("error"),
-                   t=message.type))
+    bytes_message = bytes(request, 'utf-8') + bytes(payload, 'utf-8')
 
-    try:
-        start = time.time()
+    try_send(server, bytes_message)
 
-        # TODO we probably shouldn't use sendall here.
-        server.socket.sendall(bytes(request, 'utf-8'))
-        if payload:
-            server.socket.sendall(bytes(payload, 'utf-8'))
-
-        end = time.time()
-        message.send_time = end
-
-        send_lag = (end - start) * 1000
-        lag_string = "{0:.3f}" if send_lag < 1000 else "{0:.1f}"
-
-        prnt_debug(DebugType.NETWORK, server.server_buffer,
-                   ("{prefix}matrix: Message done sending (Lag: {t}s), putting"
-                    " message in the receive queue.").format(
-                        prefix=W.prefix("network"),
-                        t=lag_string.format(send_lag)))
-
-        server.receive_queue.append(message)
-        return True
-
-    except OSError as error:
-        disconnect(server)
-        server_buffer_prnt(server, str(error))
-        return False
+    return True

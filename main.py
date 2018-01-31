@@ -32,7 +32,7 @@ from matrix import colors
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
 from matrix.api import MatrixMessage, MessageType, matrix_login
-from matrix.socket import disconnect, send_or_queue, send, connect
+from matrix.socket import disconnect, send_or_queue, send, connect, send_cb
 from matrix.messages import handle_http_response
 
 # Weechat searches for the registered callbacks in the scope of the main script

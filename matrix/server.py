@@ -64,6 +64,10 @@ class MatrixServer:
         self.transaction_id = 0                          # type: int
         self.lag = 0                                     # type: int
 
+        self.send_fd_hook = None                         # type: weechat.hook
+        self.send_buffer = b""                           # type: bytes
+        self.current_message = None                      # type: MatrixMessage
+
         self.http_parser = HttpParser()                  # type: HttpParser
         self.http_buffer = []                            # type: List[bytes]
 

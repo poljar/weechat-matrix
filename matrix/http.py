@@ -54,7 +54,7 @@ class HttpRequest:
         request_list = []              # type: List[str]
         accept_header = 'Accept: */*'  # type: str
         end_separator = '\r\n'         # type: str
-        payload = None                 # type: str
+        payload = ""                   # type: str
 
         if request_type == RequestType.GET:
             get = 'GET {location} HTTP/1.1'.format(location=location)
