@@ -46,6 +46,7 @@ def disconnect(server):
     server.fd_hook = None
     server.socket = None
     server.connected = False
+    server.receive_queue.clear()
 
     server_buffer_prnt(server, "Disconnected")
 
