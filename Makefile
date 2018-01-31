@@ -1,4 +1,4 @@
-.PHONY: install install-lib
+.PHONY: install install-lib phony
 
 WEECHAT_HOME ?= $(HOME)/.weechat
 PREFIX ?= $(WEECHAT_HOME)
@@ -11,5 +11,7 @@ install: install-lib
 
 install-lib: $(lib)
 
-$(DESTDIR)$(PREFIX)/python/matrix/%.py: matrix/%.py
+phony:
+
+$(DESTDIR)$(PREFIX)/python/matrix/%.py: matrix/%.py phony
 	install -Dm644 $< $@
