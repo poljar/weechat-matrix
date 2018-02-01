@@ -16,18 +16,24 @@
 
 
 from __future__ import unicode_literals
-from builtins import str
+from builtins import str, bytes
 
 import ssl
+import socket
+import time
 
 from collections import deque
 from http_parser.pyparser import HttpParser
 
 from matrix.plugin_options import Option, DebugType
-from matrix.utils import key_from_value, prnt_debug, server_buffer_prnt
+from matrix.utils import (
+    key_from_value,
+    prnt_debug,
+    server_buffer_prnt,
+    create_server_buffer
+)
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS
-from matrix.socket import send, connect
 
 
 class MatrixServer:
@@ -55,7 +61,8 @@ class MatrixServer:
         self.autoconnect = False                         # type: bool
         self.connected = False                           # type: bool
         self.connecting = False                          # type: bool
-        self.reconnect_count = 0                         # type: int
+        self.reconnect_delay = 0                         # type: int
+        self.reconnect_time = None                       # type: float
         self.socket = None                               # type: ssl.SSLSocket
         self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
 
@@ -228,10 +235,14 @@ def matrix_config_server_change_cb(server_name, option):
 def matrix_timer_cb(server_name, remaining_calls):
     server = SERVERS[server_name]
 
+    current_time = time.time()
+
+    if ((not server.connected) and
+            server.reconnect_time and
+            current_time >= (server.reconnect_time + server.reconnect_delay)):
+        matrix_server_reconnect(server)
+
     if not server.connected:
-        if not server.connecting:
-            server_buffer_prnt(server, "Reconnecting timeout blaaaa")
-            matrix_server_reconnect(server)
         return W.WEECHAT_RC_OK
 
     while server.send_queue:
@@ -246,11 +257,6 @@ def matrix_timer_cb(server_name, remaining_calls):
             server.send_queue.appendleft(message)
             break
 
-    for message in server.message_queue:
-        server_buffer_prnt(
-            server,
-            "Handling message: {message}".format(message=message))
-
     return W.WEECHAT_RC_OK
 
 
@@ -264,17 +270,205 @@ def create_default_server(config_file):
 
 
 def matrix_server_reconnect(server):
+    message = ("{prefix}matrix: reconnecting to server...").format(
+        prefix=W.prefix("network"))
+
+    server_buffer_prnt(server, message)
+
+    server.reconnect_time = None
+
+    if not matrix_server_connect(server):
+        matrix_server_reconnect_schedule(server)
+
+
+def matrix_server_reconnect_schedule(server):
     # type: (MatrixServer) -> None
     server.connecting = True
-    timeout = server.reconnect_count * 5 * 1000
+    server.reconnect_time = time.time()
 
-    if timeout > 0:
-        server_buffer_prnt(
-            server,
-            "Reconnecting in {timeout} seconds.".format(
-                timeout=timeout / 1000))
-        W.hook_timer(timeout, 0, 1, "reconnect_cb", server.name)
+    if server.reconnect_delay:
+        server.reconnect_delay = server.reconnect_delay * 2
     else:
-        connect(server)
+        server.reconnect_delay = 10
 
-    server.reconnect_count += 1
+    message = ("{prefix}matrix: reconnecting to server in {t} "
+               "seconds").format(
+                   prefix=W.prefix("network"),
+                   t=server.reconnect_delay)
+
+    server_buffer_prnt(server, message)
+
+
+def matrix_server_disconnect(server, reconnect=True):
+    # type: (MatrixServer) -> None
+    if server.fd_hook:
+        W.unhook(server.fd_hook)
+
+    # TODO close socket
+    close_socket(server.socket)
+
+    server.fd_hook = None
+    server.socket = None
+    server.connected = False
+    server.access_token = ""
+    server.receive_queue.clear()
+
+    server.reconnect_delay = 0
+    server.reconnect_time = None
+
+    if server.server_buffer:
+        message = ("{prefix}matrix: disconnected from server").format(
+            prefix=W.prefix("network"))
+        server_buffer_prnt(server, message)
+
+    if reconnect:
+        matrix_server_reconnect_schedule(server)
+
+
+def matrix_server_connect(server):
+    # type: (MatrixServer) -> int
+    if not server.address or not server.port:
+        message = "{prefix}Server address or port not set".format(
+            prefix=W.prefix("error"))
+        W.prnt("", message)
+        return False
+
+    if not server.user or not server.password:
+        message = "{prefix}User or password not set".format(
+            prefix=W.prefix("error"))
+        W.prnt("", message)
+        return False
+
+    if server.connected:
+        return True
+
+    if not server.server_buffer:
+        create_server_buffer(server)
+
+    if not server.timer_hook:
+        server.timer_hook = W.hook_timer(
+            1 * 1000,
+            0,
+            0,
+            "matrix_timer_cb",
+            server.name
+        )
+
+    ssl_message = " (SSL)" if server.ssl_context.check_hostname else ""
+
+    message = "{prefix}matrix: Connecting to {server}:{port}{ssl}...".format(
+        prefix=W.prefix("network"),
+        server=server.address,
+        port=server.port,
+        ssl=ssl_message)
+
+    W.prnt(server.server_buffer, message)
+
+    W.hook_connect("", server.address, server.port, 1, 0, "",
+                   "connect_cb", server.name)
+
+    return True
+
+
+@utf8_decode
+def send_cb(server_name, file_descriptor):
+    # type: (str, int) -> int
+
+    server = SERVERS[server_name]
+
+    if server.send_fd_hook:
+        W.unhook(server.send_fd_hook)
+        server.send_fd_hook = None
+
+    if server.send_buffer:
+        try_send(server, send_buffer)
+
+    return W.WEECHAT_RC_OK
+
+
+def send_or_queue(server, message):
+    # type: (MatrixServer, MatrixMessage) -> None
+    if not send(server, message):
+        prnt_debug(DebugType.MESSAGING, server,
+                   ("{prefix} Failed sending message of type {t}. "
+                    "Adding to queue").format(
+                        prefix=W.prefix("error"),
+                        t=message.type))
+        server.send_queue.append(message)
+
+
+def try_send(server, message):
+    # type: (MatrixServer, bytes) -> bool
+
+    socket = server.socket
+    total_sent = 0
+    message_length = len(message)
+
+    while total_sent < message_length:
+        try:
+            sent = socket.send(message[total_sent:])
+
+        except ssl.SSLWantWriteError:
+            hook = W.hook_fd(
+                server.socket.fileno(),
+                0, 1, 0,
+                "send_cb",
+                server.name
+            )
+            server.send_fd_hook = hook
+            server.send_buffer = message[total_sent:]
+            return True
+
+        except OSError as error:
+            disconnect(server)
+            abort_send(server)
+            server_buffer_prnt(server, str(error))
+            return False
+
+        if sent == 0:
+            disconnect(server)
+            abort_send(server)
+            server_buffer_prnt(server, "Socket closed while sending data.")
+            return False
+
+        total_sent = total_sent + sent
+
+    finalize_send(server)
+    return True
+
+
+def abort_send(server):
+    server.send_queue.appendleft(server.current_message)
+    server.current_message = None
+    server.send_buffer = ""
+
+
+def finalize_send(server):
+    # type: (MatrixServer) -> None
+    server.current_message.send_time = time.time()
+    server.receive_queue.append(server.current_message)
+
+    server.send_buffer = ""
+    server.current_message = None
+
+
+def send(server, message):
+    # type: (MatrixServer, MatrixMessage) -> bool
+    if server.current_message:
+        return False
+
+    server.current_message = message
+
+    request = message.request.request
+    payload = message.request.payload
+
+    bytes_message = bytes(request, 'utf-8') + bytes(payload, 'utf-8')
+
+    try_send(server, bytes_message)
+
+    return True
+
+def close_socket(sock):
+    # type: (socket.socket) -> None
+    sock.shutdown(socket.SHUT_RDWR)
+    sock.close()

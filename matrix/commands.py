@@ -25,9 +25,13 @@ import matrix.globals
 from matrix.utf import utf8_decode
 from matrix.api import MatrixMessage, MessageType
 from matrix.utils import key_from_value, tags_from_line_data
-from matrix.socket import send_or_queue, disconnect, connect
 from matrix.plugin_options import DebugType
-from matrix.server import MatrixServer
+from matrix.server import (
+    MatrixServer,
+    matrix_server_connect,
+    matrix_server_disconnect,
+    send_or_queue
+)
 
 
 W = matrix.globals.W
@@ -819,17 +823,17 @@ def matrix_command_cb(data, buffer, args):
         for server_name in args:
             if check_server_existence(server_name, SERVERS):
                 server = SERVERS[server_name]
-                connect(server)
+                matrix_server_connect(server)
 
     def disconnect_server(args):
         for server_name in args:
             if check_server_existence(server_name, SERVERS):
                 server = SERVERS[server_name]
-                if server.connected:
-                    W.unhook(server.timer_hook)
-                    server.timer_hook = None
+                if server.connected or server.reconnect_time:
+                    # W.unhook(server.timer_hook)
+                    # server.timer_hook = None
                     server.access_token = ""
-                    disconnect(server)
+                    matrix_server_disconnect(server, reconnect=False)
 
     split_args = list(filter(bool, args.split(' ')))
 

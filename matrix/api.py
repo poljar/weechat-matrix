@@ -23,7 +23,7 @@ from enum import Enum, unique
 
 from matrix.globals import OPTIONS
 
-from matrix.socket import send_or_queue
+from matrix.server import send_or_queue
 from matrix.http import RequestType, HttpRequest
 
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: str

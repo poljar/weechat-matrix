@@ -32,7 +32,6 @@ from matrix import colors
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
 from matrix.api import MatrixMessage, MessageType, matrix_login
-from matrix.socket import disconnect, send_or_queue, send, connect, send_cb
 from matrix.messages import handle_http_response
 
 # Weechat searches for the registered callbacks in the scope of the main script
@@ -53,7 +52,13 @@ from matrix.commands import (
 from matrix.server import (
     MatrixServer,
     create_default_server,
+    matrix_server_connect,
+    send,
+    send_cb,
+    send_or_queue,
+    matrix_server_disconnect,
     matrix_server_reconnect,
+    matrix_server_reconnect_schedule,
     matrix_timer_cb,
     matrix_config_server_read_cb,
     matrix_config_server_write_cb,
@@ -219,7 +224,7 @@ def receive_cb(server_name, file_descriptor):
         except ssl.SSLWantReadError:
             break
         except socket.error as error:
-            disconnect(server)
+            matrix_server_disconnect(server)
 
             # Queue the failed message for resending
             if server.receive_queue:
@@ -237,7 +242,7 @@ def receive_cb(server_name, file_descriptor):
                 message = server.receive_queue.popleft()
                 server.send_queue.appendleft(message)
 
-            disconnect(server)
+            matrix_server_disconnect(server)
             break
 
         received = len(data)  # type: int
@@ -284,19 +289,11 @@ def finalize_connection(server):
         server.name
     )
 
-    if not server.timer_hook:
-        server.timer_hook = W.hook_timer(
-            1 * 1000,
-            0,
-            0,
-            "matrix_timer_cb",
-            server.name
-        )
-
     server.fd_hook = hook
     server.connected = True
     server.connecting = False
-    server.reconnect_count = 0
+    server.reconnect_time = None
+    server.reconnect_delay = 0
 
     matrix_login(server)
 
@@ -357,15 +354,7 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
             'Unexpected error: {status}'.format(status=status_value)
         )
 
-    matrix_server_reconnect(server)
-    return W.WEECHAT_RC_OK
-
-
-@utf8_decode
-def reconnect_cb(server_name, remaining):
-    server = SERVERS[server_name]
-    connect(server)
-
+    matrix_server_reconnect_schedule(server)
     return W.WEECHAT_RC_OK
 
 
@@ -426,7 +415,7 @@ def matrix_unload_cb():
 def autoconnect(servers):
     for server in servers.values():
         if server.autoconnect:
-            connect(server)
+            matrix_server_connect(server)
 
 
 if __name__ == "__main__":
