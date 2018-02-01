@@ -381,7 +381,7 @@ def send_cb(server_name, file_descriptor):
         server.send_fd_hook = None
 
     if server.send_buffer:
-        try_send(server, send_buffer)
+        try_send(server, server.send_buffer)
 
     return W.WEECHAT_RC_OK
 
