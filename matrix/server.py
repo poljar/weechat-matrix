@@ -110,7 +110,6 @@ class MatrixServer:
                 'ssl_verify', 'boolean', '', 0, 0, 'on',
                 (
                     "Check that the SSL connection is fully trusted"
-                    "is starting"
                 )
             ),
             Option(
