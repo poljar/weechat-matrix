@@ -292,8 +292,6 @@ def finalize_connection(server):
     server.fd_hook = hook
     server.connected = True
     server.connecting = False
-    server.reconnect_time = None
-    server.reconnect_delay = 0
 
     matrix_login(server)
 
