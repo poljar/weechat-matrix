@@ -298,8 +298,7 @@ def finalize_connection(server):
     server.connecting = False
     server.reconnect_count = 0
 
-    if not server.access_token:
-        matrix_login(server)
+    matrix_login(server)
 
 
 @utf8_decode
