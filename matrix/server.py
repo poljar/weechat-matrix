@@ -420,13 +420,13 @@ def try_send(server, message):
             return True
 
         except OSError as error:
-            disconnect(server)
+            matrix_server_disconnect(server)
             abort_send(server)
             server_buffer_prnt(server, str(error))
             return False
 
         if sent == 0:
-            disconnect(server)
+            matrix_server_disconnect(server)
             abort_send(server)
             server_buffer_prnt(server, "Socket closed while sending data.")
             return False
