@@ -32,7 +32,7 @@ def add_servers_to_completion(completion):
 
 
 @utf8_decode
-def server_command_completion_cb(data, completion_item, buffer, completion):
+def matrix_server_command_completion_cb(data, completion_item, buffer, completion):
     buffer_input = W.buffer_get_string(buffer, "input").split()
 
     args = buffer_input[1:]
@@ -155,7 +155,7 @@ def init_completion():
     W.hook_completion(
         "matrix_server_commands",
         "Matrix server completion",
-        "server_command_completion_cb",
+        "matrix_server_command_completion_cb",
         ""
     )
 

@@ -70,6 +70,7 @@ from matrix.bar_items import (
 from matrix.completion import (
     init_completion,
     matrix_command_completion_cb,
+    matrix_server_command_completion_cb,
     matrix_debug_completion_cb,
     matrix_message_completion_cb,
     matrix_server_completion_cb
