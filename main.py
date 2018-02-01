@@ -163,23 +163,23 @@ def ssl_fd_cb(server_name, file_descriptor):
 
 
 def try_ssl_handshake(server):
-    socket = server.socket
+    sock = server.socket
 
     while True:
         try:
-            socket.do_handshake()
+            sock.do_handshake()
 
-            cipher = socket.cipher()
+            cipher = sock.cipher()
             cipher_message = ("{prefix}matrix: Connected using {tls}, and "
                               "{bit} bit {cipher} cipher suite.").format(
-                prefix=W.prefix("network"),
-                tls=cipher[1],
-                bit=cipher[2],
-                cipher=cipher[0])
+                                  prefix=W.prefix("network"),
+                                  tls=cipher[1],
+                                  bit=cipher[2],
+                                  cipher=cipher[0])
             W.prnt(server.server_buffer, cipher_message)
 
             # TODO print out the certificates
-            # cert = socket.getpeercert()
+            # cert = sock.getpeercert()
             # W.prnt(server.server_buffer, pprint.pformat(cert))
 
             finalize_connection(server)

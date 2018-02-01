@@ -304,7 +304,6 @@ def matrix_server_disconnect(server, reconnect=True):
     if server.fd_hook:
         W.unhook(server.fd_hook)
 
-    # TODO close socket
     close_socket(server.socket)
 
     server.fd_hook = None
@@ -400,17 +399,17 @@ def send_or_queue(server, message):
 def try_send(server, message):
     # type: (MatrixServer, bytes) -> bool
 
-    socket = server.socket
+    sock = server.socket
     total_sent = 0
     message_length = len(message)
 
     while total_sent < message_length:
         try:
-            sent = socket.send(message[total_sent:])
+            sent = sock.send(message[total_sent:])
 
         except ssl.SSLWantWriteError:
             hook = W.hook_fd(
-                server.socket.fileno(),
+                server.sock.fileno(),
                 0, 1, 0,
                 "send_cb",
                 server.name
