@@ -304,13 +304,18 @@ class MatrixServer:
 
         server_buffer_prnt(self, message)
 
+    def _close_socket(self):
+        # type: (socket.socket) -> None
+        if self.socket:
+            self.socket.shutdown(socket.SHUT_RDWR)
+            self.socket.close()
+
     def disconnect(self, reconnect=True):
         # type: (MatrixServer) -> None
         if self.fd_hook:
             W.unhook(self.fd_hook)
 
-        if self.socket:
-            close_socket(self.socket)
+        self._close_socket()
 
         self.fd_hook = None
         self.socket = None
@@ -484,7 +489,3 @@ def send_cb(server_name, file_descriptor):
     return W.WEECHAT_RC_OK
 
 
-def close_socket(sock):
-    # type: (socket.socket) -> None
-    sock.shutdown(socket.SHUT_RDWR)
-    sock.close()
