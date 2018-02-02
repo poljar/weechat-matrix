@@ -303,7 +303,8 @@ def matrix_server_disconnect(server, reconnect=True):
     if server.fd_hook:
         W.unhook(server.fd_hook)
 
-    close_socket(server.socket)
+    if server.socket:
+        close_socket(server.socket)
 
     server.fd_hook = None
     server.socket = None
