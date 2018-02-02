@@ -30,7 +30,6 @@ from matrix.server import (
     MatrixServer,
     matrix_server_connect,
     matrix_server_disconnect,
-    send_or_queue
 )
 
 
@@ -117,7 +116,7 @@ def matrix_fetch_old_messages(server, room_id):
     message = MatrixMessage(server, GLOBAL_OPTIONS, MessageType.ROOM_MSG,
                             room_id=room_id, extra_id=prev_batch)
 
-    send_or_queue(server, message)
+    server.send_or_queue(message)
 
     return
 
@@ -195,7 +194,7 @@ def matrix_command_join_cb(data, buffer, command):
             MessageType.JOIN,
             room_id=room_id
         )
-        send_or_queue(server, message)
+        server.send_or_queue(message)
 
     for server in SERVERS.values():
         if buffer in server.buffers.values():
@@ -236,7 +235,7 @@ def matrix_command_part_cb(data, buffer, command):
                 MessageType.PART,
                 room_id=room_id
             )
-            send_or_queue(server, message)
+            server.send_or_queue(message)
 
     for server in SERVERS.values():
         if buffer in server.buffers.values():
@@ -274,7 +273,7 @@ def matrix_command_invite_cb(data, buffer, command):
             room_id=room_id,
             data=body
         )
-        send_or_queue(server, message)
+        server.send_or_queue(message)
 
     for server in SERVERS.values():
         if buffer in server.buffers.values():
@@ -365,7 +364,7 @@ def matrix_redact_command_cb(data, buffer, args):
                 room_id=room_id,
                 extra_id=event_id
             )
-            send_or_queue(server, message)
+            server.send_or_queue(message)
 
             return W.WEECHAT_RC_OK
 
@@ -933,7 +932,7 @@ def matrix_command_topic_cb(data, buffer, command):
                 room_id=room_id,
                 extra_id="m.room.topic"
             )
-            send_or_queue(server, message)
+            server.send_or_queue(message)
 
             return W.WEECHAT_RC_OK_EAT
 

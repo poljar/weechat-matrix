@@ -23,7 +23,6 @@ from enum import Enum, unique
 
 from matrix.globals import OPTIONS
 
-from matrix.server import send_or_queue
 from matrix.http import RequestType, HttpRequest
 
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
@@ -257,4 +256,4 @@ def matrix_login(server):
         MessageType.LOGIN,
         data=post_data
     )
-    send_or_queue(server, message)
+    server.send_or_queue(message)

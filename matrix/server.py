@@ -174,6 +174,108 @@ class MatrixServer:
         else:
             pass
 
+    def send_or_queue(self, message):
+        # type: (MatrixServer, MatrixMessage) -> None
+        if not self.send(message):
+            prnt_debug(DebugType.MESSAGING, self,
+                       ("{prefix} Failed sending message of type {t}. "
+                        "Adding to queue").format(
+                            prefix=W.prefix("error"),
+                            t=message.type))
+            self.send_queue.append(message)
+
+    def try_send(self, message):
+        # type: (MatrixServer, bytes) -> bool
+
+        sock = self.socket
+        total_sent = 0
+        message_length = len(message)
+
+        while total_sent < message_length:
+            try:
+                sent = sock.send(message[total_sent:])
+
+            except ssl.SSLWantWriteError:
+                hook = W.hook_fd(
+                    sock.fileno(),
+                    0, 1, 0,
+                    "send_cb",
+                    self.name
+                )
+                self.send_fd_hook = hook
+                self.send_buffer = message[total_sent:]
+                return True
+
+            except socket.error as error:
+                self.abort_send()
+
+                errno = "error" + str(error.errno) + " " if error.errno else ""
+                strerr = error.strerror if error.strerror else "Unknown reason"
+                strerr = errno + strerr
+
+                message = ("{prefix}Error while writing to "
+                           "socket: {error}").format(
+                    prefix=W.prefix("network"),
+                    error=strerr)
+
+                server_buffer_prnt(self, message)
+                server_buffer_prnt(
+                    self,
+                    ("{prefix}matrix: disconnecting from server...").format(
+                        prefix=W.prefix("network")))
+
+                matrix_server_disconnect(self)
+                return False
+
+            if sent == 0:
+                self.abort_send()
+
+                server_buffer_prnt(
+                    self,
+                    "{prefix}matrix: Error while writing to socket".format(
+                        W.prefix("network")))
+                server_buffer_prnt(
+                    self,
+                    ("{prefix}matrix: disconnecting from server...").format(
+                        prefix=W.prefix("network")))
+                matrix_server_disconnect(self)
+                return False
+
+            total_sent = total_sent + sent
+
+        self.finalize_send()
+        return True
+
+    def abort_send(self):
+        self.send_queue.appendleft(self.current_message)
+        self.current_message = None
+        self.send_buffer = ""
+
+    def finalize_send(self):
+        # type: (MatrixServer) -> None
+        self.current_message.send_time = time.time()
+        self.receive_queue.append(self.current_message)
+
+        self.send_buffer = ""
+        self.current_message = None
+
+
+    def send(self, message):
+        # type: (MatrixServer, MatrixMessage) -> bool
+        if self.current_message:
+            return False
+
+        self.current_message = message
+
+        request = message.request.request
+        payload = message.request.payload
+
+        bytes_message = bytes(request, 'utf-8') + bytes(payload, 'utf-8')
+
+        self.try_send(bytes_message)
+
+        return True
+
 
 @utf8_decode
 def matrix_config_server_read_cb(
@@ -250,7 +352,7 @@ def matrix_timer_cb(server_name, remaining_calls):
                    ("Timer hook found message of type {t} in queue. Sending "
                     "out.".format(t=message.type)))
 
-        if not send(server, message):
+        if not server.send(message):
             # We got an error while sending the last message return the message
             # to the queue and exit the loop
             server.send_queue.appendleft(message)
@@ -380,115 +482,10 @@ def send_cb(server_name, file_descriptor):
         server.send_fd_hook = None
 
     if server.send_buffer:
-        try_send(server, server.send_buffer)
+        server.try_send(server, server.send_buffer)
 
     return W.WEECHAT_RC_OK
 
-
-def send_or_queue(server, message):
-    # type: (MatrixServer, MatrixMessage) -> None
-    if not send(server, message):
-        prnt_debug(DebugType.MESSAGING, server,
-                   ("{prefix} Failed sending message of type {t}. "
-                    "Adding to queue").format(
-                        prefix=W.prefix("error"),
-                        t=message.type))
-        server.send_queue.append(message)
-
-
-def try_send(server, message):
-    # type: (MatrixServer, bytes) -> bool
-
-    sock = server.socket
-    total_sent = 0
-    message_length = len(message)
-
-    while total_sent < message_length:
-        try:
-            sent = sock.send(message[total_sent:])
-
-        except ssl.SSLWantWriteError:
-            hook = W.hook_fd(
-                server.sock.fileno(),
-                0, 1, 0,
-                "send_cb",
-                server.name
-            )
-            server.send_fd_hook = hook
-            server.send_buffer = message[total_sent:]
-            return True
-
-        except socket.error as error:
-            abort_send(server)
-
-            errno = "error" + str(error.errno) + " " if error.errno else ""
-            str_error = error.strerror if error.strerror else "Unknown reason"
-            str_error = errno + str_error
-
-            message = ("{prefix}Error while writing to "
-                       "socket: {error}").format(
-                prefix=W.prefix("network"),
-                error=str_error)
-
-            server_buffer_prnt(server, message)
-            server_buffer_prnt(
-                server,
-                ("{prefix}matrix: disconnecting from server...").format(
-                    prefix=W.prefix("network")))
-
-            matrix_server_disconnect(server)
-            return False
-
-        if sent == 0:
-            abort_send(server)
-
-            server_buffer_prnt(
-                server,
-                "{prefix}matrix: Error while writing to socket".format(
-                    W.prefix("network")))
-            server_buffer_prnt(
-                server,
-                ("{prefix}matrix: disconnecting from server...").format(
-                    prefix=W.prefix("network")))
-            matrix_server_disconnect(server)
-            return False
-
-        total_sent = total_sent + sent
-
-    finalize_send(server)
-    return True
-
-
-def abort_send(server):
-    server.send_queue.appendleft(server.current_message)
-    server.current_message = None
-    server.send_buffer = ""
-
-
-def finalize_send(server):
-    # type: (MatrixServer) -> None
-    server.current_message.send_time = time.time()
-    server.receive_queue.append(server.current_message)
-
-    server.send_buffer = ""
-    server.current_message = None
-
-
-def send(server, message):
-    # type: (MatrixServer, MatrixMessage) -> bool
-    if server.current_message:
-        return False
-
-    server.current_message = message
-
-    request = message.request.request
-    payload = message.request.payload
-
-    bytes_message = bytes(request, 'utf-8') + bytes(payload, 'utf-8')
-
-    try_send(server, bytes_message)
-
-    return True
 
 def close_socket(sock):
     # type: (socket.socket) -> None

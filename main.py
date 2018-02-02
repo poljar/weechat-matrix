@@ -53,9 +53,7 @@ from matrix.server import (
     MatrixServer,
     create_default_server,
     matrix_server_connect,
-    send,
     send_cb,
-    send_or_queue,
     matrix_server_disconnect,
     matrix_server_reconnect,
     matrix_server_reconnect_schedule,
@@ -428,7 +426,7 @@ def room_input_cb(server_name, buffer, input_data):
                             data=body, room_id=room_id,
                             extra_data=extra_data)
 
-    send_or_queue(server, message)
+    server.send_or_queue(message)
     return W.WEECHAT_RC_OK
 
 

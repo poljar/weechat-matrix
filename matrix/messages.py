@@ -38,7 +38,7 @@ from matrix.api import (
 
 from matrix.utils import server_buffer_prnt, tags_from_line_data, prnt_debug
 from matrix.plugin_options import RedactType, DebugType
-from matrix.server import send_or_queue, matrix_server_disconnect
+from matrix.server import matrix_server_disconnect
 
 def strip_matrix_server(string):
     # type: (str) -> str
@@ -687,7 +687,7 @@ def matrix_handle_message(
         server.access_token = response["access_token"]
         server.user_id = response["user_id"]
         message = MatrixMessage(server, OPTIONS, MessageType.SYNC)
-        send_or_queue(server, message)
+        server.send_or_queue(message)
 
     elif message_type is MessageType.SYNC:
         next_batch = response['next_batch']
