@@ -207,7 +207,7 @@ class MatrixServer:
                 return True
 
             except socket.error as error:
-                self.abort_send()
+                self._abort_send()
 
                 errno = "error" + str(error.errno) + " " if error.errno else ""
                 strerr = error.strerror if error.strerror else "Unknown reason"
@@ -228,7 +228,7 @@ class MatrixServer:
                 return False
 
             if sent == 0:
-                self.abort_send()
+                self._abort_send()
 
                 server_buffer_prnt(
                     self,
@@ -243,15 +243,15 @@ class MatrixServer:
 
             total_sent = total_sent + sent
 
-        self.finalize_send()
+        self._finalize_send()
         return True
 
-    def abort_send(self):
+    def _abort_send(self):
         self.send_queue.appendleft(self.current_message)
         self.current_message = None
         self.send_buffer = ""
 
-    def finalize_send(self):
+    def _finalize_send(self):
         # type: (MatrixServer) -> None
         self.current_message.send_time = time.time()
         self.receive_queue.append(self.current_message)
