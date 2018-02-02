@@ -396,7 +396,7 @@ def room_input_cb(server_name, buffer, input_data):
     server = SERVERS[server_name]
 
     if not server.connected:
-        message = "{prefix}you are not connected to the server".format(
+        message = "{prefix}matrix: you are not connected to the server".format(
             prefix=W.prefix("error"))
         W.prnt(buffer, message)
         return W.WEECHAT_RC_ERROR
