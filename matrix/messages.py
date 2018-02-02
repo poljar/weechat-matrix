@@ -686,8 +686,9 @@ def matrix_handle_message(
     if message_type is MessageType.LOGIN:
         server.access_token = response["access_token"]
         server.user_id = response["user_id"]
-        message = MatrixMessage(server, OPTIONS, MessageType.SYNC)
-        server.send_or_queue(message)
+        server.client.access_token = server.access_token
+
+        matrix_sync(server)
 
     elif message_type is MessageType.SYNC:
         next_batch = response['next_batch']

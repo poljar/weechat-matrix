@@ -21,6 +21,11 @@ import time
 import json
 from enum import Enum, unique
 
+try:
+    from urllib import quote, urlencode
+except ImportError:
+    from urllib.parse import quote, urlencode
+
 from matrix.globals import OPTIONS
 
 from matrix.http import RequestType, HttpRequest
@@ -39,6 +44,56 @@ class MessageType(Enum):
     JOIN = 6
     PART = 7
     INVITE = 8
+
+
+class MatrixClient:
+    def __init__(
+            self,
+            host,             # type: str
+            access_token="",  # type: str
+            user_agent=""     # type: str
+    ):
+        self.host = host
+        self.user_agent = user_agent
+        self.access_token = access_token
+        self.txn_id = 0     # type: int
+
+    def login(self, user, password, device_name=""):
+        # type () -> HttpRequest
+        path = ("{api}/login").format(api=MATRIX_API_PATH)
+
+        post_data = {
+            "type": "m.login.password",
+            "user": user,
+            "password": password
+        }
+
+        if device_name:
+            post_data["initial_device_display_name"] = device_name
+
+        return HttpRequest(RequestType.POST, self.host, path, post_data)
+
+    def sync(self, next_batch="", sync_filter=None):
+        # type: (str, Dict[Any, Any]) -> HttpRequest
+        assert self.access_token
+
+        query_parameters = {"access_token": self.access_token}
+
+        if sync_filter:
+            query_parameters["filter"] = json.dumps(
+                sync_filter,
+                separators=(",", ":")
+            )
+
+        if next_batch:
+            query_parameters["since"] = next_batch
+
+        path = ("{api}/sync?{query_params}").format(
+            api=MATRIX_API_PATH,
+            query_params=urlencode(query_parameters)
+        )
+
+        return HttpRequest(RequestType.GET, self.host, path)
 
 
 class MatrixMessage:
@@ -63,14 +118,13 @@ class MatrixMessage:
         self.send_time = None             # type: float
         self.receive_time = None          # type: float
 
+        host = ':'.join([server.address, str(server.port)])
+
         if message_type == MessageType.LOGIN:
-            path = ("{api}/login").format(api=MATRIX_API_PATH)
-            self.request = HttpRequest(
-                RequestType.POST,
-                server.address,
-                server.port,
-                path,
-                data
+            self.request = server.client.login(
+                server.user,
+                server.password,
+                server.device_name
             )
 
         elif message_type == MessageType.SYNC:
@@ -80,23 +134,7 @@ class MatrixMessage:
                 }
             }
 
-            path = ("{api}/sync?access_token={access_token}&"
-                    "filter={sync_filter}").format(
-                        api=MATRIX_API_PATH,
-                        access_token=server.access_token,
-                        sync_filter=json.dumps(sync_filter,
-                                               separators=(',', ':')))
-
-            if server.next_batch:
-                path = path + '&since={next_batch}'.format(
-                    next_batch=server.next_batch)
-
-            self.request = HttpRequest(
-                RequestType.GET,
-                server.address,
-                server.port,
-                path
-            )
+            self.request = server.client.sync(server.next_batch, sync_filter)
 
         elif message_type == MessageType.SEND:
             path = ("{api}/rooms/{room}/send/m.room.message/{tx_id}?"
@@ -108,8 +146,7 @@ class MatrixMessage:
 
             self.request = HttpRequest(
                 RequestType.PUT,
-                server.address,
-                server.port,
+                host,
                 path,
                 data
             )
@@ -124,8 +161,7 @@ class MatrixMessage:
 
             self.request = HttpRequest(
                 RequestType.PUT,
-                server.address,
-                server.port,
+                host,
                 path,
                 data
             )
@@ -141,8 +177,7 @@ class MatrixMessage:
 
             self.request = HttpRequest(
                 RequestType.PUT,
-                server.address,
-                server.port,
+                host,
                 path,
                 data
             )
@@ -158,8 +193,7 @@ class MatrixMessage:
                         access_token=server.access_token)
             self.request = HttpRequest(
                 RequestType.GET,
-                server.address,
-                server.port,
+                host,
                 path,
             )
 
@@ -172,8 +206,7 @@ class MatrixMessage:
 
             self.request = HttpRequest(
                 RequestType.POST,
-                server.address,
-                server.port,
+                host,
                 path,
                 data
             )
@@ -187,8 +220,7 @@ class MatrixMessage:
 
             self.request = HttpRequest(
                 RequestType.POST,
-                server.address,
-                server.port,
+                host,
                 path,
                 data
             )
@@ -202,8 +234,7 @@ class MatrixMessage:
 
             self.request = HttpRequest(
                 RequestType.POST,
-                server.address,
-                server.port,
+                host,
                 path,
                 data
             )
@@ -245,15 +276,9 @@ def matrix_sync(server):
 
 def matrix_login(server):
     # type: (MatrixServer) -> None
-    post_data = {"type": "m.login.password",
-                 "user": server.user,
-                 "password": server.password,
-                 "initial_device_display_name": server.device_name}
-
     message = MatrixMessage(
         server,
         OPTIONS,
-        MessageType.LOGIN,
-        data=post_data
+        MessageType.LOGIN
     )
     server.send_or_queue(message)

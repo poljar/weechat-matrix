@@ -40,17 +40,14 @@ class HttpRequest:
             self,
             request_type,                        # type: RequestType
             host,                                # type: str
-            port,                                # type: int
             location,                            # type: str
             data=None,                           # type: Dict[str, Any]
             user_agent='weechat-matrix/{version}'.format(
                 version="0.1")  # type: str
     ):
         # type: (...) -> None
-        host_string = ':'.join([host, str(port)])
-
         user_agent = 'User-Agent: {agent}'.format(agent=user_agent)
-        host_header = 'Host: {host}'.format(host=host_string)
+        host_header = 'Host: {host}'.format(host=host)
         request_list = []              # type: List[str]
         accept_header = 'Accept: */*'  # type: str
         end_separator = '\r\n'         # type: str

@@ -34,6 +34,7 @@ from matrix.utils import (
 )
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS
+from matrix.api import MatrixClient
 
 
 class MatrixServer:
@@ -66,6 +67,7 @@ class MatrixServer:
         self.socket = None                               # type: ssl.SSLSocket
         self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
 
+        self.client = None
         self.access_token = None                         # type: str
         self.next_batch = None                           # type: str
         self.transaction_id = 0                          # type: int
@@ -143,16 +145,23 @@ class MatrixServer:
         self.http_parser = HttpParser()
         self.http_buffer = []
 
+    def _change_client(self):
+        host = ':'.join([self.address, str(self.port)])
+        user_agent = 'weechat-matrix/{version}'.format(version="0.1")
+        self.client = MatrixClient(host, user_agent=user_agent)
+
     def update_option(self, option, option_name):
         if option_name == "address":
             value = W.config_string(option)
             self.address = value
+            self._change_client()
         elif option_name == "autoconnect":
             value = W.config_boolean(option)
             self.autoconnect = value
         elif option_name == "port":
             value = W.config_integer(option)
             self.port = value
+            self._change_client()
         elif option_name == "ssl_verify":
             value = W.config_boolean(option)
             if value:
