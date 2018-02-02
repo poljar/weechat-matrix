@@ -209,8 +209,21 @@ def try_ssl_handshake(server):
             return False
 
         except ssl.SSLError as error:
-            server_buffer_prnt(server, str(error))
-            matrix_server_reconnect(server)
+            str_error = error.reason if error.reason else "Unknown error"
+
+            message = ("{prefix}Error while doing SSL handshake"
+                       ": {error}").format(
+                prefix=W.prefix("network"),
+                error=str_error)
+
+            server_buffer_prnt(server, message)
+
+            server_buffer_prnt(
+                server,
+                ("{prefix}matrix: disconnecting from server...").format(
+                    prefix=W.prefix("network")))
+
+            matrix_server_disconnect(server)
             return False
 
 
@@ -224,6 +237,22 @@ def receive_cb(server_name, file_descriptor):
         except ssl.SSLWantReadError:
             break
         except socket.error as error:
+            errno = "error" + str(error.errno) + " " if error.errno else ""
+            str_error = error.strerror if error.strerror else "Unknown error"
+            str_error = errno + str_error
+
+            message = ("{prefix}Error while reading from "
+                       "socket: {error}").format(
+                prefix=W.prefix("network"),
+                error=str_error)
+
+            server_buffer_prnt(server, message)
+
+            server_buffer_prnt(
+                server,
+                ("{prefix}matrix: disconnecting from server...").format(
+                    prefix=W.prefix("network")))
+
             matrix_server_disconnect(server)
 
             # Queue the failed message for resending
@@ -231,11 +260,17 @@ def receive_cb(server_name, file_descriptor):
                 message = server.receive_queue.popleft()
                 server.send_queue.appendleft(message)
 
-            server_buffer_prnt(server, pprint.pformat(error))
             return W.WEECHAT_RC_OK
 
         if not data:
-            server_buffer_prnt(server, "No data while reading")
+            server_buffer_prnt(
+                server,
+                "{prefix}matrix: Error while reading from socket".format(
+                    prefix=W.prefix("network")))
+            server_buffer_prnt(
+                server,
+                ("{prefix}matrix: disconnecting from server...").format(
+                    prefix=W.prefix("network")))
 
             # Queue the failed message for resending
             if server.receive_queue:

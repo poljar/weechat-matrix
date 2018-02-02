@@ -417,16 +417,39 @@ def try_send(server, message):
             server.send_buffer = message[total_sent:]
             return True
 
-        except OSError as error:
-            matrix_server_disconnect(server)
+        except socket.error as error:
             abort_send(server)
-            server_buffer_prnt(server, str(error))
+
+            errno = "error" + str(error.errno) + " " if error.errno else ""
+            str_error = error.strerror if error.strerror else "Unknown reason"
+            str_error = errno + str_error
+
+            message = ("{prefix}Error while writing to "
+                       "socket: {error}").format(
+                prefix=W.prefix("network"),
+                error=str_error)
+
+            server_buffer_prnt(server, message)
+            server_buffer_prnt(
+                server,
+                ("{prefix}matrix: disconnecting from server...").format(
+                    prefix=W.prefix("network")))
+
+            matrix_server_disconnect(server)
             return False
 
         if sent == 0:
-            matrix_server_disconnect(server)
             abort_send(server)
-            server_buffer_prnt(server, "Socket closed while sending data.")
+
+            server_buffer_prnt(
+                server,
+                "{prefix}matrix: Error while writing to socket".format(
+                    W.prefix("network")))
+            server_buffer_prnt(
+                server,
+                ("{prefix}matrix: disconnecting from server...").format(
+                    prefix=W.prefix("network")))
+            matrix_server_disconnect(server)
             return False
 
         total_sent = total_sent + sent
