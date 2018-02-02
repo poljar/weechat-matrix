@@ -38,7 +38,7 @@ from matrix.api import (
 
 from matrix.utils import server_buffer_prnt, tags_from_line_data, prnt_debug
 from matrix.plugin_options import RedactType, DebugType
-from matrix.server import matrix_server_disconnect
+
 
 def strip_matrix_server(string):
     # type: (str) -> str
@@ -809,7 +809,7 @@ def handle_http_response(server, message):
             W.unhook(server.timer_hook)
             server.timer_hook = None
 
-            matrix_server_disconnect(server)
+            server.disconnect()
         elif message.type == MessageType.STATE:
             response = decode_json(server, message.response.body)
             reason = ("." if not response or not response["error"] else

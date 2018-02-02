@@ -224,7 +224,7 @@ class MatrixServer:
                     ("{prefix}matrix: disconnecting from server...").format(
                         prefix=W.prefix("network")))
 
-                matrix_server_disconnect(self)
+                self.disconnect()
                 return False
 
             if sent == 0:
@@ -238,7 +238,7 @@ class MatrixServer:
                     self,
                     ("{prefix}matrix: disconnecting from server...").format(
                         prefix=W.prefix("network")))
-                matrix_server_disconnect(self)
+                self.disconnect()
                 return False
 
             total_sent = total_sent + sent
@@ -273,6 +273,104 @@ class MatrixServer:
         bytes_message = bytes(request, 'utf-8') + bytes(payload, 'utf-8')
 
         self.try_send(bytes_message)
+
+        return True
+
+    def reconnect(self):
+        message = ("{prefix}matrix: reconnecting to server...").format(
+            prefix=W.prefix("network"))
+
+        server_buffer_prnt(self, message)
+
+        self.reconnect_time = None
+
+        if not self.connect():
+            self.schedule_reconnect()
+
+    def schedule_reconnect(self):
+        # type: (MatrixServer) -> None
+        self.connecting = True
+        self.reconnect_time = time.time()
+
+        if self.reconnect_delay:
+            self.reconnect_delay = self.reconnect_delay * 2
+        else:
+            self.reconnect_delay = 10
+
+        message = ("{prefix}matrix: reconnecting to server in {t} "
+                   "seconds").format(
+                       prefix=W.prefix("network"),
+                       t=self.reconnect_delay)
+
+        server_buffer_prnt(self, message)
+
+    def disconnect(self, reconnect=True):
+        # type: (MatrixServer) -> None
+        if self.fd_hook:
+            W.unhook(self.fd_hook)
+
+        if self.socket:
+            close_socket(self.socket)
+
+        self.fd_hook = None
+        self.socket = None
+        self.connected = False
+        self.access_token = ""
+        self.receive_queue.clear()
+
+        self.reconnect_delay = 0
+        self.reconnect_time = None
+
+        if self.server_buffer:
+            message = ("{prefix}matrix: disconnected from server").format(
+                prefix=W.prefix("network"))
+            server_buffer_prnt(self, message)
+
+        if reconnect:
+            self.schedule_reconnect()
+
+    def connect(self):
+        # type: (MatrixServer) -> int
+        if not self.address or not self.port:
+            message = "{prefix}Server address or port not set".format(
+                prefix=W.prefix("error"))
+            W.prnt("", message)
+            return False
+
+        if not self.user or not self.password:
+            message = "{prefix}User or password not set".format(
+                prefix=W.prefix("error"))
+            W.prnt("", message)
+            return False
+
+        if self.connected:
+            return True
+
+        if not self.server_buffer:
+            create_server_buffer(self)
+
+        if not self.timer_hook:
+            self.timer_hook = W.hook_timer(
+                1 * 1000,
+                0,
+                0,
+                "matrix_timer_cb",
+                self.name
+            )
+
+        ssl_message = " (SSL)" if self.ssl_context.check_hostname else ""
+
+        message = ("{prefix}matrix: Connecting to "
+                   "{server}:{port}{ssl}...").format(
+            prefix=W.prefix("network"),
+            server=self.address,
+            port=self.port,
+            ssl=ssl_message)
+
+        W.prnt(self.server_buffer, message)
+
+        W.hook_connect("", self.address, self.port, 1, 0, "",
+                       "connect_cb", self.name)
 
         return True
 
@@ -341,7 +439,7 @@ def matrix_timer_cb(server_name, remaining_calls):
     if ((not server.connected) and
             server.reconnect_time and
             current_time >= (server.reconnect_time + server.reconnect_delay)):
-        matrix_server_reconnect(server)
+        server.reconnect()
 
     if not server.connected:
         return W.WEECHAT_RC_OK
@@ -366,107 +464,6 @@ def create_default_server(config_file):
     SERVERS[server.name] = server
 
     W.config_option_set(server.options["address"], "matrix.org", 1)
-
-    return True
-
-
-def matrix_server_reconnect(server):
-    message = ("{prefix}matrix: reconnecting to server...").format(
-        prefix=W.prefix("network"))
-
-    server_buffer_prnt(server, message)
-
-    server.reconnect_time = None
-
-    if not matrix_server_connect(server):
-        matrix_server_reconnect_schedule(server)
-
-
-def matrix_server_reconnect_schedule(server):
-    # type: (MatrixServer) -> None
-    server.connecting = True
-    server.reconnect_time = time.time()
-
-    if server.reconnect_delay:
-        server.reconnect_delay = server.reconnect_delay * 2
-    else:
-        server.reconnect_delay = 10
-
-    message = ("{prefix}matrix: reconnecting to server in {t} "
-               "seconds").format(
-                   prefix=W.prefix("network"),
-                   t=server.reconnect_delay)
-
-    server_buffer_prnt(server, message)
-
-
-def matrix_server_disconnect(server, reconnect=True):
-    # type: (MatrixServer) -> None
-    if server.fd_hook:
-        W.unhook(server.fd_hook)
-
-    if server.socket:
-        close_socket(server.socket)
-
-    server.fd_hook = None
-    server.socket = None
-    server.connected = False
-    server.access_token = ""
-    server.receive_queue.clear()
-
-    server.reconnect_delay = 0
-    server.reconnect_time = None
-
-    if server.server_buffer:
-        message = ("{prefix}matrix: disconnected from server").format(
-            prefix=W.prefix("network"))
-        server_buffer_prnt(server, message)
-
-    if reconnect:
-        matrix_server_reconnect_schedule(server)
-
-
-def matrix_server_connect(server):
-    # type: (MatrixServer) -> int
-    if not server.address or not server.port:
-        message = "{prefix}Server address or port not set".format(
-            prefix=W.prefix("error"))
-        W.prnt("", message)
-        return False
-
-    if not server.user or not server.password:
-        message = "{prefix}User or password not set".format(
-            prefix=W.prefix("error"))
-        W.prnt("", message)
-        return False
-
-    if server.connected:
-        return True
-
-    if not server.server_buffer:
-        create_server_buffer(server)
-
-    if not server.timer_hook:
-        server.timer_hook = W.hook_timer(
-            1 * 1000,
-            0,
-            0,
-            "matrix_timer_cb",
-            server.name
-        )
-
-    ssl_message = " (SSL)" if server.ssl_context.check_hostname else ""
-
-    message = "{prefix}matrix: Connecting to {server}:{port}{ssl}...".format(
-        prefix=W.prefix("network"),
-        server=server.address,
-        port=server.port,
-        ssl=ssl_message)
-
-    W.prnt(server.server_buffer, message)
-
-    W.hook_connect("", server.address, server.port, 1, 0, "",
-                   "connect_cb", server.name)
 
     return True
 

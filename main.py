@@ -52,11 +52,7 @@ from matrix.commands import (
 from matrix.server import (
     MatrixServer,
     create_default_server,
-    matrix_server_connect,
     send_cb,
-    matrix_server_disconnect,
-    matrix_server_reconnect,
-    matrix_server_reconnect_schedule,
     matrix_timer_cb,
     matrix_config_server_read_cb,
     matrix_config_server_write_cb,
@@ -221,7 +217,7 @@ def try_ssl_handshake(server):
                 ("{prefix}matrix: disconnecting from server...").format(
                     prefix=W.prefix("network")))
 
-            matrix_server_disconnect(server)
+            server.disconnect()
             return False
 
 
@@ -251,7 +247,7 @@ def receive_cb(server_name, file_descriptor):
                 ("{prefix}matrix: disconnecting from server...").format(
                     prefix=W.prefix("network")))
 
-            matrix_server_disconnect(server)
+            server.disconnect()
 
             # Queue the failed message for resending
             if server.receive_queue:
@@ -275,7 +271,7 @@ def receive_cb(server_name, file_descriptor):
                 message = server.receive_queue.popleft()
                 server.send_queue.appendleft(message)
 
-            matrix_server_disconnect(server)
+            server.disconnect()
             break
 
         received = len(data)  # type: int
@@ -385,7 +381,7 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
             'Unexpected error: {status}'.format(status=status_value)
         )
 
-    matrix_server_reconnect_schedule(server)
+    server.schedule_reconnect()
     return W.WEECHAT_RC_OK
 
 
@@ -446,7 +442,7 @@ def matrix_unload_cb():
 def autoconnect(servers):
     for server in servers.values():
         if server.autoconnect:
-            matrix_server_connect(server)
+            server.connect()
 
 
 if __name__ == "__main__":
