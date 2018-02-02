@@ -127,6 +127,9 @@ def wrap_socket(server, file_descriptor):
     else:
         sock = temp_socket
 
+    # fromfd() duplicates the file descriptor but doesn't retain it's blocking
+    # non-blocking attribute, so mark the socket as non-blocking even though
+    # weechat already did that for us
     sock.setblocking(False)
 
     message = "{prefix}matrix: Doing SSL handshake...".format(
