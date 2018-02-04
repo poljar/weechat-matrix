@@ -18,12 +18,9 @@ from __future__ import unicode_literals
 
 import time
 
-import matrix.globals
+from matrix.globals import W, SERVERS, OPTIONS
 
 from matrix.plugin_options import ServerBufferType
-
-W = matrix.globals.W
-GLOBAL_OPTIONS = matrix.globals.OPTIONS
 
 
 def key_from_value(dictionary, value):
@@ -32,7 +29,7 @@ def key_from_value(dictionary, value):
 
 
 def prnt_debug(debug_type, server, message):
-    if debug_type in GLOBAL_OPTIONS.debug:
+    if debug_type in OPTIONS.debug:
         W.prnt(server.server_buffer, message)
 
 
@@ -77,13 +74,23 @@ def create_server_buffer(server):
     W.buffer_set(server.server_buffer, "localvar_set_server", server.name)
     W.buffer_set(server.server_buffer, "localvar_set_channel", server.name)
 
-    # TODO merge without core
-    if GLOBAL_OPTIONS.look_server_buf == ServerBufferType.MERGE_CORE:
-        W.buffer_merge(server.server_buffer, W.buffer_search_main())
-    elif GLOBAL_OPTIONS.look_server_buf == ServerBufferType.MERGE:
-        pass
+    server_buffer_merge(server.server_buffer)
+
+
+def server_buffer_merge(buffer):
+    if OPTIONS.look_server_buf == ServerBufferType.MERGE_CORE:
+        num = W.buffer_get_integer(W.buffer_search_main(), "number")
+        W.buffer_unmerge(buffer, num + 1)
+        W.buffer_merge(buffer, W.buffer_search_main())
+    elif OPTIONS.look_server_buf == ServerBufferType.MERGE:
+        if SERVERS:
+            first = list(SERVERS.values())[0].server_buffer
+            num = W.buffer_get_integer(W.buffer_search_main(), "number")
+            W.buffer_unmerge(buffer, num + 1)
+            W.buffer_merge(buffer, first)
     else:
-        pass
+        num = W.buffer_get_integer(W.buffer_search_main(), "number")
+        W.buffer_unmerge(buffer, num + 1)
 
 
 def server_buffer_set_title(server):

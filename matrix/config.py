@@ -22,9 +22,9 @@ from matrix.plugin_options import (
     ServerBufferType
 )
 
-from matrix.globals import W, OPTIONS, CONFIG
+from matrix.globals import W, OPTIONS, CONFIG, SERVERS
 from matrix.utf import utf8_decode
-from matrix.utils import key_from_value
+from matrix.utils import key_from_value, server_buffer_merge
 from matrix.commands import hook_page_up
 
 
@@ -39,13 +39,19 @@ def matrix_config_change_cb(data, option):
 
     if option_name == "redactions":
         OPTIONS.redaction_type = RedactType(W.config_integer(option))
+
     elif option_name == "server_buffer":
         OPTIONS.look_server_buf = ServerBufferType(
             W.config_integer(option))
+        for server in SERVERS.values():
+            server_buffer_merge(server.server_buffer)
+
     elif option_name == "max_initial_sync_events":
         OPTIONS.sync_limit = W.config_integer(option)
+
     elif option_name == "max_backlog_sync_events":
         OPTIONS.backlog_limit = W.config_integer(option)
+
     elif option_name == "fetch_backlog_on_pgup":
         OPTIONS.enable_backlog = W.config_boolean(option)
 
