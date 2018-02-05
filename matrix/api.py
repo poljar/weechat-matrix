@@ -58,8 +58,13 @@ class MatrixClient:
         self.access_token = access_token
         self.txn_id = 0     # type: int
 
+    def _get_txn_id(self):
+        txn_id = self.txn_id
+        self.txn_id = self.txn_id + 1
+        return txn_id
+
     def login(self, user, password, device_name=""):
-        # type () -> HttpRequest
+        # type (str, str, str) -> HttpRequest
         path = ("{api}/login").format(api=MATRIX_API_PATH)
 
         post_data = {
@@ -94,6 +99,19 @@ class MatrixClient:
         )
 
         return HttpRequest(RequestType.GET, self.host, path)
+
+    def room_message(self, room_id, content):
+        # type: (str, Dict[str, str]) -> HttpRequest
+        query_parameters = {"access_token": self.access_token}
+
+        path = ("{api}/rooms/{room}/send/m.room.message/"
+                "{tx_id}?{query_parameters}").format(
+            api=MATRIX_API_PATH,
+            room=quote(room_id),
+            tx_id=quote(str(self._get_txn_id())),
+            query_parameters=urlencode(query_parameters))
+
+        return HttpRequest(RequestType.PUT, self.host, path, content)
 
 
 class MatrixMessage:
@@ -137,19 +155,7 @@ class MatrixMessage:
             self.request = server.client.sync(server.next_batch, sync_filter)
 
         elif message_type == MessageType.SEND:
-            path = ("{api}/rooms/{room}/send/m.room.message/{tx_id}?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        tx_id=get_transaction_id(server),
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.PUT,
-                host,
-                path,
-                data
-            )
+            self.request = server.client.room_message(room_id, data)
 
         elif message_type == MessageType.STATE:
             path = ("{api}/rooms/{room}/state/{event_type}?"
