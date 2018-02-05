@@ -54,7 +54,7 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
                 color=W.color(color),
                 name=room.alias)
 
-        elif buffer in server.server_buffer:
+        elif buffer is server.server_buffer:
             color = ("status_name_ssl"
                      if server.ssl_context.check_hostname else
                      "status_name")
