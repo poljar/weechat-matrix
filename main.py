@@ -97,7 +97,9 @@ from matrix.config import (
     matrix_config_reload_cb
 )
 
-from matrix.globals import W, OPTIONS, CONFIG, SERVERS
+import matrix.globals
+
+from matrix.globals import W, OPTIONS, SERVERS
 
 
 WEECHAT_SCRIPT_NAME = "matrix"                                 # type: str
@@ -438,7 +440,7 @@ def room_close_cb(data, buffer):
 
 @utf8_decode
 def matrix_unload_cb():
-    matrix_config_free(CONFIG)
+    matrix_config_free(matrix.globals.CONFIG)
     return W.WEECHAT_RC_OK
 
 
@@ -458,14 +460,20 @@ if __name__ == "__main__":
                   ''):
 
         # TODO if this fails we should abort and unload the script.
-        CONFIG = matrix_config_init()
-        matrix_config_read(CONFIG)
+
+        matrix.globals.CONFIG = W.config_new(
+            "matrix",
+            "matrix_config_reload_cb",
+            ""
+        )
+        matrix_config_init(matrix.globals.CONFIG)
+        matrix_config_read(matrix.globals.CONFIG)
 
         hook_commands()
         init_bar_items()
         init_completion()
 
         if not SERVERS:
-            create_default_server(CONFIG)
+            create_default_server(matrix.globals.CONFIG)
 
         autoconnect(SERVERS)

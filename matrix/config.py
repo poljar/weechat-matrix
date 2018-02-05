@@ -22,7 +22,8 @@ from matrix.plugin_options import (
     ServerBufferType
 )
 
-from matrix.globals import W, OPTIONS, CONFIG, SERVERS
+import matrix.globals
+from matrix.globals import W, OPTIONS, SERVERS
 from matrix.utf import utf8_decode
 from matrix.utils import key_from_value, server_buffer_merge
 from matrix.commands import hook_page_up
@@ -57,7 +58,7 @@ def matrix_config_change_cb(data, option):
 
         if OPTIONS.enable_backlog:
             if not OPTIONS.page_up_hook:
-                hook_page_up(CONFIG)
+                hook_page_up(matrix.globals.CONFIG)
         else:
             if OPTIONS.page_up_hook:
                 W.unhook(OPTIONS.page_up_hook)
@@ -66,9 +67,7 @@ def matrix_config_change_cb(data, option):
     return 1
 
 
-def matrix_config_init():
-    config_file = W.config_new("matrix", "matrix_config_reload_cb", "")
-
+def matrix_config_init(config_file):
     look_options = [
         Option(
             "redactions", "integer",

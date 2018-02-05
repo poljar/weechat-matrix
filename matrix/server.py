@@ -477,7 +477,7 @@ def matrix_timer_cb(server_name, remaining_calls):
 
 
 def create_default_server(config_file):
-    server = MatrixServer('matrix.org', W, config_file)
+    server = MatrixServer('matrix.org', config_file)
     SERVERS[server.name] = server
 
     W.config_option_set(server.options["address"], "matrix.org", 1)

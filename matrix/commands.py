@@ -21,6 +21,7 @@ import re
 import time
 
 import matrix.globals
+from matrix.globals import W, OPTIONS, SERVERS
 
 from matrix.utf import utf8_decode
 from matrix.api import MatrixMessage, MessageType
@@ -28,11 +29,6 @@ from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
 from matrix.server import MatrixServer
 
-
-W = matrix.globals.W
-GLOBAL_OPTIONS = matrix.globals.OPTIONS
-SERVERS = matrix.globals.SERVERS
-CONFIG = matrix.globals.CONFIG
 
 def hook_commands():
     W.hook_command(
@@ -98,7 +94,7 @@ def hook_commands():
     W.hook_command_run('/part', 'matrix_command_part_cb', '')
     W.hook_command_run('/invite', 'matrix_command_invite_cb', '')
 
-    if GLOBAL_OPTIONS.enable_backlog:
+    if OPTIONS.enable_backlog:
         hook_page_up()
 
 
@@ -109,7 +105,7 @@ def matrix_fetch_old_messages(server, room_id):
     if not prev_batch:
         return
 
-    message = MatrixMessage(server, GLOBAL_OPTIONS, MessageType.ROOM_MSG,
+    message = MatrixMessage(server, OPTIONS, MessageType.ROOM_MSG,
                             room_id=room_id, extra_id=prev_batch)
 
     server.send_or_queue(message)
@@ -127,7 +123,7 @@ def check_server_existence(server_name, servers):
 
 
 def hook_page_up():
-    GLOBAL_OPTIONS.page_up_hook = W.hook_command_run(
+    OPTIONS.page_up_hook = W.hook_command_run(
         '/window page_up',
         'matrix_command_pgup_cb',
         ''
@@ -186,7 +182,7 @@ def matrix_command_join_cb(data, buffer, command):
         _, room_id = split_args
         message = MatrixMessage(
             server,
-            GLOBAL_OPTIONS,
+            OPTIONS,
             MessageType.JOIN,
             room_id=room_id
         )
@@ -227,7 +223,7 @@ def matrix_command_part_cb(data, buffer, command):
         for room_id in rooms:
             message = MatrixMessage(
                 server,
-                GLOBAL_OPTIONS,
+                OPTIONS,
                 MessageType.PART,
                 room_id=room_id
             )
@@ -264,7 +260,7 @@ def matrix_command_invite_cb(data, buffer, command):
 
         message = MatrixMessage(
             server,
-            GLOBAL_OPTIONS,
+            OPTIONS,
             MessageType.INVITE,
             room_id=room_id,
             data=body
@@ -354,7 +350,7 @@ def matrix_redact_command_cb(data, buffer, args):
 
             message = MatrixMessage(
                 server,
-                GLOBAL_OPTIONS,
+                OPTIONS,
                 MessageType.REDACT,
                 data=body,
                 room_id=room_id,
@@ -383,20 +379,20 @@ def matrix_command_debug(args):
         return
 
     def toggle_debug(debug_type):
-        if debug_type in GLOBAL_OPTIONS.debug:
+        if debug_type in OPTIONS.debug:
             message = ("{prefix}matrix: Disabling matrix {t} "
                        "debugging.").format(
                            prefix=W.prefix("error"),
                            t=debug_type)
             W.prnt("", message)
-            GLOBAL_OPTIONS.debug.remove(debug_type)
+            OPTIONS.debug.remove(debug_type)
         else:
             message = ("{prefix}matrix: Enabling matrix {t} "
                        "debugging.").format(
                            prefix=W.prefix("error"),
                            t=debug_type)
             W.prnt("", message)
-            GLOBAL_OPTIONS.debug.append(debug_type)
+            OPTIONS.debug.append(debug_type)
 
     for command in args:
         if command == "network":
@@ -684,7 +680,7 @@ def matrix_server_command_add(args):
         W.prnt("", message)
         return
 
-    server = MatrixServer(args[0], W, CONFIG)
+    server = MatrixServer(server_name, matrix.globals.CONFIG)
     SERVERS[server.name] = server
 
     if len(args) >= 2:
@@ -922,7 +918,7 @@ def matrix_command_topic_cb(data, buffer, command):
 
             message = MatrixMessage(
                 server,
-                GLOBAL_OPTIONS,
+                OPTIONS,
                 MessageType.STATE,
                 data=body,
                 room_id=room_id,
