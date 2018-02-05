@@ -914,13 +914,11 @@ def matrix_command_topic_cb(data, buffer, command):
 
                 return W.WEECHAT_RC_OK_EAT
 
-            body = {"topic": topic}
-
             message = MatrixMessage(
                 server,
                 OPTIONS,
                 MessageType.STATE,
-                data=body,
+                data=topic,
                 room_id=room_id,
                 extra_id="m.room.topic"
             )

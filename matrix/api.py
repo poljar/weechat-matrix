@@ -111,6 +111,17 @@ class MatrixClient:
             tx_id=quote(str(self._get_txn_id())),
             query_parameters=urlencode(query_parameters))
 
+    def room_topic(self, room_id, topic):
+        query_parameters = {"access_token": self.access_token}
+
+        content = {"topic": topic}
+
+        path = ("{api}/rooms/{room}/state/m.room.topic?"
+                "{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    room=quote(room_id),
+                    query_parameters=urlencode(query_parameters))
+
         return HttpRequest(RequestType.PUT, self.host, path, content)
 
 
@@ -158,19 +169,10 @@ class MatrixMessage:
             self.request = server.client.room_message(room_id, data)
 
         elif message_type == MessageType.STATE:
-            path = ("{api}/rooms/{room}/state/{event_type}?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        event_type=extra_id,
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.PUT,
-                host,
-                path,
-                data
-            )
+            if extra_id == "m.room.topic":
+                self.request = server.client.room_topic(room_id, data)
+            else:
+                assert "Not implemented state event"
 
         elif message_type == MessageType.REDACT:
             path = ("{api}/rooms/{room}/redact/{event_id}/{tx_id}?"
