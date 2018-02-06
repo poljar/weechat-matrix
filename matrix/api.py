@@ -145,6 +145,30 @@ class MatrixClient:
 
         return HttpRequest(RequestType.PUT, self.host, path, content)
 
+    def room_get_messages(
+        self,
+        room_id,
+        start_token,
+        end_token="",
+        limit=10,
+        direction='b'
+    ):
+        query_parameters = {
+            "access_token": self.access_token,
+            "from": start_token,
+            "dir": direction,
+            "limit": str(limit)
+        }
+
+        if end_token:
+            query_parameters["to"] = end_token
+
+        path = ("{api}/rooms/{room}/messages?{query_parameters}").format(
+            api=MATRIX_API_PATH,
+            room=room_id,
+            query_parameters=urlencode(query_parameters))
+
+        return HttpRequest(RequestType.GET, self.host, path)
 
 
 class MatrixMessage:
@@ -200,18 +224,10 @@ class MatrixMessage:
             self.request = server.client.room_redact(room_id, extra_id, data)
 
         elif message_type == MessageType.ROOM_MSG:
-            path = ("{api}/rooms/{room}/messages?from={prev_batch}&"
-                    "dir=b&limit={message_limit}&"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        prev_batch=extra_id,
-                        message_limit=options.backlog_limit,
-                        access_token=server.access_token)
-            self.request = HttpRequest(
-                RequestType.GET,
-                host,
-                path,
+            self.request = server.client.room_get_messages(
+                room_id,
+                start_token=extra_id,
+                limit=options.backlog_limit,
             )
 
         elif message_type == MessageType.JOIN:
