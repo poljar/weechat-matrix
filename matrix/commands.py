@@ -335,9 +335,6 @@ def matrix_redact_command_cb(data, buffer, args):
             line_string, _, reason = matches.groups()
             line = int(line_string)
 
-            if reason:
-                body = {"reason": reason}
-
             event_id = event_id_from_line(buffer, line)
 
             if not event_id:
@@ -352,7 +349,7 @@ def matrix_redact_command_cb(data, buffer, args):
                 server,
                 OPTIONS,
                 MessageType.REDACT,
-                data=body,
+                data=reason,
                 room_id=room_id,
                 extra_id=event_id
             )

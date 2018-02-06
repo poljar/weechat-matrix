@@ -127,6 +127,25 @@ class MatrixClient:
 
         return HttpRequest(RequestType.PUT, self.host, path, content)
 
+    def room_redact(self, room_id, event_id, reason):
+        # type: (str, str, str) -> HttpRequest
+        query_parameters = {"access_token": self.access_token}
+        content = {}
+
+        if reason:
+            content["reason"] = reason
+
+        path = ("{api}/rooms/{room}/redact/{event_id}/{tx_id}?"
+                "{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    room=quote(room_id),
+                    event_id=quote(event_id),
+                    tx_id=quote(str(self._get_txn_id())),
+                    query_parameters=urlencode(query_parameters))
+
+        return HttpRequest(RequestType.PUT, self.host, path, content)
+
+
 
 class MatrixMessage:
     def __init__(
@@ -169,7 +188,7 @@ class MatrixMessage:
             self.request = server.client.sync(server.next_batch, sync_filter)
 
         elif message_type == MessageType.SEND:
-            self.request = server.client.room_message(room_id, data)
+            self.request = server.client.room_send_message(room_id, data)
 
         elif message_type == MessageType.STATE:
             if extra_id == "m.room.topic":
@@ -178,20 +197,7 @@ class MatrixMessage:
                 assert "Not implemented state event"
 
         elif message_type == MessageType.REDACT:
-            path = ("{api}/rooms/{room}/redact/{event_id}/{tx_id}?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        event_id=extra_id,
-                        tx_id=get_transaction_id(server),
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.PUT,
-                host,
-                path,
-                data
-            )
+            self.request = server.client.room_redact(room_id, extra_id, data)
 
         elif message_type == MessageType.ROOM_MSG:
             path = ("{api}/rooms/{room}/messages?from={prev_batch}&"
