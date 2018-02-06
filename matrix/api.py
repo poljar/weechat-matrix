@@ -100,7 +100,7 @@ class MatrixClient:
 
         return HttpRequest(RequestType.GET, self.host, path)
 
-    def room_message(self, room_id, content):
+    def room_send_message(self, room_id, content):
         # type: (str, Dict[str, str]) -> HttpRequest
         query_parameters = {"access_token": self.access_token}
 
@@ -111,7 +111,10 @@ class MatrixClient:
             tx_id=quote(str(self._get_txn_id())),
             query_parameters=urlencode(query_parameters))
 
+        return HttpRequest(RequestType.PUT, self.host, path, content)
+
     def room_topic(self, room_id, topic):
+        # type: (str, str) -> HttpRequest
         query_parameters = {"access_token": self.access_token}
 
         content = {"topic": topic}
