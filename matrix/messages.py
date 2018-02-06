@@ -350,7 +350,7 @@ def matrix_redact_line(data, tags, event):
 
     tags.append("matrix_new_redacted")
 
-    new_data = {'tags_array': tags,
+    new_data = {'tags_array': ','.join(tags),
                 'message': message}
 
     W.hdata_update(hdata_line_data, data, new_data)
