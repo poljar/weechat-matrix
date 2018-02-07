@@ -31,7 +31,6 @@ from matrix.globals import W, OPTIONS
 from matrix.api import (
     MessageType,
     matrix_sync,
-    MatrixMessage,
     MatrixRoom,
     MatrixUser
 )

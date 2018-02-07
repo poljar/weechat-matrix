@@ -256,14 +256,12 @@ def matrix_command_invite_cb(data, buffer, command):
         _, invitee = split_args
         room_id = key_from_value(server.buffers, buf)
 
-        body = {"user_id": invitee}
-
         message = MatrixMessage(
             server,
             OPTIONS,
             MessageType.INVITE,
             room_id=room_id,
-            data=body
+            data=invitee
         )
         server.send_or_queue(message)
 
@@ -319,8 +317,6 @@ def event_id_from_line(buf, target_number):
 def matrix_redact_command_cb(data, buffer, args):
     for server in SERVERS.values():
         if buffer in server.buffers.values():
-            body = {}
-
             room_id = key_from_value(server.buffers, buffer)
 
             matches = re.match(r"(\d+)(:\".*\")? ?(.*)?", args)

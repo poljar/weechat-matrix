@@ -165,10 +165,45 @@ class MatrixClient:
 
         path = ("{api}/rooms/{room}/messages?{query_parameters}").format(
             api=MATRIX_API_PATH,
-            room=room_id,
+            room=quote(room_id),
             query_parameters=urlencode(query_parameters))
 
         return HttpRequest(RequestType.GET, self.host, path)
+
+    def room_join(self, room_id):
+        query_parameters = {"access_token": self.access_token}
+
+        path = ("{api}/rooms/{room_id}/join?"
+                "{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    room_id=quote(room_id),
+                    query_parameters=urlencode(query_parameters))
+
+        return HttpRequest(RequestType.POST, self.host, path)
+
+    def room_leave(self, room_id):
+        query_parameters = {"access_token": self.access_token}
+
+        path = ("{api}/rooms/{room_id}/leave?"
+                "{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    room_id=quote(room_id),
+                    query_parameters=urlencode(query_parameters))
+
+        return HttpRequest(RequestType.POST, self.host, path)
+
+    def room_invite(self, room_id, user_id):
+        query_parameters = {"access_token": self.access_token}
+
+        content = {"user_id": user_id}
+
+        path = ("{api}/rooms/{room_id}/invite?"
+                "{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    room_id=quote(room_id),
+                    query_parameters=urlencode(query_parameters))
+
+        return HttpRequest(RequestType.POST, self.host, path, content)
 
 
 class MatrixMessage:
@@ -192,8 +227,6 @@ class MatrixMessage:
         self.creation_time = time.time()  # type: float
         self.send_time = None             # type: float
         self.receive_time = None          # type: float
-
-        host = ':'.join([server.address, str(server.port)])
 
         if message_type == MessageType.LOGIN:
             self.request = server.client.login(
@@ -231,46 +264,13 @@ class MatrixMessage:
             )
 
         elif message_type == MessageType.JOIN:
-            path = ("{api}/rooms/{room_id}/join?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room_id=room_id,
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.POST,
-                host,
-                path,
-                data
-            )
+            self.request = server.client.room_join(room_id)
 
         elif message_type == MessageType.PART:
-            path = ("{api}/rooms/{room_id}/leave?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room_id=room_id,
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.POST,
-                host,
-                path,
-                data
-            )
+            self.request = server.client.room_leave(room_id)
 
         elif message_type == MessageType.INVITE:
-            path = ("{api}/rooms/{room}/invite?"
-                    "access_token={access_token}").format(
-                        api=MATRIX_API_PATH,
-                        room=room_id,
-                        access_token=server.access_token)
-
-            self.request = HttpRequest(
-                RequestType.POST,
-                host,
-                path,
-                data
-            )
+            self.request = server.client.room_invite(room_id, data)
 
 
 class MatrixUser:
