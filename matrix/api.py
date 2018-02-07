@@ -106,10 +106,10 @@ class MatrixClient:
 
         path = ("{api}/rooms/{room}/send/m.room.message/"
                 "{tx_id}?{query_parameters}").format(
-            api=MATRIX_API_PATH,
-            room=quote(room_id),
-            tx_id=quote(str(self._get_txn_id())),
-            query_parameters=urlencode(query_parameters))
+                    api=MATRIX_API_PATH,
+                    room=quote(room_id),
+                    tx_id=quote(str(self._get_txn_id())),
+                    query_parameters=urlencode(query_parameters))
 
         return HttpRequest(RequestType.PUT, self.host, path, content)
 
@@ -146,12 +146,12 @@ class MatrixClient:
         return HttpRequest(RequestType.PUT, self.host, path, content)
 
     def room_get_messages(
-        self,
-        room_id,
-        start_token,
-        end_token="",
-        limit=10,
-        direction='b'
+            self,
+            room_id,
+            start_token,
+            end_token="",
+            limit=10,
+            direction='b'
     ):
         query_parameters = {
             "access_token": self.access_token,

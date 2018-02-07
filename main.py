@@ -212,8 +212,8 @@ def try_ssl_handshake(server):
 
             message = ("{prefix}Error while doing SSL handshake"
                        ": {error}").format(
-                prefix=W.prefix("network"),
-                error=str_error)
+                           prefix=W.prefix("network"),
+                           error=str_error)
 
             server_buffer_prnt(server, message)
 
@@ -242,8 +242,8 @@ def receive_cb(server_name, file_descriptor):
 
             message = ("{prefix}Error while reading from "
                        "socket: {error}").format(
-                prefix=W.prefix("network"),
-                error=str_error)
+                           prefix=W.prefix("network"),
+                           error=str_error)
 
             server_buffer_prnt(server, message)
 

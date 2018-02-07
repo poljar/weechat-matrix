@@ -224,8 +224,8 @@ class MatrixServer:
 
                 message = ("{prefix}Error while writing to "
                            "socket: {error}").format(
-                    prefix=W.prefix("network"),
-                    error=strerr)
+                               prefix=W.prefix("network"),
+                               error=strerr)
 
                 server_buffer_prnt(self, message)
                 server_buffer_prnt(
@@ -242,7 +242,7 @@ class MatrixServer:
                 server_buffer_prnt(
                     self,
                     "{prefix}matrix: Error while writing to socket".format(
-                        W.prefix("network")))
+                        prefix=W.prefix("network")))
                 server_buffer_prnt(
                     self,
                     ("{prefix}matrix: disconnecting from server...").format(
@@ -379,10 +379,10 @@ class MatrixServer:
 
         message = ("{prefix}matrix: Connecting to "
                    "{server}:{port}{ssl}...").format(
-            prefix=W.prefix("network"),
-            server=self.address,
-            port=self.port,
-            ssl=ssl_message)
+                       prefix=W.prefix("network"),
+                       server=self.address,
+                       port=self.port,
+                       ssl=ssl_message)
 
         W.prnt(self.server_buffer, message)
 
@@ -499,5 +499,3 @@ def send_cb(server_name, file_descriptor):
         server.try_send(server, server.send_buffer)
 
     return W.WEECHAT_RC_OK
-
-
