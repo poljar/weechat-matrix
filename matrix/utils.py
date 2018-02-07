@@ -84,10 +84,15 @@ def server_buffer_merge(buffer):
         W.buffer_merge(buffer, W.buffer_search_main())
     elif OPTIONS.look_server_buf == ServerBufferType.MERGE:
         if SERVERS:
-            first = list(SERVERS.values())[0].server_buffer
-            num = W.buffer_get_integer(W.buffer_search_main(), "number")
-            W.buffer_unmerge(buffer, num + 1)
-            W.buffer_merge(buffer, first)
+            first = None
+            for server in SERVERS.values():
+                if server.server_buffer and buffer is not server.server_buffer:
+                    first = server.server_buffer
+                    break
+            if first:
+                num = W.buffer_get_integer(W.buffer_search_main(), "number")
+                W.buffer_unmerge(buffer, num + 1)
+                W.buffer_merge(buffer, first)
     else:
         num = W.buffer_get_integer(W.buffer_search_main(), "number")
         W.buffer_unmerge(buffer, num + 1)

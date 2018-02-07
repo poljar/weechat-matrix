@@ -45,7 +45,8 @@ def matrix_config_change_cb(data, option):
         OPTIONS.look_server_buf = ServerBufferType(
             W.config_integer(option))
         for server in SERVERS.values():
-            server_buffer_merge(server.server_buffer)
+            if server.server_buffer:
+                server_buffer_merge(server.server_buffer)
 
     elif option_name == "max_initial_sync_events":
         OPTIONS.sync_limit = W.config_integer(option)
