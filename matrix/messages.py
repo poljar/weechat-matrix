@@ -743,8 +743,8 @@ def matrix_handle_message(
 
         room.prev_batch = response['end']
 
-    # Nothing to do here, we'll handle state changes and redactions in the sync
-    elif (message_type == MessageType.STATE or
+    # Nothing to do here, we'll handle topic changes and redactions in the sync
+    elif (message_type == MessageType.TOPIC or
           message_type == MessageType.REDACT):
         pass
 
@@ -810,12 +810,12 @@ def handle_http_response(server, message):
             server.timer_hook = None
 
             server.disconnect()
-        elif message.type == MessageType.STATE:
+        elif message.type == MessageType.TOPIC:
             response = decode_json(server, message.response.body)
             reason = ("." if not response or not response["error"] else
                       ": {r}.".format(r=response["error"]))
 
-            error_message = ("{prefix}Can't set state{reason}").format(
+            error_message = ("{prefix}Can't set topic{reason}").format(
                 prefix=W.prefix("network"),
                 reason=reason)
             server_buffer_prnt(server, error_message)

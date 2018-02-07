@@ -38,7 +38,7 @@ class MessageType(Enum):
     LOGIN = 0
     SYNC = 1
     SEND = 2
-    STATE = 3
+    TOPIC = 3
     REDACT = 4
     ROOM_MSG = 5
     JOIN = 6
@@ -247,7 +247,7 @@ class MatrixMessage:
         elif message_type == MessageType.SEND:
             self.request = server.client.room_send_message(room_id, data)
 
-        elif message_type == MessageType.STATE:
+        elif message_type == MessageType.TOPIC:
             if extra_id == "m.room.topic":
                 self.request = server.client.room_topic(room_id, data)
             else:
