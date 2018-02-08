@@ -912,8 +912,7 @@ def matrix_command_topic_cb(data, buffer, command):
                 OPTIONS,
                 MessageType.TOPIC,
                 data=topic,
-                room_id=room_id,
-                extra_id="m.room.topic"
+                room_id=room_id
             )
             server.send_or_queue(message)
 

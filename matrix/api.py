@@ -248,10 +248,7 @@ class MatrixMessage:
             self.request = server.client.room_send_message(room_id, data)
 
         elif message_type == MessageType.TOPIC:
-            if extra_id == "m.room.topic":
-                self.request = server.client.room_topic(room_id, data)
-            else:
-                assert "Not implemented state event"
+            self.request = server.client.room_topic(room_id, data)
 
         elif message_type == MessageType.REDACT:
             self.request = server.client.room_redact(room_id, extra_id, data)
