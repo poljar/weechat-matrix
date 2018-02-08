@@ -409,23 +409,14 @@ def room_input_cb(server_name, buffer, input_data):
 
     formatted_data = colors.parse_input_line(input_data)
 
-    body = {
-        "msgtype": "m.text",
-        "body": colors.formatted_to_plain(formatted_data)
-    }
-
-    if colors.formatted(formatted_data):
-        body["format"] = "org.matrix.custom.html"
-        body["formatted_body"] = colors.formatted_to_html(formatted_data)
-
     extra_data = {
         "author": server.user,
         "message": colors.formatted_to_weechat(W, formatted_data),
         "room_id": room_id
     }
 
-    message = MatrixMessage(server, OPTIONS, MessageType.SEND,
-                            data=body, room_id=room_id,
+    message = MatrixMessage(server, OPTIONS, MessageType.SEND, room_id=room_id,
+                            formatted_message=formatted_data,
                             extra_data=extra_data)
 
     server.send_or_queue(message)

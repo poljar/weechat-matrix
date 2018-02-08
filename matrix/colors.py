@@ -722,7 +722,7 @@ def parse_input_line(line):
     return substrings
 
 
-def formatted(strings):
+def is_formatted(strings):
     # type: (List[FormattedString]) -> bool
     for string in strings:
         if string.attributes != DEFAULT_ATRIBUTES:
@@ -781,7 +781,7 @@ def formatted_to_html(strings):
     return "".join(html_string)
 
 
-# TODO do we want at least some formating using unicode
+# TODO do we want at least some formatting using unicode
 # (strikethrough, quotes)?
 def formatted_to_plain(strings):
     # type: (List[FormattedString]) -> str

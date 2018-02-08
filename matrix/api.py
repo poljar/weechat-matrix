@@ -29,6 +29,7 @@ except ImportError:
 from matrix.globals import OPTIONS
 
 from matrix.http import RequestType, HttpRequest
+from matrix.colors import formatted_to_plain, formatted_to_html, is_formatted
 
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
 
@@ -100,9 +101,18 @@ class MatrixClient:
 
         return HttpRequest(RequestType.GET, self.host, path)
 
-    def room_send_message(self, room_id, content):
+    def room_send_message(self, room_id, content, formatted_content=None):
         # type: (str, Dict[str, str]) -> HttpRequest
         query_parameters = {"access_token": self.access_token}
+
+        body = {
+            "msgtype": "m.text",
+            "body": content
+        }
+
+        if formatted_content:
+            body["format"] = "org.matrix.custom.html"
+            body["formatted_body"] = formatted_content
 
         path = ("{api}/rooms/{room}/send/m.room.message/"
                 "{tx_id}?{query_parameters}").format(
@@ -111,7 +121,7 @@ class MatrixClient:
                     tx_id=quote(str(self._get_txn_id())),
                     query_parameters=urlencode(query_parameters))
 
-        return HttpRequest(RequestType.PUT, self.host, path, content)
+        return HttpRequest(RequestType.PUT, self.host, path, body)
 
     def room_topic(self, room_id, topic):
         # type: (str, str) -> HttpRequest
@@ -249,7 +259,15 @@ class MatrixMessage:
             self.request = server.client.sync(server.next_batch, sync_filter)
 
         elif message_type == MessageType.SEND:
-            self.request = server.client.room_send_message(room_id, data)
+            assert self.formatted_message
+
+            data = {"content": formatted_to_plain(self.formatted_message)}
+
+            if is_formatted(self.formatted_message):
+                data["formatted_content"] = formatted_to_html(
+                    self.formatted_message)
+
+            self.request = server.client.room_send_message(room_id, **data)
 
         elif message_type == MessageType.TOPIC:
             assert self.topic
