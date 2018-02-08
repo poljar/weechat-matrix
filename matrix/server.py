@@ -72,6 +72,7 @@ class MatrixServer:
         self.next_batch = None                           # type: str
         self.transaction_id = 0                          # type: int
         self.lag = 0                                     # type: int
+        self.lag_done = False                            # type: bool
 
         self.send_fd_hook = None                         # type: weechat.hook
         self.send_buffer = b""                           # type: bytes
@@ -460,6 +461,19 @@ def matrix_timer_cb(server_name, remaining_calls):
 
     if not server.connected:
         return W.WEECHAT_RC_OK
+
+    # check lag, disconnect if it's too big
+    if server.receive_queue:
+        message = server.receive_queue.popleft()
+        server.lag = (current_time - message.send_time) * 1000
+        server.receive_queue.appendleft(message)
+        server.lag_done = False
+        W.bar_item_update("lag")
+
+        # TODO print out message, make timeout configurable
+        if server.lag > 300000:
+            server.disconnect()
+            server.schedule_reconnect()
 
     while server.send_queue:
         message = server.send_queue.popleft()

@@ -74,9 +74,15 @@ def matrix_bar_item_lag(data, item, window, buffer, extra_info):
         if (buffer in server.buffers.values() or
                 buffer == server.server_buffer):
             if server.lag >= 500:
-                lag = "{0:.3f}" if server.lag < 1000 else "{0:.0f}"
-                lag_string = "Lag: {lag}".format(
-                    lag=lag.format(server.lag / 1000)
+                color = W.color("irc.color.item_lag_counting")
+                if server.lag_done:
+                    color = W.color("irc.color.item_lag_finished")
+
+                lag = "{0:.3f}" if round(server.lag) < 1000 else "{0:.0f}"
+                lag_string = "Lag: {color}{lag}{ncolor}".format(
+                    lag=lag.format((server.lag / 1000)),
+                    color=color,
+                    ncolor=W.color("reset")
                 )
                 return lag_string
             return ""

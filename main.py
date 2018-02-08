@@ -296,6 +296,7 @@ def receive_cb(server_name, file_descriptor):
             message.response = HttpResponse(status, headers, body)
             receive_time = time.time()
             server.lag = (receive_time - message.send_time) * 1000
+            server.lag_done = True
             W.bar_item_update("lag")
             message.receive_time = receive_time
 
