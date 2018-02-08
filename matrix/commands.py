@@ -261,7 +261,7 @@ def matrix_command_invite_cb(data, buffer, command):
             OPTIONS,
             MessageType.INVITE,
             room_id=room_id,
-            data=invitee
+            user_id=invitee
         )
         server.send_or_queue(message)
 

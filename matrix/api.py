@@ -223,7 +223,6 @@ class MatrixMessage:
             options,          # type: PluginOptions
             message_type,     # type: MessageType
             room_id=None,     # type: str
-            data={},          # type: Dict[str, Any]
             **kwargs
     ):
         # type: (...) -> None
@@ -298,7 +297,8 @@ class MatrixMessage:
             self.request = server.client.room_leave(room_id)
 
         elif message_type == MessageType.INVITE:
-            self.request = server.client.room_invite(room_id, data)
+            assert self.user_id
+            self.request = server.client.room_invite(room_id, self.user_id)
 
 
 class MatrixUser:
