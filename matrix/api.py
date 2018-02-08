@@ -213,13 +213,17 @@ class MatrixMessage:
             options,          # type: PluginOptions
             message_type,     # type: MessageType
             room_id=None,     # type: str
-            extra_id=None,    # type: str
             data={},          # type: Dict[str, Any]
-            extra_data=None   # type: Dict[str, Any]
+            extra_data=None,  # type: Dict[str, Any]
+            **kwargs
     ):
         # type: (...) -> None
         # pylint: disable=dangerous-default-value
         self.type = message_type          # type: MessageType
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
         self.request = None               # type: HttpRequest
         self.response = None              # type: HttpResponse
         self.extra_data = extra_data      # type: Dict[str, Any]
@@ -248,15 +252,24 @@ class MatrixMessage:
             self.request = server.client.room_send_message(room_id, data)
 
         elif message_type == MessageType.TOPIC:
-            self.request = server.client.room_topic(room_id, data)
+            assert self.topic
+            self.request = server.client.room_topic(room_id, self.topic)
 
         elif message_type == MessageType.REDACT:
-            self.request = server.client.room_redact(room_id, extra_id, data)
+            assert self.event_id
+
+            self.request = server.client.room_redact(
+                room_id,
+                self.event_id,
+                self.reason
+            )
 
         elif message_type == MessageType.ROOM_MSG:
+            assert self.token
+
             self.request = server.client.room_get_messages(
                 room_id,
-                start_token=extra_id,
+                start_token=self.token,
                 limit=options.backlog_limit,
             )
 

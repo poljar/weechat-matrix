@@ -106,7 +106,7 @@ def matrix_fetch_old_messages(server, room_id):
         return
 
     message = MatrixMessage(server, OPTIONS, MessageType.ROOM_MSG,
-                            room_id=room_id, extra_id=prev_batch)
+                            room_id=room_id, token=prev_batch)
 
     server.send_or_queue(message)
 
@@ -345,9 +345,9 @@ def matrix_redact_command_cb(data, buffer, args):
                 server,
                 OPTIONS,
                 MessageType.REDACT,
-                data=reason,
                 room_id=room_id,
-                extra_id=event_id
+                event_id=event_id,
+                reason=reason
             )
             server.send_or_queue(message)
 
@@ -911,8 +911,8 @@ def matrix_command_topic_cb(data, buffer, command):
                 server,
                 OPTIONS,
                 MessageType.TOPIC,
-                data=topic,
-                room_id=room_id
+                room_id=room_id,
+                topic=topic
             )
             server.send_or_queue(message)
 
