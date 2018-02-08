@@ -676,11 +676,11 @@ def matrix_handle_old_messages(server, room_id, events):
 
 def matrix_handle_message(
         server,        # type: MatrixServer
-        message_type,  # type: MessageType
-        response,      # type: Dict[str, Any]
-        extra_data     # type: Dict[str, Any]
+        message,       # type: MatrixMessage
 ):
     # type: (...) -> None
+    message_type = message.type
+    response = message.decoded_response
 
     if message_type is MessageType.LOGIN:
         server.access_token = response["access_token"]
@@ -706,9 +706,13 @@ def matrix_handle_message(
         matrix_sync(server)
 
     elif message_type is MessageType.SEND:
-        author = extra_data["author"]
-        message = extra_data["message"]
-        room_id = extra_data["room_id"]
+        room_id = message.room_id
+        author = server.user
+        weechat_message = colors.formatted_to_weechat(
+            W,
+            message.formatted_message
+        )
+
         date = int(time.time())
         # TODO the event_id can be missing if sending has failed for
         # some reason
@@ -725,7 +729,7 @@ def matrix_handle_message(
                    color=color_for_tags("weechat.color.chat_nick_self"),
                    event_id=event_id)
 
-        data = "{author}\t{msg}".format(author=author, msg=message)
+        data = "{author}\t{msg}".format(author=author, msg=weechat_message)
 
         buf = server.buffers[room_id]
         W.prnt_date_tags(buf, date, tag, data)
@@ -775,7 +779,7 @@ def handle_http_response(server, message):
             return None
 
     if status_code == 200:
-        response = decode_json(server, message.response.body)
+        message.decoded_response = decode_json(server, message.response.body)
 
         # if not response:
         #     # Resend the message
@@ -785,9 +789,7 @@ def handle_http_response(server, message):
 
         matrix_handle_message(
             server,
-            message.type,
-            response,
-            message.extra_data
+            message,
         )
 
     # TODO handle try again response

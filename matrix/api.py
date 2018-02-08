@@ -224,7 +224,6 @@ class MatrixMessage:
             message_type,     # type: MessageType
             room_id=None,     # type: str
             data={},          # type: Dict[str, Any]
-            extra_data=None,  # type: Dict[str, Any]
             **kwargs
     ):
         # type: (...) -> None
@@ -236,7 +235,7 @@ class MatrixMessage:
 
         self.request = None               # type: HttpRequest
         self.response = None              # type: HttpResponse
-        self.extra_data = extra_data      # type: Dict[str, Any]
+        self.decoded_response = None      # type: Dict[Any, Any]
 
         self.creation_time = time.time()  # type: float
         self.send_time = None             # type: float
@@ -267,6 +266,7 @@ class MatrixMessage:
                 data["formatted_content"] = formatted_to_html(
                     self.formatted_message)
 
+            self.room_id = room_id
             self.request = server.client.room_send_message(room_id, **data)
 
         elif message_type == MessageType.TOPIC:
