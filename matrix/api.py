@@ -222,7 +222,6 @@ class MatrixMessage:
             server,           # type: MatrixServer
             options,          # type: PluginOptions
             message_type,     # type: MessageType
-            room_id=None,     # type: str
             **kwargs
     ):
         # type: (...) -> None
@@ -257,6 +256,7 @@ class MatrixMessage:
             self.request = server.client.sync(server.next_batch, sync_filter)
 
         elif message_type == MessageType.SEND:
+            assert self.room_id
             assert self.formatted_message
 
             data = {"content": formatted_to_plain(self.formatted_message)}
@@ -265,40 +265,48 @@ class MatrixMessage:
                 data["formatted_content"] = formatted_to_html(
                     self.formatted_message)
 
-            self.room_id = room_id
-            self.request = server.client.room_send_message(room_id, **data)
+            self.request = server.client.room_send_message(
+                self.room_id,
+                **data
+            )
 
         elif message_type == MessageType.TOPIC:
+            assert self.room_id
             assert self.topic
-            self.request = server.client.room_topic(room_id, self.topic)
+            self.request = server.client.room_topic(self.room_id, self.topic)
 
         elif message_type == MessageType.REDACT:
+            assert self.room_id
             assert self.event_id
 
             self.request = server.client.room_redact(
-                room_id,
+                self.room_id,
                 self.event_id,
                 self.reason
             )
 
         elif message_type == MessageType.ROOM_MSG:
+            assert self.room_id
             assert self.token
 
             self.request = server.client.room_get_messages(
-                room_id,
+                self.room_id,
                 start_token=self.token,
                 limit=options.backlog_limit,
             )
 
         elif message_type == MessageType.JOIN:
-            self.request = server.client.room_join(room_id)
+            assert self.room_id
+            self.request = server.client.room_join(self.room_id)
 
         elif message_type == MessageType.PART:
-            self.request = server.client.room_leave(room_id)
+            assert self.room_id
+            self.request = server.client.room_leave(self.room_id)
 
         elif message_type == MessageType.INVITE:
+            assert self.room_id
             assert self.user_id
-            self.request = server.client.room_invite(room_id, self.user_id)
+            self.request = server.client.room_invite(self.room_id, self.user_id)
 
 
 class MatrixUser:

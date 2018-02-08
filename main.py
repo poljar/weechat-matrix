@@ -416,8 +416,7 @@ def room_input_cb(server_name, buffer, input_data):
     }
 
     message = MatrixMessage(server, OPTIONS, MessageType.SEND, room_id=room_id,
-                            formatted_message=formatted_data,
-                            extra_data=extra_data)
+                            formatted_message=formatted_data)
 
     server.send_or_queue(message)
     return W.WEECHAT_RC_OK
