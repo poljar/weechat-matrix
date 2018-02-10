@@ -315,12 +315,12 @@ class MatrixServer:
         server_buffer_prnt(self, message)
 
     def _close_socket(self):
-        # type: (socket.socket) -> None
+        # type: () -> None
         if self.socket:
             try:
                 self.socket.shutdown(socket.SHUT_RDWR)
                 self.socket.close()
-            except OSError:
+            except socket.error:
                 pass
 
     def disconnect(self, reconnect=True):
