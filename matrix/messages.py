@@ -24,7 +24,7 @@ import datetime
 
 from operator import itemgetter
 
-import matrix.colors as colors
+from matrix.colors import Formatted
 
 from matrix.globals import W, OPTIONS
 
@@ -190,9 +190,9 @@ def matrix_handle_room_text_message(server, room_id, event, old=False):
 
     if 'format' in event['content'] and 'formatted_body' in event['content']:
         if event['content']['format'] == "org.matrix.custom.html":
-            formatted_data = colors.html_to_formatted(
+            formatted_data = Formatted.from_html(
                 event['content']['formatted_body'])
-            msg = colors.formatted_to_weechat(W, formatted_data)
+            msg = formatted_data.to_weechat()
 
     if event['sender'] in room.users:
         user = room.users[event['sender']]
@@ -708,10 +708,7 @@ def matrix_handle_message(
     elif message_type is MessageType.SEND:
         room_id = message.room_id
         author = server.user
-        weechat_message = colors.formatted_to_weechat(
-            W,
-            message.formatted_message
-        )
+        weechat_message = message.formatted_message.to_weechat()
 
         date = int(time.time())
         # TODO the event_id can be missing if sending has failed for

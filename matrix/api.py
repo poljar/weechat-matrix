@@ -29,7 +29,6 @@ except ImportError:
 from matrix.globals import OPTIONS
 
 from matrix.http import RequestType, HttpRequest
-from matrix.colors import formatted_to_plain, formatted_to_html, is_formatted
 
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
 
@@ -259,11 +258,10 @@ class MatrixMessage:
             assert self.room_id
             assert self.formatted_message
 
-            data = {"content": formatted_to_plain(self.formatted_message)}
+            data = {"content": self.formatted_message.to_plain()}
 
-            if is_formatted(self.formatted_message):
-                data["formatted_content"] = formatted_to_html(
-                    self.formatted_message)
+            if self.formatted_message.is_formatted:
+                data["formatted_content"] = self.formatted_message.to_html()
 
             self.request = server.client.room_send_message(
                 self.room_id,

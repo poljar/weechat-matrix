@@ -28,7 +28,7 @@ from builtins import str
 # pylint: disable=unused-import
 from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 
-from matrix import colors
+from matrix.colors import Formatted
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
 from matrix.api import MatrixMessage, MessageType, matrix_login
@@ -407,13 +407,7 @@ def room_input_cb(server_name, buffer, input_data):
     if room.encrypted:
         return W.WEECHAT_RC_OK
 
-    formatted_data = colors.parse_input_line(input_data)
-
-    extra_data = {
-        "author": server.user,
-        "message": colors.formatted_to_weechat(W, formatted_data),
-        "room_id": room_id
-    }
+    formatted_data = Formatted.from_input_line(input_data)
 
     message = MatrixMessage(server, OPTIONS, MessageType.SEND, room_id=room_id,
                             formatted_message=formatted_data)

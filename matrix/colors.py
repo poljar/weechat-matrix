@@ -21,6 +21,7 @@ from __future__ import unicode_literals
 # pylint: disable=redefined-builtin
 from builtins import str
 from collections import namedtuple
+from matrix.globals import W
 
 import webcolors
 
@@ -34,6 +35,238 @@ FormattedString = namedtuple(
     'FormattedString',
     ['text', 'attributes']
 )
+
+
+class Formatted():
+    def __init__(self, substrings):
+        # type: List[FormattedString] -> None
+        self.substrings = substrings
+
+
+    def is_formatted(self):
+        # type: (Formatted) -> bool
+        for string in self.substrings:
+            if string.attributes != DEFAULT_ATRIBUTES:
+                return True
+        return False
+
+    # TODO reverse video
+    @classmethod
+    def from_input_line(cls, line):
+        # type: (str) -> Formatted
+        """Parses the weechat input line and produces formatted strings that
+        can be later converted to HTML or to a string for weechat's print
+        functions
+        """
+        text = ""        # type: str
+        substrings = []  # type: List[FormattedString]
+        attributes = DEFAULT_ATRIBUTES.copy()
+
+        i = 0
+        while i < len(line):
+            # Bold
+            if line[i] == "\x02":
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                attributes["bold"] = not attributes["bold"]
+                i = i + 1
+
+            # Color
+            elif line[i] == "\x03":
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                i = i + 1
+
+                # check if it's a valid color, add it to the attributes
+                if line[i].isdigit():
+                    color_string = line[i]
+                    i = i + 1
+
+                    if line[i].isdigit():
+                        if color_string == "0":
+                            color_string = line[i]
+                        else:
+                            color_string = color_string + line[i]
+                        i = i + 1
+
+                    attributes["fgcolor"] = color_line_to_weechat(color_string)
+                else:
+                    attributes["fgcolor"] = None
+
+                # check if we have a background color
+                if line[i] == "," and line[i + 1].isdigit():
+                    color_string = line[i + 1]
+                    i = i + 2
+
+                    if line[i].isdigit():
+                        if color_string == "0":
+                            color_string = line[i]
+                        else:
+                            color_string = color_string + line[i]
+                        i = i + 1
+
+                    attributes["bgcolor"] = color_line_to_weechat(color_string)
+                else:
+                    attributes["bgcolor"] = None
+            # Reset
+            elif line[i] == "\x0F":
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                # Reset all the attributes
+                attributes = DEFAULT_ATRIBUTES.copy()
+                i = i + 1
+            # Italic
+            elif line[i] == "\x1D":
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                attributes["italic"] = not attributes["italic"]
+                i = i + 1
+
+            # Underline
+            elif line[i] == "\x1F":
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                attributes["underline"] = not attributes["underline"]
+                i = i + 1
+
+            # Normal text
+            else:
+                text = text + line[i]
+                i = i + 1
+
+        substrings.append(FormattedString(text, attributes))
+        return cls(substrings)
+
+    @classmethod
+    def from_html(cls, html):
+        # type: (str) -> Formatted
+        parser = MatrixHtmlParser()
+        parser.feed(html)
+        return cls(parser.get_substrings())
+
+    def to_html(self):
+        # TODO BG COLOR
+        def add_attribute(string, name, value):
+            if name == "bold" and value:
+                return "{bold_on}{text}{bold_off}".format(
+                    bold_on="<strong>",
+                    text=string,
+                    bold_off="</strong>")
+            elif name == "italic" and value:
+                return "{italic_on}{text}{italic_off}".format(
+                    italic_on="<em>",
+                    text=string,
+                    italic_off="</em>")
+            elif name == "underline" and value:
+                return "{underline_on}{text}{underline_off}".format(
+                    underline_on="<u>",
+                    text=string,
+                    underline_off="</u>")
+            elif name == "strikethrough" and value:
+                return "{strike_on}{text}{strike_off}".format(
+                    strike_on="<del>",
+                    text=string,
+                    strike_off="</del>")
+            elif name == "quote" and value:
+                return "{quote_on}{text}{quote_off}".format(
+                    quote_on="<blockquote>",
+                    text=string,
+                    quote_off="</blockquote>")
+            elif name == "fgcolor" and value:
+                return "{color_on}{text}{color_off}".format(
+                    color_on="<font color={color}>".format(
+                        color=color_weechat_to_html(value)
+                    ),
+                    text=string,
+                    color_off="</font>")
+
+            return string
+
+        def format_string(formatted_string):
+            text = formatted_string.text
+            attributes = formatted_string.attributes
+
+            for key, value in attributes.items():
+                text = add_attribute(text, key, value)
+            return text
+
+        html_string = map(format_string, self.substrings)
+        return "".join(html_string)
+
+    # TODO do we want at least some formatting using unicode
+    # (strikethrough, quotes)?
+    def to_plain(self):
+        # type: (List[FormattedString]) -> str
+        def strip_atribute(string, _, __):
+            return string
+
+        def format_string(formatted_string):
+            text = formatted_string.text
+            attributes = formatted_string.attributes
+
+            for key, value in attributes.items():
+                text = strip_atribute(text, key, value)
+            return text
+
+        plain_string = map(format_string, self.substrings)
+        return "".join(plain_string)
+
+    def to_weechat(self):
+        # TODO BG COLOR
+        def add_attribute(string, name, value):
+            if name == "bold" and value:
+                return "{bold_on}{text}{bold_off}".format(
+                    bold_on=W.color("bold"),
+                    text=string,
+                    bold_off=W.color("-bold"))
+
+            elif name == "italic" and value:
+                return "{italic_on}{text}{italic_off}".format(
+                    italic_on=W.color("italic"),
+                    text=string,
+                    italic_off=W.color("-italic"))
+
+            elif name == "underline" and value:
+                return "{underline_on}{text}{underline_off}".format(
+                    underline_on=W.color("underline"),
+                    text=string,
+                    underline_off=W.color("-underline"))
+
+            elif name == "strikethrough" and value:
+                return string_strikethrough(string)
+
+            elif name == "quote" and value:
+                return "“{text}”".format(text=string)
+
+            elif name == "fgcolor" and value:
+                return "{color_on}{text}{color_off}".format(
+                    color_on=W.color(value),
+                    text=string,
+                    color_off=W.color("resetcolor"))
+
+            elif name == "bgcolor" and value:
+                return "{color_on}{text}{color_off}".format(
+                    color_on=W.color("," + value),
+                    text=string,
+                    color_off=W.color("resetcolor"))
+
+            return string
+
+        def format_string(formatted_string):
+            text = formatted_string.text
+            attributes = formatted_string.attributes
+
+            for key, value in attributes.items():
+                text = add_attribute(text, key, value)
+            return text
+
+        weechat_strings = map(format_string, self.substrings)
+        return "".join(weechat_strings)
 
 
 # TODO this should be a typed dict.
@@ -631,236 +864,6 @@ def color_weechat_to_html(color):
         return hex_color
 
 
-# TODO reverse video
-def parse_input_line(line):
-    # type: (str) -> List[FormattedString]
-    """Parses the weechat input line and produces formatted strings that can be
-    later converted to HTML or to a string for weechat's print functions
-    """
-    text = ""        # type: str
-    substrings = []  # type: List[FormattedString]
-    attributes = DEFAULT_ATRIBUTES.copy()
-
-    i = 0
-    while i < len(line):
-        # Bold
-        if line[i] == "\x02":
-            if text:
-                substrings.append(FormattedString(text, attributes.copy()))
-            text = ""
-            attributes["bold"] = not attributes["bold"]
-            i = i + 1
-
-        # Color
-        elif line[i] == "\x03":
-            if text:
-                substrings.append(FormattedString(text, attributes.copy()))
-            text = ""
-            i = i + 1
-
-            # check if it's a valid color, add it to the attributes
-            if line[i].isdigit():
-                color_string = line[i]
-                i = i + 1
-
-                if line[i].isdigit():
-                    if color_string == "0":
-                        color_string = line[i]
-                    else:
-                        color_string = color_string + line[i]
-                    i = i + 1
-
-                attributes["fgcolor"] = color_line_to_weechat(color_string)
-            else:
-                attributes["fgcolor"] = None
-
-            # check if we have a background color
-            if line[i] == "," and line[i+1].isdigit():
-                color_string = line[i+1]
-                i = i + 2
-
-                if line[i].isdigit():
-                    if color_string == "0":
-                        color_string = line[i]
-                    else:
-                        color_string = color_string + line[i]
-                    i = i + 1
-
-                attributes["bgcolor"] = color_line_to_weechat(color_string)
-            else:
-                attributes["bgcolor"] = None
-        # Reset
-        elif line[i] == "\x0F":
-            if text:
-                substrings.append(FormattedString(text, attributes.copy()))
-            text = ""
-            # Reset all the attributes
-            attributes = DEFAULT_ATRIBUTES.copy()
-            i = i + 1
-        # Italic
-        elif line[i] == "\x1D":
-            if text:
-                substrings.append(FormattedString(text, attributes.copy()))
-            text = ""
-            attributes["italic"] = not attributes["italic"]
-            i = i + 1
-
-        # Underline
-        elif line[i] == "\x1F":
-            if text:
-                substrings.append(FormattedString(text, attributes.copy()))
-            text = ""
-            attributes["underline"] = not attributes["underline"]
-            i = i + 1
-
-        # Normal text
-        else:
-            text = text + line[i]
-            i = i + 1
-
-    substrings.append(FormattedString(text, attributes))
-    return substrings
-
-
-def is_formatted(strings):
-    # type: (List[FormattedString]) -> bool
-    for string in strings:
-        if string.attributes != DEFAULT_ATRIBUTES:
-            return True
-    return False
-
-
-def formatted_to_html(strings):
-    # type: (List[FormattedString]) -> str
-    # TODO BG COLOR
-    def add_attribute(string, name, value):
-        if name == "bold" and value:
-            return "{bold_on}{text}{bold_off}".format(
-                bold_on="<strong>",
-                text=string,
-                bold_off="</strong>")
-        elif name == "italic" and value:
-            return "{italic_on}{text}{italic_off}".format(
-                italic_on="<em>",
-                text=string,
-                italic_off="</em>")
-        elif name == "underline" and value:
-            return "{underline_on}{text}{underline_off}".format(
-                underline_on="<u>",
-                text=string,
-                underline_off="</u>")
-        elif name == "strikethrough" and value:
-            return "{strike_on}{text}{strike_off}".format(
-                strike_on="<del>",
-                text=string,
-                strike_off="</del>")
-        elif name == "quote" and value:
-            return "{quote_on}{text}{quote_off}".format(
-                quote_on="<blockquote>",
-                text=string,
-                quote_off="</blockquote>")
-        elif name == "fgcolor" and value:
-            return "{color_on}{text}{color_off}".format(
-                color_on="<font color={color}>".format(
-                    color=color_weechat_to_html(value)
-                ),
-                text=string,
-                color_off="</font>")
-
-        return string
-
-    def format_string(formatted_string):
-        text = formatted_string.text
-        attributes = formatted_string.attributes
-
-        for key, value in attributes.items():
-            text = add_attribute(text, key, value)
-        return text
-
-    html_string = map(format_string, strings)
-    return "".join(html_string)
-
-
-# TODO do we want at least some formatting using unicode
-# (strikethrough, quotes)?
-def formatted_to_plain(strings):
-    # type: (List[FormattedString]) -> str
-    def strip_atribute(string, _, __):
-        return string
-
-    def format_string(formatted_string):
-        text = formatted_string.text
-        attributes = formatted_string.attributes
-
-        for key, value in attributes.items():
-            text = strip_atribute(text, key, value)
-        return text
-
-    plain_string = map(format_string, strings)
-    return "".join(plain_string)
-
-
-def html_to_formatted(html):
-    # type: (str) -> FormattedString
-    parser = MatrixHtmlParser()
-    parser.feed(html)
-    return parser.get_substrings()
-
-
 def string_strikethrough(string):
     # type (str) -> str
     return "".join(["{}\u0336".format(c) for c in string])
-
-
-def formatted_to_weechat(W, strings):
-    # type: (weechat, List[FormattedString]) -> str
-    # TODO BG COLOR
-    def add_attribute(string, name, value):
-        if name == "bold" and value:
-            return "{bold_on}{text}{bold_off}".format(
-                bold_on=W.color("bold"),
-                text=string,
-                bold_off=W.color("-bold"))
-
-        elif name == "italic" and value:
-            return "{italic_on}{text}{italic_off}".format(
-                italic_on=W.color("italic"),
-                text=string,
-                italic_off=W.color("-italic"))
-
-        elif name == "underline" and value:
-            return "{underline_on}{text}{underline_off}".format(
-                underline_on=W.color("underline"),
-                text=string,
-                underline_off=W.color("-underline"))
-
-        elif name == "strikethrough" and value:
-            return string_strikethrough(string)
-
-        elif name == "quote" and value:
-            return "“{text}”".format(text=string)
-
-        elif name == "fgcolor" and value:
-            return "{color_on}{text}{color_off}".format(
-                color_on=W.color(value),
-                text=string,
-                color_off=W.color("resetcolor"))
-
-        elif name == "bgcolor" and value:
-            return "{color_on}{text}{color_off}".format(
-                color_on=W.color("," + value),
-                text=string,
-                color_off=W.color("resetcolor"))
-
-        return string
-
-    def format_string(formatted_string):
-        text = formatted_string.text
-        attributes = formatted_string.attributes
-
-        for key, value in attributes.items():
-            text = add_attribute(text, key, value)
-        return text
-
-    weechat_strings = map(format_string, strings)
-    return "".join(weechat_strings)
