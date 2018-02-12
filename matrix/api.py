@@ -329,6 +329,25 @@ class MatrixGenericMessage():
         self.request = request_func(**func_args)
 
 
+class MatrixLoginMessage(MatrixGenericMessage):
+    def __init__(self, client, user, password, device_name, device_id=None):
+        data = {
+            "user": user,
+            "password": password,
+            "device_name": device_name
+        }
+
+        if device_id:
+            data["device_id"] = device_id
+
+        MatrixGenericMessage.__init__(
+            self,
+            MessageType.LOGIN,
+            client.login,
+            data
+        )
+
+
 class MatrixSendMessage(MatrixGenericMessage):
     def __init__(self, client, room_id, formatted_message):
         self.room_id = room_id
@@ -389,9 +408,10 @@ def matrix_sync(server):
 
 def matrix_login(server):
     # type: (MatrixServer) -> None
-    message = MatrixMessage(
-        server,
-        OPTIONS,
-        MessageType.LOGIN
+    message = MatrixLoginMessage(
+        server.client,
+        server.user,
+        server.password,
+        server.device_name
     )
     server.send_or_queue(message)
