@@ -31,7 +31,8 @@ from matrix.api import (
     MatrixRedactMessage,
     MatrixBacklogMessage,
     MatrixJoinMessage,
-    MatrixPartMessage
+    MatrixPartMessage,
+    MatrixInviteMessage
 )
 from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
@@ -264,10 +265,8 @@ def matrix_command_invite_cb(data, buffer, command):
         _, invitee = split_args
         room_id = key_from_value(server.buffers, buf)
 
-        message = MatrixMessage(
-            server,
-            OPTIONS,
-            MessageType.INVITE,
+        message = MatrixInviteMessage(
+            server.client,
             room_id=room_id,
             user_id=invitee
         )

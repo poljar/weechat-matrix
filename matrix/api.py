@@ -478,6 +478,21 @@ class MatrixPartMessage(MatrixGenericMessage):
         )
 
 
+class MatrixInviteMessage(MatrixGenericMessage):
+    def __init__(self, client, room_id, user_id):
+        self.room_id = room_id
+
+        data = {"room_id": self.room_id,
+                "user_id": user_id}
+
+        MatrixGenericMessage.__init__(
+            self,
+            MessageType.INVITE,
+            client.room_invite,
+            data
+        )
+
+
 class MatrixUser:
     def __init__(self, name, display_name):
         self.name = name                  # type: str
