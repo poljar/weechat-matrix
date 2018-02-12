@@ -28,7 +28,8 @@ from matrix.api import (
     MatrixMessage,
     MessageType,
     MatrixTopicMessage,
-    MatrixRedactMessage
+    MatrixRedactMessage,
+    MatrixBacklogMessage
 )
 from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
@@ -110,8 +111,12 @@ def matrix_fetch_old_messages(server, room_id):
     if not prev_batch:
         return
 
-    message = MatrixMessage(server, OPTIONS, MessageType.ROOM_MSG,
-                            room_id=room_id, token=prev_batch)
+    message = MatrixBacklogMessage(
+        server.client,
+        room_id=room_id,
+        token=prev_batch,
+        limit=OPTIONS.backlog_limit
+    )
 
     server.send_or_queue(message)
 

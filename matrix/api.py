@@ -431,6 +431,25 @@ class MatrixRedactMessage(MatrixGenericMessage):
         )
 
 
+class MatrixBacklogMessage(MatrixGenericMessage):
+    def __init__(self, client, room_id, token, limit):
+        self.room_id = room_id
+
+        data = {
+            "room_id": self.room_id,
+            "start_token": token,
+            "direction": "b",
+            "limit": limit
+        }
+
+        MatrixGenericMessage.__init__(
+            self,
+            MessageType.ROOM_MSG,
+            client.room_get_messages,
+            data
+        )
+
+
 class MatrixUser:
     def __init__(self, name, display_name):
         self.name = name                  # type: str
