@@ -86,13 +86,14 @@ def server_buffer_merge(buffer):
         if SERVERS:
             first = None
             for server in SERVERS.values():
-                if server.server_buffer and buffer is not server.server_buffer:
+                if server.server_buffer:
                     first = server.server_buffer
                     break
             if first:
                 num = W.buffer_get_integer(W.buffer_search_main(), "number")
                 W.buffer_unmerge(buffer, num + 1)
-                W.buffer_merge(buffer, first)
+                if buffer is not server.server_buffer:
+                    W.buffer_merge(buffer, first)
     else:
         num = W.buffer_get_integer(W.buffer_search_main(), "number")
         W.buffer_unmerge(buffer, num + 1)
