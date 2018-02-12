@@ -216,7 +216,7 @@ class MatrixClient:
         return HttpRequest(RequestType.POST, self.host, path, content)
 
 
-class MatrixGenericMessage():
+class MatrixMessage():
     def __init__(
             self,
             message_type,     # type: MessageType
@@ -237,7 +237,7 @@ class MatrixGenericMessage():
         self.request = request_func(**func_args)
 
 
-class MatrixLoginMessage(MatrixGenericMessage):
+class MatrixLoginMessage(MatrixMessage):
     def __init__(self, client, user, password, device_name, device_id=None):
         data = {
             "user": user,
@@ -248,7 +248,7 @@ class MatrixLoginMessage(MatrixGenericMessage):
         if device_id:
             data["device_id"] = device_id
 
-        MatrixGenericMessage.__init__(
+        MatrixMessage.__init__(
             self,
             MessageType.LOGIN,
             client.login,
@@ -256,7 +256,7 @@ class MatrixLoginMessage(MatrixGenericMessage):
         )
 
 
-class MatrixSyncMessage(MatrixGenericMessage):
+class MatrixSyncMessage(MatrixMessage):
     def __init__(self, client, next_batch=None, limit=None):
         data = {}
 
@@ -268,7 +268,7 @@ class MatrixSyncMessage(MatrixGenericMessage):
                 "room": {"timeline": {"limit": limit}}
             }
 
-        MatrixGenericMessage.__init__(
+        MatrixMessage.__init__(
             self,
             MessageType.SYNC,
             client.sync,
@@ -276,7 +276,7 @@ class MatrixSyncMessage(MatrixGenericMessage):
         )
 
 
-class MatrixSendMessage(MatrixGenericMessage):
+class MatrixSendMessage(MatrixMessage):
     def __init__(self, client, room_id, formatted_message):
         self.room_id = room_id
         self.formatted_message = formatted_message
@@ -292,7 +292,7 @@ class MatrixSendMessage(MatrixGenericMessage):
         if self.formatted_message.is_formatted:
             data["formatted_content"] = self.formatted_message.to_html()
 
-        MatrixGenericMessage.__init__(
+        MatrixMessage.__init__(
             self,
             MessageType.SEND,
             client.room_send_message,
@@ -300,7 +300,7 @@ class MatrixSendMessage(MatrixGenericMessage):
         )
 
 
-class MatrixTopicMessage(MatrixGenericMessage):
+class MatrixTopicMessage(MatrixMessage):
     def __init__(self, client, room_id, topic):
         self.room_id = room_id
         self.topic = topic
@@ -310,7 +310,7 @@ class MatrixTopicMessage(MatrixGenericMessage):
             "topic": self.topic
         }
 
-        MatrixGenericMessage.__init__(
+        MatrixMessage.__init__(
             self,
             MessageType.TOPIC,
             client.room_topic,
@@ -318,7 +318,7 @@ class MatrixTopicMessage(MatrixGenericMessage):
         )
 
 
-class MatrixRedactMessage(MatrixGenericMessage):
+class MatrixRedactMessage(MatrixMessage):
     def __init__(self, client, room_id, event_id, reason=None):
         self.room_id = room_id
         self.event_id = event_id
@@ -331,7 +331,7 @@ class MatrixRedactMessage(MatrixGenericMessage):
         if reason:
             data["reason"] = reason
 
-        MatrixGenericMessage.__init__(
+        MatrixMessage.__init__(
             self,
             MessageType.REDACT,
             client.room_redact,
@@ -339,7 +339,7 @@ class MatrixRedactMessage(MatrixGenericMessage):
         )
 
 
-class MatrixBacklogMessage(MatrixGenericMessage):
+class MatrixBacklogMessage(MatrixMessage):
     def __init__(self, client, room_id, token, limit):
         self.room_id = room_id
 
@@ -350,7 +350,7 @@ class MatrixBacklogMessage(MatrixGenericMessage):
             "limit": limit
         }
 
-        MatrixGenericMessage.__init__(
+        MatrixMessage.__init__(
             self,
             MessageType.ROOM_MSG,
             client.room_get_messages,
@@ -358,13 +358,13 @@ class MatrixBacklogMessage(MatrixGenericMessage):
         )
 
 
-class MatrixJoinMessage(MatrixGenericMessage):
+class MatrixJoinMessage(MatrixMessage):
     def __init__(self, client, room_id):
         self.room_id = room_id
 
         data = {"room_id": self.room_id}
 
-        MatrixGenericMessage.__init__(
+        MatrixMessage.__init__(
             self,
             MessageType.JOIN,
             client.room_join,
@@ -372,13 +372,13 @@ class MatrixJoinMessage(MatrixGenericMessage):
         )
 
 
-class MatrixPartMessage(MatrixGenericMessage):
+class MatrixPartMessage(MatrixMessage):
     def __init__(self, client, room_id):
         self.room_id = room_id
 
         data = {"room_id": self.room_id}
 
-        MatrixGenericMessage.__init__(
+        MatrixMessage.__init__(
             self,
             MessageType.PART,
             client.room_leave,
@@ -386,14 +386,14 @@ class MatrixPartMessage(MatrixGenericMessage):
         )
 
 
-class MatrixInviteMessage(MatrixGenericMessage):
+class MatrixInviteMessage(MatrixMessage):
     def __init__(self, client, room_id, user_id):
         self.room_id = room_id
 
         data = {"room_id": self.room_id,
                 "user_id": user_id}
 
-        MatrixGenericMessage.__init__(
+        MatrixMessage.__init__(
             self,
             MessageType.INVITE,
             client.room_invite,
