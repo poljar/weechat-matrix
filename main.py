@@ -32,7 +32,6 @@ from matrix.colors import Formatted
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
 from matrix.api import (
-    MatrixMessage,
     MessageType,
     matrix_login,
     MatrixSendMessage

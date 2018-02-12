@@ -25,7 +25,6 @@ from matrix.globals import W, OPTIONS, SERVERS
 
 from matrix.utf import utf8_decode
 from matrix.api import (
-    MatrixMessage,
     MessageType,
     MatrixTopicMessage,
     MatrixRedactMessage,
