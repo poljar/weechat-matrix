@@ -423,13 +423,6 @@ class MatrixRoom:
         self.encrypted = False  # type: bool
 
 
-def get_transaction_id(server):
-    # type: (MatrixServer) -> int
-    transaction_id = server.transaction_id
-    server.transaction_id += 1
-    return transaction_id
-
-
 def matrix_sync(server):
     message = MatrixSyncMessage(
         server.client,
