@@ -29,7 +29,9 @@ from matrix.api import (
     MessageType,
     MatrixTopicMessage,
     MatrixRedactMessage,
-    MatrixBacklogMessage
+    MatrixBacklogMessage,
+    MatrixJoinMessage,
+    MatrixPartMessage
 )
 from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
@@ -190,10 +192,8 @@ def matrix_command_join_cb(data, buffer, command):
             return
 
         _, room_id = split_args
-        message = MatrixMessage(
-            server,
-            OPTIONS,
-            MessageType.JOIN,
+        message = MatrixJoinMessage(
+            server.client,
             room_id=room_id
         )
         server.send_or_queue(message)
@@ -231,10 +231,8 @@ def matrix_command_part_cb(data, buffer, command):
             rooms = rooms.split(" ")
 
         for room_id in rooms:
-            message = MatrixMessage(
-                server,
-                OPTIONS,
-                MessageType.PART,
+            message = MatrixPartMessage(
+                server.client,
                 room_id=room_id
             )
             server.send_or_queue(message)

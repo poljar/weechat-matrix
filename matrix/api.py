@@ -450,6 +450,34 @@ class MatrixBacklogMessage(MatrixGenericMessage):
         )
 
 
+class MatrixJoinMessage(MatrixGenericMessage):
+    def __init__(self, client, room_id):
+        self.room_id = room_id
+
+        data = {"room_id": self.room_id}
+
+        MatrixGenericMessage.__init__(
+            self,
+            MessageType.JOIN,
+            client.room_join,
+            data
+        )
+
+
+class MatrixPartMessage(MatrixGenericMessage):
+    def __init__(self, client, room_id):
+        self.room_id = room_id
+
+        data = {"room_id": self.room_id}
+
+        MatrixGenericMessage.__init__(
+            self,
+            MessageType.PART,
+            client.room_leave,
+            data
+        )
+
+
 class MatrixUser:
     def __init__(self, name, display_name):
         self.name = name                  # type: str
