@@ -33,7 +33,6 @@ from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
 from matrix.api import (
     MessageType,
-    matrix_login,
     MatrixSendMessage
 )
 from matrix.messages import handle_http_response
@@ -332,7 +331,7 @@ def finalize_connection(server):
     server.connected = True
     server.connecting = False
 
-    matrix_login(server)
+    server.login()
 
 
 @utf8_decode

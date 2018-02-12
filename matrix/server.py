@@ -33,8 +33,8 @@ from matrix.utils import (
     create_server_buffer
 )
 from matrix.utf import utf8_decode
-from matrix.globals import W, SERVERS
-from matrix.api import MatrixClient
+from matrix.globals import W, SERVERS, OPTIONS
+from matrix.api import MatrixClient, MatrixSyncMessage, MatrixLoginMessage
 
 
 class MatrixServer:
@@ -391,6 +391,24 @@ class MatrixServer:
                        "connect_cb", self.name)
 
         return True
+
+    def sync(self):
+        message = MatrixSyncMessage(
+            self.client,
+            self.next_batch,
+            OPTIONS.sync_limit
+        )
+        self.send_queue.append(message)
+
+    def login(self):
+        # type: (MatrixServer) -> None
+        message = MatrixLoginMessage(
+            self.client,
+            self.user,
+            self.password,
+            self.device_name
+        )
+        self.send_or_queue(message)
 
 
 @utf8_decode

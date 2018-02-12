@@ -30,7 +30,6 @@ from matrix.globals import W, OPTIONS
 
 from matrix.api import (
     MessageType,
-    matrix_sync,
     MatrixRoom,
     MatrixUser
 )
@@ -687,14 +686,14 @@ def matrix_handle_message(
         server.user_id = response["user_id"]
         server.client.access_token = server.access_token
 
-        matrix_sync(server)
+        server.sync()
 
     elif message_type is MessageType.SYNC:
         next_batch = response['next_batch']
 
         # we got the same batch again, nothing to do
         if next_batch == server.next_batch:
-            matrix_sync(server)
+            server.sync()
             return
 
         room_info = response['rooms']
@@ -703,7 +702,7 @@ def matrix_handle_message(
         server.next_batch = next_batch
 
         # TODO add a delay to this
-        matrix_sync(server)
+        server.sync()
 
     elif message_type is MessageType.SEND:
         room_id = message.room_id
@@ -792,7 +791,7 @@ def handle_http_response(server, message):
     # TODO handle try again response
     elif status_code == 504:
         if message.type == MessageType.SYNC:
-            matrix_sync(server)
+            server.sync()
 
     elif status_code == 403:
         if message.type == MessageType.LOGIN:

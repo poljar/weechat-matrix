@@ -26,8 +26,6 @@ try:
 except ImportError:
     from urllib.parse import quote, urlencode
 
-from matrix.globals import OPTIONS
-
 from matrix.http import RequestType, HttpRequest
 
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
@@ -421,23 +419,3 @@ class MatrixRoom:
         self.prev_batch = ""    # type: str
         self.users = dict()     # type: Dict[str, MatrixUser]
         self.encrypted = False  # type: bool
-
-
-def matrix_sync(server):
-    message = MatrixSyncMessage(
-        server.client,
-        server.next_batch,
-        OPTIONS.sync_limit
-    )
-    server.send_queue.append(message)
-
-
-def matrix_login(server):
-    # type: (MatrixServer) -> None
-    message = MatrixLoginMessage(
-        server.client,
-        server.user,
-        server.password,
-        server.device_name
-    )
-    server.send_or_queue(message)
