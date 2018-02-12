@@ -137,7 +137,7 @@ class MatrixClient:
 
         return HttpRequest(RequestType.PUT, self.host, path, content)
 
-    def room_redact(self, room_id, event_id, reason):
+    def room_redact(self, room_id, event_id, reason=None):
         # type: (str, str, str) -> HttpRequest
         query_parameters = {"access_token": self.access_token}
         content = {}
@@ -406,6 +406,27 @@ class MatrixTopicMessage(MatrixGenericMessage):
             self,
             MessageType.TOPIC,
             client.room_topic,
+            data
+        )
+
+
+class MatrixRedactMessage(MatrixGenericMessage):
+    def __init__(self, client, room_id, event_id, reason=None):
+        self.room_id = room_id
+        self.event_id = event_id
+
+        data = {
+            "room_id": self.room_id,
+            "event_id": self.event_id
+        }
+
+        if reason:
+            data["reason"] = reason
+
+        MatrixGenericMessage.__init__(
+            self,
+            MessageType.REDACT,
+            client.room_redact,
             data
         )
 

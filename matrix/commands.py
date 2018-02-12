@@ -24,7 +24,12 @@ import matrix.globals
 from matrix.globals import W, OPTIONS, SERVERS
 
 from matrix.utf import utf8_decode
-from matrix.api import MatrixMessage, MessageType, MatrixTopicMessage
+from matrix.api import (
+    MatrixMessage,
+    MessageType,
+    MatrixTopicMessage,
+    MatrixRedactMessage
+)
 from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
 from matrix.server import MatrixServer
@@ -341,10 +346,8 @@ def matrix_redact_command_cb(data, buffer, args):
                 W.prnt("", message)
                 return W.WEECHAT_RC_OK
 
-            message = MatrixMessage(
-                server,
-                OPTIONS,
-                MessageType.REDACT,
+            message = MatrixRedactMessage(
+                server.client,
                 room_id=room_id,
                 event_id=event_id,
                 reason=reason
