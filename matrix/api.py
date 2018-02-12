@@ -307,6 +307,51 @@ class MatrixMessage:
             self.request = server.client.room_invite(self.room_id, self.user_id)
 
 
+class MatrixGenericMessage():
+    def __init__(
+            self,
+            message_type,     # type: MessageType
+            request_func,     # type: Callable[[...], HttpRequest]
+            func_args,
+    ):
+        # type: (...) -> None
+        self.type = message_type          # type: MessageType
+
+        self.request = None               # type: HttpRequest
+        self.response = None              # type: HttpResponse
+        self.decoded_response = None      # type: Dict[Any, Any]
+
+        self.creation_time = time.time()  # type: float
+        self.send_time = None             # type: float
+        self.receive_time = None          # type: float
+
+        self.request = request_func(**func_args)
+
+
+class MatrixSendMessage(MatrixGenericMessage):
+    def __init__(self, client, room_id, formatted_message):
+        self.room_id = room_id
+        self.formatted_message = formatted_message
+
+        assert self.room_id
+        assert self.formatted_message
+
+        data = {
+            "room_id": self.room_id,
+            "content": self.formatted_message.to_plain()
+        }
+
+        if self.formatted_message.is_formatted:
+            data["formatted_content"] = self.formatted_message.to_html()
+
+        MatrixGenericMessage.__init__(
+            self,
+            MessageType.SEND,
+            client.room_send_message,
+            data
+        )
+
+
 class MatrixUser:
     def __init__(self, name, display_name):
         self.name = name                  # type: str

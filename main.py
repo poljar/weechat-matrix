@@ -31,7 +31,12 @@ from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 from matrix.colors import Formatted
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
-from matrix.api import MatrixMessage, MessageType, matrix_login
+from matrix.api import (
+    MatrixMessage,
+    MessageType,
+    matrix_login,
+    MatrixSendMessage
+)
 from matrix.messages import handle_http_response
 
 # Weechat searches for the registered callbacks in the scope of the main script
@@ -409,8 +414,11 @@ def room_input_cb(server_name, buffer, input_data):
 
     formatted_data = Formatted.from_input_line(input_data)
 
-    message = MatrixMessage(server, OPTIONS, MessageType.SEND, room_id=room_id,
-                            formatted_message=formatted_data)
+    message = MatrixSendMessage(
+        server.client,
+        room_id=room_id,
+        formatted_message=formatted_data
+    )
 
     server.send_or_queue(message)
     return W.WEECHAT_RC_OK
