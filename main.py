@@ -115,7 +115,7 @@ WEECHAT_SCRIPT_LICENSE = "ISC"                                 # type: str
 
 
 def wrap_socket(server, file_descriptor):
-    # type: (MatrixServer, int) -> socket.socket
+    # type: (MatrixServer, int) -> None
     sock = None  # type: socket.socket
 
     temp_socket = socket.fromfd(

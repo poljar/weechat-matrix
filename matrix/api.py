@@ -53,6 +53,7 @@ class MatrixClient:
             access_token="",  # type: str
             user_agent=""     # type: str
     ):
+        # type: (...) -> None
         self.host = host
         self.user_agent = user_agent
         self.access_token = access_token
@@ -101,7 +102,7 @@ class MatrixClient:
         return HttpRequest(RequestType.GET, self.host, path)
 
     def room_send_message(self, room_id, content, formatted_content=None):
-        # type: (str, Dict[str, str]) -> HttpRequest
+        # type: (str, str, str) -> HttpRequest
         query_parameters = {"access_token": self.access_token}
 
         body = {

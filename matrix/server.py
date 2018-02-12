@@ -40,7 +40,7 @@ from matrix.api import MatrixClient
 class MatrixServer:
     # pylint: disable=too-many-instance-attributes
     def __init__(self, name, config_file):
-        # type: (str, weechat, weechat.config) -> None
+        # type: (str, weechat.config) -> None
         self.name = name                     # type: str
         self.user_id = ""
         self.address = ""                    # type: str
@@ -223,12 +223,12 @@ class MatrixServer:
                 strerr = error.strerror if error.strerror else "Unknown reason"
                 strerr = errno + strerr
 
-                message = ("{prefix}Error while writing to "
-                           "socket: {error}").format(
-                               prefix=W.prefix("network"),
-                               error=strerr)
+                error_message = ("{prefix}Error while writing to "
+                                 "socket: {error}").format(
+                                     prefix=W.prefix("network"),
+                                     error=strerr)
 
-                server_buffer_prnt(self, message)
+                server_buffer_prnt(self, error_message)
                 server_buffer_prnt(
                     self,
                     ("{prefix}matrix: disconnecting from server...").format(
@@ -266,7 +266,7 @@ class MatrixServer:
         self.current_message.send_time = time.time()
         self.receive_queue.append(self.current_message)
 
-        self.send_buffer = ""
+        self.send_buffer = b""
         self.current_message = None
 
 
@@ -324,7 +324,7 @@ class MatrixServer:
                 pass
 
     def disconnect(self, reconnect=True):
-        # type: (MatrixServer) -> None
+        # type: (bool) -> None
         if self.fd_hook:
             W.unhook(self.fd_hook)
 

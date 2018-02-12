@@ -149,7 +149,7 @@ def matrix_config_init(config_file):
 
 
 def matrix_config_read(config):
-    # type: () -> bool
+    # type: (str) -> bool
     return_code = W.config_read(config)
     if return_code == W.WEECHAT_CONFIG_READ_OK:
         return True

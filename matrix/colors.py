@@ -39,7 +39,7 @@ FormattedString = namedtuple(
 
 class Formatted():
     def __init__(self, substrings):
-        # type: List[FormattedString] -> None
+        # type: (List[FormattedString]) -> None
         self.substrings = substrings
 
 
