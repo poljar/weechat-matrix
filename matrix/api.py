@@ -348,6 +348,26 @@ class MatrixLoginMessage(MatrixGenericMessage):
         )
 
 
+class MatrixSyncMessage(MatrixGenericMessage):
+    def __init__(self, client, next_batch=None, limit=None):
+        data = {}
+
+        if next_batch:
+            data["next_batch"] = next_batch
+
+        if limit:
+            data["sync_filter"] = {
+                "room": {"timeline": {"limit": limit}}
+            }
+
+        MatrixGenericMessage.__init__(
+            self,
+            MessageType.SYNC,
+            client.sync,
+            data
+        )
+
+
 class MatrixSendMessage(MatrixGenericMessage):
     def __init__(self, client, room_id, formatted_message):
         self.room_id = room_id
@@ -402,7 +422,11 @@ def get_transaction_id(server):
 
 
 def matrix_sync(server):
-    message = MatrixMessage(server, OPTIONS, MessageType.SYNC)
+    message = MatrixSyncMessage(
+        server.client,
+        server.next_batch,
+        OPTIONS.sync_limit
+    )
     server.send_queue.append(message)
 
 
