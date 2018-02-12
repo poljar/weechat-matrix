@@ -24,7 +24,7 @@ import matrix.globals
 from matrix.globals import W, OPTIONS, SERVERS
 
 from matrix.utf import utf8_decode
-from matrix.api import MatrixMessage, MessageType
+from matrix.api import MatrixMessage, MessageType, MatrixTopicMessage
 from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
 from matrix.server import MatrixServer
@@ -907,10 +907,8 @@ def matrix_command_topic_cb(data, buffer, command):
 
                 return W.WEECHAT_RC_OK_EAT
 
-            message = MatrixMessage(
-                server,
-                OPTIONS,
-                MessageType.TOPIC,
+            message = MatrixTopicMessage(
+                server.client,
                 room_id=room_id,
                 topic=topic
             )

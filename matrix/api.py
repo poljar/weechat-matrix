@@ -392,6 +392,24 @@ class MatrixSendMessage(MatrixGenericMessage):
         )
 
 
+class MatrixTopicMessage(MatrixGenericMessage):
+    def __init__(self, client, room_id, topic):
+        self.room_id = room_id
+        self.topic = topic
+
+        data = {
+            "room_id": self.room_id,
+            "topic": self.topic
+        }
+
+        MatrixGenericMessage.__init__(
+            self,
+            MessageType.TOPIC,
+            client.room_topic,
+            data
+        )
+
+
 class MatrixUser:
     def __init__(self, name, display_name):
         self.name = name                  # type: str
