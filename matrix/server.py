@@ -478,6 +478,7 @@ def matrix_timer_cb(server_name, remaining_calls):
             server.reconnect_time and
             current_time >= (server.reconnect_time + server.reconnect_delay)):
         server.reconnect()
+        return W.WEECHAT_RC_OK
 
     if not server.connected:
         return W.WEECHAT_RC_OK
@@ -494,6 +495,7 @@ def matrix_timer_cb(server_name, remaining_calls):
         if server.lag > 300000:
             server.disconnect()
             server.schedule_reconnect()
+            return W.WEECHAT_RC_OK
 
     while server.send_queue:
         message = server.send_queue.popleft()
