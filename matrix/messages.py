@@ -34,7 +34,12 @@ from matrix.api import (
     MatrixUser
 )
 
-from matrix.utils import server_buffer_prnt, tags_from_line_data, prnt_debug
+from matrix.utils import (
+    server_buffer_prnt,
+    tags_from_line_data,
+    prnt_debug,
+    color_for_tags
+)
 from matrix.plugin_options import RedactType, DebugType
 
 
@@ -169,13 +174,6 @@ def date_from_age(age):
     now = time.time()
     date = int(now - (age / 1000))
     return date
-
-
-def color_for_tags(color):
-    if color == "weechat.color.chat_nick_self":
-        option = W.config_get(color)
-        return W.config_string(option)
-    return color
 
 
 def matrix_handle_room_text_message(server, room_id, event, old=False):
@@ -702,30 +700,8 @@ def matrix_handle_message(
         server.sync()
 
     elif message_type is MessageType.SEND:
-        room_id = message.room_id
-        author = server.user
-        weechat_message = message.formatted_message.to_weechat()
-
-        date = int(time.time())
-        # TODO the event_id can be missing if sending has failed for
-        # some reason
-        event_id = response["event_id"]
-
-        # This message will be part of the next sync, we already printed it out
-        # so ignore it in the sync.
-        server.ignore_event_list.append(event_id)
-
-        tag = ("notify_none,no_highlight,self_msg,log1,nick_{a},"
-               "prefix_nick_{color},matrix_id_{event_id},"
-               "matrix_message").format(
-                   a=author,
-                   color=color_for_tags("weechat.color.chat_nick_self"),
-                   event_id=event_id)
-
-        data = "{author}\t{msg}".format(author=author, msg=weechat_message)
-
-        buf = server.buffers[room_id]
-        W.prnt_date_tags(buf, date, tag, data)
+        event = message.event
+        event.execute()
 
     elif message_type == MessageType.ROOM_MSG:
         # Response has no messages, that is we already got the oldest message

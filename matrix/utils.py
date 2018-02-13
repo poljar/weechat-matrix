@@ -112,3 +112,10 @@ def server_buffer_set_title(server):
         ip=ip_string)
 
     W.buffer_set(server.server_buffer, "title", title)
+
+
+def color_for_tags(color):
+    if color == "weechat.color.chat_nick_self":
+        option = W.config_get(color)
+        return W.config_string(option)
+    return color

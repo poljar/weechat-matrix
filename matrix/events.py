@@ -17,7 +17,10 @@
 from __future__ import unicode_literals
 from builtins import str
 
+import time
+
 from matrix.globals import W, OPTIONS
+from matrix.utils import color_for_tags
 
 
 class MatrixEvent():
@@ -79,3 +82,59 @@ class MatrixLoginEvent(MatrixEvent):
                     server,
                     "Error logging in: Invalid JSON response from server.",
                     fatal=True)
+
+
+class MatrixSendEvent(MatrixEvent):
+    def __init__(self, server, room_id, event_id, message):
+        self.room_id = room_id
+        self.event_id = event_id
+        self.message = message
+        MatrixEvent.__init__(self, server)
+
+    def execute(self):
+        room_id = self.room_id
+        author = self.server.user
+        event_id = self.event_id
+        weechat_message = self.message.to_weechat()
+
+        date = int(time.time())
+
+        # This message will be part of the next sync, we already printed it out
+        # so ignore it in the sync.
+        self.server.ignore_event_list.append(event_id)
+
+        tag = ("notify_none,no_highlight,self_msg,log1,nick_{a},"
+               "prefix_nick_{color},matrix_id_{event_id},"
+               "matrix_message").format(
+                   a=author,
+                   color=color_for_tags("weechat.color.chat_nick_self"),
+                   event_id=event_id)
+
+        message = "{author}\t{msg}".format(author=author, msg=weechat_message)
+
+        buf = self.server.buffers[room_id]
+        W.prnt_date_tags(buf, date, tag, message)
+
+    @classmethod
+    def from_dict(cls, server, room_id, message, parsed_dict):
+        try:
+            return cls(
+                server,
+                room_id,
+                parsed_dict["event_id"],
+                message
+            )
+        except KeyError:
+            try:
+                message = "Error sending message: {}.".format(parsed_dict["error"])
+                return MatrixErrorEvent(
+                    server,
+                    message,
+                    fatal=False
+                )
+            except KeyError:
+                return MatrixErrorEvent(
+                    server,
+                    ("Error sending message: Invalid JSON response "
+                     "from server."),
+                    fatal=False)
