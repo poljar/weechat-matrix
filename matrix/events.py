@@ -28,7 +28,24 @@ class MatrixEvent():
         pass
 
 
-class MatrixLoginEvent():
+class MatrixErrorEvent(MatrixEvent):
+    def __init__(self, server, error_message, fatal=False):
+        self.error_message = error_message
+        self.fatal = fatal
+        MatrixEvent.__init__(self, server)
+
+    def execute(self):
+        message = ("{prefix}matrix: {error}").format(
+            prefix=W.prefix("error"),
+            error=self.error_message)
+
+        W.prnt(self.server.server_buffer, message)
+
+        if self.fatal:
+            self.server.disconnect(reconnect=False)
+
+
+class MatrixLoginEvent(MatrixEvent):
     def __init__(self, server, user_id, access_token):
         self.user_id = user_id
         self.access_token = access_token
@@ -40,3 +57,25 @@ class MatrixLoginEvent():
         self.server.client.access_token = self.access_token
 
         self.server.sync()
+
+    @classmethod
+    def from_dict(cls, server, parsed_dict):
+        try:
+            return cls(
+                server,
+                parsed_dict["user_id"],
+                parsed_dict["access_token"]
+            )
+        except KeyError:
+            try:
+                message = "Error logging in: {}.".format(parsed_dict["error"])
+                return MatrixErrorEvent(
+                    server,
+                    message,
+                    fatal=True
+                )
+            except KeyError:
+                return MatrixErrorEvent(
+                    server,
+                    "Error logging in: Invalid JSON response from server.",
+                    fatal=True)

@@ -682,14 +682,8 @@ def matrix_handle_message(
     response = message.decoded_response
 
     if message_type is MessageType.LOGIN:
-        ret, event = message.to_event(server)
-
-        if ret:
-            event.execute()
-        else:
-            message = ("{prefix}Error while parsing login response.")
-            W.prnt(server.server_buffer, message)
-            server.disconnect(reconnect=False)
+        event = message.event
+        event.execute()
 
     elif message_type is MessageType.SYNC:
         next_batch = response['next_batch']
@@ -765,7 +759,7 @@ def handle_http_response(server, message):
 
     if ('content-type' in message.response.headers and
             message.response.headers['content-type'] == 'application/json'):
-        ret, error = message.decode_body()
+        ret, error = message.decode_body(server)
 
         if not ret:
             # TODO try to resend the message if decoding has failed?
@@ -791,19 +785,9 @@ def handle_http_response(server, message):
 
     elif status_code == 403:
         if message.type == MessageType.LOGIN:
-            response = message.response.decoded_response
-            reason = ("." if not response or not response["error"] else
-                      ": {r}.".format(r=response["error"]))
+            event = message.event
+            event.execute()
 
-            error_message = ("{prefix}Login error{reason}").format(
-                prefix=W.prefix("error"),
-                reason=reason)
-            server_buffer_prnt(server, error_message)
-
-            W.unhook(server.timer_hook)
-            server.timer_hook = None
-
-            server.disconnect()
         elif message.type == MessageType.TOPIC:
             response = message.decoded_response
             reason = ("." if not response or not response["error"] else

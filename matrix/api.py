@@ -20,6 +20,7 @@ from builtins import str
 import time
 import json
 from enum import Enum, unique
+from functools import partial
 
 try:
     from urllib import quote, urlencode
@@ -232,10 +233,11 @@ class MatrixMessage():
         self.creation_time = time.time()  # type: float
         self.send_time = None             # type: float
         self.receive_time = None          # type: float
+        self.event = None
 
         self.request = request_func(**func_args)
 
-    def decode_body(self):
+    def decode_body(self, server):
         try:
             self.decoded_response = json.loads(
                 self.response.body,
@@ -244,9 +246,6 @@ class MatrixMessage():
             return (True, None)
         except Exception as error:
             return (False, error)
-
-    def to_event():
-        pass
 
 
 class MatrixLoginMessage(MatrixMessage):
@@ -267,18 +266,23 @@ class MatrixLoginMessage(MatrixMessage):
             data
         )
 
-    def to_event(self, server):
-        response = self.decoded_response
+    def decode_body(self, server):
+        object_hook = partial(
+            MatrixEvents.MatrixLoginEvent.from_dict,
+            server
+        )
 
         try:
-            access_token = response["access_token"]
-            user_id = response["user_id"]
-
-            return (
-                True,
-                MatrixEvents.MatrixLoginEvent(server, user_id, access_token)
+            event = json.loads(
+                self.response.body,
+                encoding='utf-8',
+                object_hook=object_hook
             )
-        except KeyError as error:
+            self.event = event
+
+            return (True, None)
+
+        except json.decoder.JSONDecodeError as error:
             return (False, error)
 
 
