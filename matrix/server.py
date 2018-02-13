@@ -336,6 +336,8 @@ class MatrixServer:
         self.access_token = ""
         self.receive_queue.clear()
 
+        self.lag = 0
+        W.bar_item_update("lag")
         self.reconnect_delay = 0
         self.reconnect_time = None
 
