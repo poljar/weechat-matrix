@@ -234,6 +234,19 @@ class MatrixMessage():
 
         self.request = request_func(**func_args)
 
+    def decode_body(self):
+        try:
+            self.decoded_response = json.loads(
+                self.response.body,
+                encoding='utf-8'
+            )
+            return (True, None)
+        except Exception as error:
+            return (False, error)
+
+    def to_event():
+        pass
+
 
 class MatrixLoginMessage(MatrixMessage):
     def __init__(self, client, user, password, device_name, device_id=None):

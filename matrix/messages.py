@@ -760,29 +760,22 @@ def handle_http_response(server, message):
 
     assert message.response
 
-    status_code = message.response.status
+    if ('content-type' in message.response.headers and
+            message.response.headers['content-type'] == 'application/json'):
+        ret, error = message.decode_body()
 
-    def decode_json(server, json_string):
-        try:
-            return json.loads(json_string, encoding='utf-8')
-        except Exception as error:
+        if not ret:
+            # TODO try to resend the message if decoding has failed?
             message = ("{prefix}matrix: Error decoding json response from "
                        "server: {error}").format(
                            prefix=W.prefix("error"),
                            error=error)
 
             W.prnt(server.server_buffer, message)
-            return None
+            return
 
+    status_code = message.response.status
     if status_code == 200:
-        message.decoded_response = decode_json(server, message.response.body)
-
-        # if not response:
-        #     # Resend the message
-        #     message.response = None
-        #     send_or_queue(server, message)
-        #     return
-
         matrix_handle_message(
             server,
             message,
@@ -795,7 +788,7 @@ def handle_http_response(server, message):
 
     elif status_code == 403:
         if message.type == MessageType.LOGIN:
-            response = decode_json(server, message.response.body)
+            response = message.response.decoded_response
             reason = ("." if not response or not response["error"] else
                       ": {r}.".format(r=response["error"]))
 
@@ -809,7 +802,7 @@ def handle_http_response(server, message):
 
             server.disconnect()
         elif message.type == MessageType.TOPIC:
-            response = decode_json(server, message.response.body)
+            response = message.decoded_response
             reason = ("." if not response or not response["error"] else
                       ": {r}.".format(r=response["error"]))
 
