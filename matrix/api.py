@@ -247,6 +247,20 @@ class MatrixMessage():
         except Exception as error:
             return (False, error)
 
+    def _decode(self, server, object_hook):
+        try:
+            event = json.loads(
+                self.response.body,
+                encoding='utf-8',
+                object_hook=object_hook
+            )
+            self.event = event
+
+            return (True, None)
+
+        except json.decoder.JSONDecodeError as error:
+            return (False, error)
+
 
 class MatrixLoginMessage(MatrixMessage):
     def __init__(self, client, user, password, device_name, device_id=None):
@@ -272,18 +286,7 @@ class MatrixLoginMessage(MatrixMessage):
             server
         )
 
-        try:
-            event = json.loads(
-                self.response.body,
-                encoding='utf-8',
-                object_hook=object_hook
-            )
-            self.event = event
-
-            return (True, None)
-
-        except json.decoder.JSONDecodeError as error:
-            return (False, error)
+        return self._decode(server, object_hook)
 
 
 class MatrixSyncMessage(MatrixMessage):
