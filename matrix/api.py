@@ -27,6 +27,7 @@ except ImportError:
     from urllib.parse import quote, urlencode
 
 from matrix.http import RequestType, HttpRequest
+import matrix.events as MatrixEvents
 
 MATRIX_API_PATH = "/_matrix/client/r0"  # type: str
 
@@ -265,6 +266,20 @@ class MatrixLoginMessage(MatrixMessage):
             client.login,
             data
         )
+
+    def to_event(self, server):
+        response = self.decoded_response
+
+        try:
+            access_token = response["access_token"]
+            user_id = response["user_id"]
+
+            return (
+                True,
+                MatrixEvents.MatrixLoginEvent(server, user_id, access_token)
+            )
+        except KeyError as error:
+            return (False, error)
 
 
 class MatrixSyncMessage(MatrixMessage):

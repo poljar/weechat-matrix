@@ -682,11 +682,14 @@ def matrix_handle_message(
     response = message.decoded_response
 
     if message_type is MessageType.LOGIN:
-        server.access_token = response["access_token"]
-        server.user_id = response["user_id"]
-        server.client.access_token = server.access_token
+        ret, event = message.to_event(server)
 
-        server.sync()
+        if ret:
+            event.execute()
+        else:
+            message = ("{prefix}Error while parsing login response.")
+            W.prnt(server.server_buffer, message)
+            server.disconnect(reconnect=False)
 
     elif message_type is MessageType.SYNC:
         next_batch = response['next_batch']
