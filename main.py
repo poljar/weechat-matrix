@@ -390,7 +390,7 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
             'Unexpected error: {status}'.format(status=status_value)
         )
 
-    server.schedule_reconnect()
+    server.disconnect(reconnect=True)
     return W.WEECHAT_RC_OK
 
 
