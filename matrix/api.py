@@ -360,6 +360,16 @@ class MatrixTopicMessage(MatrixMessage):
             data
         )
 
+    def decode_body(self, server):
+        object_hook = partial(
+            MatrixEvents.MatrixTopicEvent.from_dict,
+            server,
+            self.room_id,
+            self.topic,
+        )
+
+        return self._decode(server, object_hook)
+
 
 class MatrixRedactMessage(MatrixMessage):
     def __init__(self, client, room_id, event_id, reason=None):

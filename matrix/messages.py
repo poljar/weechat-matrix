@@ -683,6 +683,10 @@ def matrix_handle_message(
         event = message.event
         event.execute()
 
+    elif message_type is MessageType.TOPIC:
+        event = message.event
+        event.execute()
+
     elif message_type is MessageType.SYNC:
         next_batch = response['next_batch']
 
@@ -717,8 +721,7 @@ def matrix_handle_message(
         room.prev_batch = response['end']
 
     # Nothing to do here, we'll handle topic changes and redactions in the sync
-    elif (message_type == MessageType.TOPIC or
-          message_type == MessageType.REDACT):
+    elif message_type == MessageType.REDACT:
         pass
 
     else:
@@ -765,14 +768,9 @@ def handle_http_response(server, message):
             event.execute()
 
         elif message.type == MessageType.TOPIC:
-            response = message.decoded_response
-            reason = ("." if not response or not response["error"] else
-                      ": {r}.".format(r=response["error"]))
+            event = message.event
+            event.execute()
 
-            error_message = ("{prefix}Can't set topic{reason}").format(
-                prefix=W.prefix("network"),
-                reason=reason)
-            server_buffer_prnt(server, error_message)
         else:
             error_message = ("{prefix}Unhandled 403 error, please inform the "
                              "developers about this: {error}").format(

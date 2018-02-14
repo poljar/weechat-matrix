@@ -143,3 +143,23 @@ class MatrixSendEvent(MatrixEvent):
                 False,
                 parsed_dict
             )
+
+
+class MatrixTopicEvent(MatrixEvent):
+    def __init__(self, server, room_id, event_id, topic):
+        self.room_id = room_id
+        self.topic = topic
+        self.event_id = event_id
+        MatrixEvent.__init__(self, server)
+
+    @classmethod
+    def from_dict(cls, server, room_id, topic, parsed_dict):
+        try:
+            return cls(server, room_id, parsed_dict["event_id"], topic)
+        except KeyError:
+            return MatrixErrorEvent.from_dict(
+                server,
+                "Error setting topic",
+                False,
+                parsed_dict
+            )
