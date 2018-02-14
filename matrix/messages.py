@@ -775,6 +775,14 @@ def handle_http_response(server, message):
             event = message.event
             event.execute()
 
+        elif message.type == MessageType.SEND:
+            event = message.event
+            event.execute()
+
+        elif message.type == MessageType.JOIN:
+            event = message.event
+            event.execute()
+
         else:
             error_message = ("{prefix}Unhandled 403 error, please inform the "
                              "developers about this: {error}").format(
