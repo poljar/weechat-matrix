@@ -24,6 +24,10 @@ from matrix.utils import color_for_tags
 
 def sanitize_id(string):
     # type: (unicode) -> unicode
+
+    if not isinstance(string, str):
+        raise TypeError
+
     remap = {
         ord('\b'): None,
         ord('\f'): None,
@@ -100,7 +104,7 @@ class MatrixLoginEvent(MatrixEvent):
                 sanitize_id(parsed_dict["user_id"]),
                 sanitize_id(parsed_dict["access_token"])
             )
-        except KeyError:
+        except (KeyError, TypeError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error logging in",
@@ -149,7 +153,7 @@ class MatrixSendEvent(MatrixEvent):
                 sanitize_id(parsed_dict["event_id"]),
                 message
             )
-        except KeyError:
+        except (KeyError, TypeError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error sending message",
@@ -174,7 +178,7 @@ class MatrixTopicEvent(MatrixEvent):
                 sanitize_id(parsed_dict["event_id"]),
                 topic
             )
-        except KeyError:
+        except (KeyError, TypeError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error setting topic",
@@ -199,7 +203,7 @@ class MatrixRedactEvent(MatrixEvent):
                 sanitize_id(parsed_dict["event_id"]),
                 reason
             )
-        except KeyError:
+        except (KeyError, TypeError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error redacting message",
@@ -222,7 +226,7 @@ class MatrixJoinEvent(MatrixEvent):
                 room_id,
                 sanitize_id(parsed_dict["room_id"]),
             )
-        except KeyError:
+        except (KeyError, TypeError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error joining room",
