@@ -47,6 +47,24 @@ class MatrixErrorEvent(MatrixEvent):
         if self.fatal:
             self.server.disconnect(reconnect=False)
 
+    @classmethod
+    def from_dict(cls, server, error_prefix, fatal, parsed_dict):
+        try:
+            message = "{prefix}: {error}.".format(
+                prefix=error_prefix,
+                error=parsed_dict["error"])
+            return cls(
+                server,
+                message,
+                fatal=fatal
+            )
+        except KeyError:
+            return cls(
+                server,
+                ("{prefix}: Invalid JSON response "
+                 "from server.").format(prefix=error_prefix),
+                fatal=fatal)
+
 
 class MatrixLoginEvent(MatrixEvent):
     def __init__(self, server, user_id, access_token):
@@ -70,18 +88,12 @@ class MatrixLoginEvent(MatrixEvent):
                 parsed_dict["access_token"]
             )
         except KeyError:
-            try:
-                message = "Error logging in: {}.".format(parsed_dict["error"])
-                return MatrixErrorEvent(
-                    server,
-                    message,
-                    fatal=True
-                )
-            except KeyError:
-                return MatrixErrorEvent(
-                    server,
-                    "Error logging in: Invalid JSON response from server.",
-                    fatal=True)
+            return MatrixErrorEvent.from_dict(
+                server,
+                "Error logging in",
+                True,
+                parsed_dict
+            )
 
 
 class MatrixSendEvent(MatrixEvent):
@@ -125,16 +137,9 @@ class MatrixSendEvent(MatrixEvent):
                 message
             )
         except KeyError:
-            try:
-                message = "Error sending message: {}.".format(parsed_dict["error"])
-                return MatrixErrorEvent(
-                    server,
-                    message,
-                    fatal=False
-                )
-            except KeyError:
-                return MatrixErrorEvent(
-                    server,
-                    ("Error sending message: Invalid JSON response "
-                     "from server."),
-                    fatal=False)
+            return MatrixErrorEvent.from_dict(
+                server,
+                "Error sending message",
+                True,
+                parsed_dict
+            )
