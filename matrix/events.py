@@ -239,7 +239,7 @@ class MatrixPartEvent(MatrixEvent):
     @classmethod
     def from_dict(cls, server, room_id, parsed_dict):
         try:
-            if parsed_dict is {}:
+            if parsed_dict == {}:
                 return cls(
                     server,
                     room_id)
