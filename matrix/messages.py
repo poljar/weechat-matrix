@@ -687,6 +687,22 @@ def matrix_handle_message(
         event = message.event
         event.execute()
 
+    elif message_type is MessageType.JOIN:
+        event = message.event
+        event.execute()
+
+    elif message_type is MessageType.PART:
+        event = message.event
+        event.execute()
+
+    elif message_type is MessageType.SEND:
+        event = message.event
+        event.execute()
+
+    elif message_type == MessageType.REDACT:
+        event = message.event
+        event.execute()
+
     elif message_type is MessageType.SYNC:
         next_batch = response['next_batch']
 
@@ -703,10 +719,6 @@ def matrix_handle_message(
         # TODO add a delay to this
         server.sync()
 
-    elif message_type is MessageType.SEND:
-        event = message.event
-        event.execute()
-
     elif message_type == MessageType.ROOM_MSG:
         # Response has no messages, that is we already got the oldest message
         # in a previous request, nothing to do
@@ -719,10 +731,6 @@ def matrix_handle_message(
         matrix_handle_old_messages(server, room_id, response['chunk'])
 
         room.prev_batch = response['end']
-
-    elif message_type == MessageType.REDACT:
-        event = message.event
-        event.execute()
 
     else:
         server_buffer_prnt(
@@ -780,6 +788,10 @@ def handle_http_response(server, message):
             event.execute()
 
         elif message.type == MessageType.JOIN:
+            event = message.event
+            event.execute()
+
+        elif message.type == MessageType.PART:
             event = message.event
             event.execute()
 

@@ -209,9 +209,9 @@ class MatrixRedactEvent(MatrixEvent):
 
 
 class MatrixJoinEvent(MatrixEvent):
-    def __init__(self, server, room_id, event_id):
+    def __init__(self, server, room, room_id):
+        self.room = room
         self.room_id = room_id
-        self.event_id = event_id
         MatrixEvent.__init__(self, server)
 
     @classmethod
@@ -220,12 +220,35 @@ class MatrixJoinEvent(MatrixEvent):
             return cls(
                 server,
                 room_id,
-                sanitize_id(parsed_dict["event_id"]),
+                sanitize_id(parsed_dict["room_id"]),
             )
         except KeyError:
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error joining room",
+                False,
+                parsed_dict
+            )
+
+
+class MatrixPartEvent(MatrixEvent):
+    def __init__(self, server, room_id):
+        self.room_id = room_id
+        MatrixEvent.__init__(self, server)
+
+    @classmethod
+    def from_dict(cls, server, room_id, parsed_dict):
+        try:
+            if parsed_dict is {}:
+                return cls(
+                    server,
+                    room_id)
+
+            raise KeyError
+        except KeyError:
+            return MatrixErrorEvent.from_dict(
+                server,
+                "Error leaving room",
                 False,
                 parsed_dict
             )

@@ -183,7 +183,7 @@ class MatrixClient:
     def room_join(self, room_id):
         query_parameters = {"access_token": self.access_token}
 
-        path = ("{api}/rooms/{room_id}/join?"
+        path = ("{api}/join/{room_id}?"
                 "{query_parameters}").format(
                     api=MATRIX_API_PATH,
                     room_id=quote(room_id),
@@ -457,6 +457,15 @@ class MatrixPartMessage(MatrixMessage):
             client.room_leave,
             data
         )
+
+    def decode_body(self, server):
+        object_hook = partial(
+            MatrixEvents.MatrixPartEvent.from_dict,
+            server,
+            self.room_id
+        )
+
+        return self._decode(server, object_hook)
 
 
 class MatrixInviteMessage(MatrixMessage):
