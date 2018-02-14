@@ -720,9 +720,9 @@ def matrix_handle_message(
 
         room.prev_batch = response['end']
 
-    # Nothing to do here, we'll handle topic changes and redactions in the sync
     elif message_type == MessageType.REDACT:
-        pass
+        event = message.event
+        event.execute()
 
     else:
         server_buffer_prnt(
@@ -768,6 +768,10 @@ def handle_http_response(server, message):
             event.execute()
 
         elif message.type == MessageType.TOPIC:
+            event = message.event
+            event.execute()
+
+        elif message.type == MessageType.REDACT:
             event = message.event
             event.execute()
 

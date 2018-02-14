@@ -375,6 +375,7 @@ class MatrixRedactMessage(MatrixMessage):
     def __init__(self, client, room_id, event_id, reason=None):
         self.room_id = room_id
         self.event_id = event_id
+        self.reason = reason
 
         data = {
             "room_id": self.room_id,
@@ -390,6 +391,16 @@ class MatrixRedactMessage(MatrixMessage):
             client.room_redact,
             data
         )
+
+    def decode_body(self, server):
+        object_hook = partial(
+            MatrixEvents.MatrixRedactEvent.from_dict,
+            server,
+            self.room_id,
+            self.reason,
+        )
+
+        return self._decode(server, object_hook)
 
 
 class MatrixBacklogMessage(MatrixMessage):
