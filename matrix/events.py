@@ -252,3 +252,28 @@ class MatrixPartEvent(MatrixEvent):
                 False,
                 parsed_dict
             )
+
+
+class MatrixInviteEvent(MatrixEvent):
+    def __init__(self, server, room_id, user_id):
+        self.room_id = room_id
+        self.user_id = user_id
+        MatrixEvent.__init__(self, server)
+
+    @classmethod
+    def from_dict(cls, server, room_id, user_id, parsed_dict):
+        try:
+            if parsed_dict == {}:
+                return cls(
+                    server,
+                    room_id,
+                    user_id)
+
+            raise KeyError
+        except KeyError:
+            return MatrixErrorEvent.from_dict(
+                server,
+                "Error inviting user",
+                False,
+                parsed_dict
+            )

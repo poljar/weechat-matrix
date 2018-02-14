@@ -471,9 +471,10 @@ class MatrixPartMessage(MatrixMessage):
 class MatrixInviteMessage(MatrixMessage):
     def __init__(self, client, room_id, user_id):
         self.room_id = room_id
+        self.user_id = user_id
 
         data = {"room_id": self.room_id,
-                "user_id": user_id}
+                "user_id": self.user_id}
 
         MatrixMessage.__init__(
             self,
@@ -481,6 +482,16 @@ class MatrixInviteMessage(MatrixMessage):
             client.room_invite,
             data
         )
+
+    def decode_body(self, server):
+        object_hook = partial(
+            MatrixEvents.MatrixInviteEvent.from_dict,
+            server,
+            self.room_id,
+            self.user_id
+        )
+
+        return self._decode(server, object_hook)
 
 
 class MatrixUser:

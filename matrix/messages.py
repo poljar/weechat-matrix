@@ -695,6 +695,10 @@ def matrix_handle_message(
         event = message.event
         event.execute()
 
+    elif message_type is MessageType.INVITE:
+        event = message.event
+        event.execute()
+
     elif message_type is MessageType.SEND:
         event = message.event
         event.execute()
@@ -792,6 +796,10 @@ def handle_http_response(server, message):
             event.execute()
 
         elif message.type == MessageType.PART:
+            event = message.event
+            event.execute()
+
+        elif message.type == MessageType.INVITE:
             event = message.event
             event.execute()
 
