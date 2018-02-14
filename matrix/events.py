@@ -140,6 +140,6 @@ class MatrixSendEvent(MatrixEvent):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error sending message",
-                True,
+                False,
                 parsed_dict
             )
