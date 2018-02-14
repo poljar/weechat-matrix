@@ -435,6 +435,15 @@ class MatrixJoinMessage(MatrixMessage):
             data
         )
 
+    def decode_body(self, server):
+        object_hook = partial(
+            MatrixEvents.MatrixJoinEvent.from_dict,
+            server,
+            self.room_id
+        )
+
+        return self._decode(server, object_hook)
+
 
 class MatrixPartMessage(MatrixMessage):
     def __init__(self, client, room_id):

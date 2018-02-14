@@ -782,6 +782,18 @@ def handle_http_response(server, message):
                                  error=message.response.body)
             server_buffer_prnt(server, error_message)
 
+    elif status_code == 404:
+        if message.type == MessageType.JOIN:
+            event = message.event
+            event.execute()
+
+        else:
+            error_message = ("{prefix}Unhandled 404 error, please inform the "
+                             "developers about this: {error}").format(
+                                 prefix=W.prefix("error"),
+                                 error=message.response.body)
+            server_buffer_prnt(server, error_message)
+
     else:
         server_buffer_prnt(
             server,
