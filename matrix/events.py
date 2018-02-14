@@ -22,6 +22,19 @@ import time
 from matrix.globals import W, OPTIONS
 from matrix.utils import color_for_tags
 
+def sanitize_id(string):
+    # type: (unicode) -> unicode
+    remap = {
+        ord('\b'): None,
+        ord('\f'): None,
+        ord('\n'): None,
+        ord('\r'): None,
+        ord('\t'): None,
+        ord('\0'): None
+    }
+
+    return string.translate(remap)
+
 
 class MatrixEvent():
     def __init__(self, server):
@@ -84,8 +97,8 @@ class MatrixLoginEvent(MatrixEvent):
         try:
             return cls(
                 server,
-                parsed_dict["user_id"],
-                parsed_dict["access_token"]
+                sanitize_id(parsed_dict["user_id"]),
+                sanitize_id(parsed_dict["access_token"])
             )
         except KeyError:
             return MatrixErrorEvent.from_dict(
@@ -133,7 +146,7 @@ class MatrixSendEvent(MatrixEvent):
             return cls(
                 server,
                 room_id,
-                parsed_dict["event_id"],
+                sanitize_id(parsed_dict["event_id"]),
                 message
             )
         except KeyError:
@@ -155,7 +168,12 @@ class MatrixTopicEvent(MatrixEvent):
     @classmethod
     def from_dict(cls, server, room_id, topic, parsed_dict):
         try:
-            return cls(server, room_id, parsed_dict["event_id"], topic)
+            return cls(
+                server,
+                room_id,
+                sanitize_id(parsed_dict["event_id"]),
+                topic
+            )
         except KeyError:
             return MatrixErrorEvent.from_dict(
                 server,
