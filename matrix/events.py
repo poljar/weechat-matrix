@@ -63,7 +63,7 @@ class MatrixErrorEvent(MatrixEvent):
     @classmethod
     def from_dict(cls, server, error_prefix, fatal, parsed_dict):
         try:
-            message = "{prefix}: {error}.".format(
+            message = "{prefix}: {error}".format(
                 prefix=error_prefix,
                 error=parsed_dict["error"])
             return cls(
