@@ -257,11 +257,6 @@ def receive_cb(server_name, file_descriptor):
 
             server.disconnect()
 
-            # Queue the failed message for resending
-            if server.receive_queue:
-                message = server.receive_queue.popleft()
-                server.send_queue.appendleft(message)
-
             return W.WEECHAT_RC_OK
 
         if not data:
@@ -273,11 +268,6 @@ def receive_cb(server_name, file_descriptor):
                 server,
                 ("{prefix}matrix: disconnecting from server...").format(
                     prefix=W.prefix("network")))
-
-            # Queue the failed message for resending
-            if server.receive_queue:
-                message = server.receive_queue.popleft()
-                server.send_queue.appendleft(message)
 
             server.disconnect()
             break

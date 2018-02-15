@@ -334,6 +334,7 @@ class MatrixServer:
         self.socket = None
         self.connected = False
         self.access_token = ""
+        self.send_queue.clear()
         self.receive_queue.clear()
 
         self.lag = 0
