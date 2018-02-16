@@ -31,9 +31,9 @@ from matrix.utils import (
 )
 from matrix.colors import Formatted
 
-def sanitize_id(string):
-    # type: (unicode) -> unicode
 
+def sanitize_id(string):
+    # type: (str) -> str
     if not isinstance(string, str):
         raise TypeError
 
