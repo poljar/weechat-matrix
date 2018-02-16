@@ -119,3 +119,64 @@ def color_for_tags(color):
         option = W.config_get(color)
         return W.config_string(option)
     return color
+
+
+def date_from_age(age):
+    # type: (float) -> int
+    now = time.time()
+    date = int(now - (age / 1000))
+    return date
+
+
+def strip_matrix_server(string):
+    # type: (str) -> str
+    return string.rsplit(":", 1)[0]
+
+
+def shorten_sender(sender):
+    # type: (str) -> str
+    return strip_matrix_server(sender)[1:]
+
+
+def sender_to_nick_and_color(room, sender):
+    nick = sender
+    nick_color_name = "default"
+
+    if sender in room.users:
+        user = room.users[sender]
+        nick = user.display_name
+        nick_color_name = user.nick_color
+    else:
+        nick = shorten_sender(sender)
+        nick_color_name = W.info_get("nick_color_name", nick)
+
+    return (nick, nick_color_name)
+
+
+def tags_for_message(message_type):
+    default_tags = {
+        "message": [
+            "matrix_message",
+            "notify_message",
+            "log1"
+        ],
+        "backlog": [
+            "matrix_message",
+            "notify_message",
+            "no_log",
+            "no_highlight"
+        ]
+    }
+
+    return default_tags[message_type]
+
+
+def add_event_tags(event_id, nick, color, tags):
+    if not tags:
+        tags = tags_for_message("message")
+
+    tags.append("nick_{nick}".format(nick=nick))
+    tags.append("perfix_nick_{color}".format(color=color_for_tags(color)))
+    tags.append("matrix_id_{event_id}".format(event_id=event_id))
+
+    return tags

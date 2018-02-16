@@ -421,6 +421,23 @@ class MatrixBacklogMessage(MatrixMessage):
             data
         )
 
+    def decode_body(self, server):
+        try:
+            parsed_dict = json.loads(
+                self.response.body,
+                encoding='utf-8',
+            )
+            self.event = MatrixEvents.MatrixBacklogEvent.from_dict(
+                server,
+                self.room_id,
+                parsed_dict
+            )
+
+            return (True, None)
+
+        except json.decoder.JSONDecodeError as error:
+            return (False, error)
+
 
 class MatrixJoinMessage(MatrixMessage):
     def __init__(self, client, room_id):

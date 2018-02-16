@@ -660,17 +660,6 @@ def matrix_update_buffer_lines(new_lines, own_lines):
         line = W.hdata_move(hdata_line, line, 1)
 
 
-def matrix_handle_old_messages(server, room_id, events):
-    for event in events:
-        if event['type'] == 'm.room.message':
-            matrix_handle_room_messages(server, room_id, event, old=True)
-        # TODO do we wan't to handle topics joins/quits here?
-        else:
-            pass
-
-    matrix_sort_old_messages(server, room_id)
-
-
 def matrix_handle_message(
         server,        # type: MatrixServer
         message,       # type: MatrixMessage
@@ -707,6 +696,11 @@ def matrix_handle_message(
         event = message.event
         event.execute()
 
+    elif message_type == MessageType.ROOM_MSG:
+        event = message.event
+        event.execute()
+        matrix_sort_old_messages(server, message.room_id)
+
     elif message_type is MessageType.SYNC:
         next_batch = response['next_batch']
 
@@ -722,19 +716,6 @@ def matrix_handle_message(
 
         # TODO add a delay to this
         server.sync()
-
-    elif message_type == MessageType.ROOM_MSG:
-        # Response has no messages, that is we already got the oldest message
-        # in a previous request, nothing to do
-        if not response['chunk']:
-            return
-
-        room_id = response['chunk'][0]['room_id']
-        room = server.rooms[room_id]
-
-        matrix_handle_old_messages(server, room_id, response['chunk'])
-
-        room.prev_batch = response['end']
 
     else:
         server_buffer_prnt(

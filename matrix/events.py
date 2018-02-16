@@ -18,9 +18,18 @@ from __future__ import unicode_literals
 from builtins import str
 
 import time
+import math
+from functools import partial
 
 from matrix.globals import W, OPTIONS
-from matrix.utils import color_for_tags
+from matrix.utils import (
+    color_for_tags,
+    date_from_age,
+    sender_to_nick_and_color,
+    tags_for_message,
+    add_event_tags
+)
+from matrix.colors import Formatted
 
 def sanitize_id(string):
     # type: (unicode) -> unicode
@@ -34,6 +43,38 @@ def sanitize_id(string):
         ord('\n'): None,
         ord('\r'): None,
         ord('\t'): None,
+        ord('\0'): None
+    }
+
+    return string.translate(remap)
+
+
+def sanitize_age(age):
+    # type: (int) -> int
+    if not isinstance(age, int):
+        raise TypeError
+
+    if math.isnan(age):
+        raise ValueError
+
+    if math.isinf(age):
+        raise ValueError
+
+    if age < 0:
+        raise ValueError
+
+    return age
+
+
+def sanitize_text(string):
+    # type: (str) -> str
+    if not isinstance(string, str):
+        raise TypeError
+
+    remap = {
+        ord('\b'): None,
+        ord('\f'): None,
+        ord('\r'): None,
         ord('\0'): None
     }
 
@@ -104,7 +145,7 @@ class MatrixLoginEvent(MatrixEvent):
                 sanitize_id(parsed_dict["user_id"]),
                 sanitize_id(parsed_dict["access_token"])
             )
-        except (KeyError, TypeError):
+        except (KeyError, TypeError, ValueError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error logging in",
@@ -153,7 +194,7 @@ class MatrixSendEvent(MatrixEvent):
                 sanitize_id(parsed_dict["event_id"]),
                 message
             )
-        except (KeyError, TypeError):
+        except (KeyError, TypeError, ValueError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error sending message",
@@ -178,7 +219,7 @@ class MatrixTopicEvent(MatrixEvent):
                 sanitize_id(parsed_dict["event_id"]),
                 topic
             )
-        except (KeyError, TypeError):
+        except (KeyError, TypeError, ValueError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error setting topic",
@@ -203,7 +244,7 @@ class MatrixRedactEvent(MatrixEvent):
                 sanitize_id(parsed_dict["event_id"]),
                 reason
             )
-        except (KeyError, TypeError):
+        except (KeyError, TypeError, ValueError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error redacting message",
@@ -226,7 +267,7 @@ class MatrixJoinEvent(MatrixEvent):
                 room_id,
                 sanitize_id(parsed_dict["room_id"]),
             )
-        except (KeyError, TypeError):
+        except (KeyError, TypeError, ValueError):
             return MatrixErrorEvent.from_dict(
                 server,
                 "Error joining room",
@@ -281,3 +322,153 @@ class MatrixInviteEvent(MatrixEvent):
                 False,
                 parsed_dict
             )
+
+
+class MatrixBacklogEvent(MatrixEvent):
+    def __init__(self, server, room_id, end_token, messages):
+        self.room_id = room_id
+        self.end_token = end_token
+        self.messages = messages
+        MatrixEvent.__init__(self, server)
+
+    @staticmethod
+    def _message_from_event(room_id, event):
+        if room_id != event["room_id"]:
+            raise ValueError
+
+        if "redacted_by" in event["unsigned"]:
+            return RedactedMessage.from_dict(event)
+
+        return Message.from_dict(event)
+
+    @classmethod
+    def from_dict(cls, server, room_id, parsed_dict):
+        try:
+            if not parsed_dict["chunk"]:
+                return cls(server, room_id, None, [])
+
+            end_token = sanitize_id(parsed_dict["end"])
+
+            message_func = partial(
+                MatrixBacklogEvent._message_from_event,
+                room_id
+            )
+
+            message_events = list(filter(
+                lambda event: event["type"] == "m.room.message",
+                parsed_dict["chunk"]
+            ))
+
+            messages = [message_func(m) for m in message_events]
+
+            return cls(
+                server,
+                room_id,
+                end_token,
+                messages)
+        except (KeyError, ValueError, TypeError):
+            return MatrixErrorEvent.from_dict(
+                server,
+                "Error fetching backlog",
+                False,
+                parsed_dict
+            )
+
+    def execute(self):
+        room = self.server.rooms[self.room_id]
+        buf = self.server.buffers[self.room_id]
+        tags = tags_for_message("backlog")
+
+        for message in self.messages:
+            message.prnt(room, buf, tags)
+
+        room.prev_batch = self.end_token
+
+
+class AbstractMessage():
+    def __init__(self, event_id, sender, age):
+        self.event_id = event_id
+        self.sender = sender
+        self.age = age
+
+
+class RedactedMessage(AbstractMessage):
+    def __init__(self, event_id, sender, age, censor, reason=None):
+        self.censor = censor
+        self.reason = reason
+        AbstractMessage.__init__(self, event_id, sender, age)
+
+    @classmethod
+    def from_dict(cls, event):
+        event_id = sanitize_id(event["event_id"])
+        sender = sanitize_id(event["sender"])
+        age = event["unsigned"]["age"]
+
+        censor = sanitize_id(
+            event['unsigned']['redacted_because']['sender'])
+        reason = None
+
+        if 'reason' in event['unsigned']['redacted_because']['content']:
+            reason = sanitize_text(
+                event['unsigned']['redacted_because']['content']['reason'])
+
+        return cls(event_id, sender, age, censor, reason)
+
+    def prnt(self, room, buff, tags):
+        pass
+
+
+class Message(AbstractMessage):
+    def __init__(
+        self,
+        event_id,
+        sender,
+        age,
+        message,
+        formatted_message=None
+    ):
+        self.message = message
+        self.formatted_message = formatted_message
+        AbstractMessage.__init__(self, event_id, sender, age)
+
+    @classmethod
+    def from_dict(cls, event):
+        event_id = sanitize_id(event["event_id"])
+        sender = sanitize_id(event["sender"])
+        age = sanitize_age(event["unsigned"]["age"])
+
+        msg = ""
+        formatted_msg = None
+
+        if event['content']['msgtype'] == 'm.text':
+            msg = sanitize_text(event['content']['body'])
+
+            if ('format' in event['content'] and
+                    'formatted_body' in event['content']):
+                if event['content']['format'] == "org.matrix.custom.html":
+                    formatted_msg = Formatted.from_html(
+                        sanitize_text(event['content']['formatted_body']))
+
+        return cls(event_id, sender, age, msg, formatted_msg)
+
+    def prnt(self, room, buff, tags):
+        msg = (self.formatted_message.to_weechat() if
+               self.formatted_message
+               else self.message)
+
+        nick, color_name = sender_to_nick_and_color(room, self.sender)
+        color = color_for_tags(color_name)
+
+        event_tags = add_event_tags(
+            self.event_id,
+            nick,
+            color,
+            tags
+        )
+
+        tags_string = ",".join(event_tags)
+
+        data = "{author}\t{msg}".format(author=nick, msg=msg)
+
+        date = date_from_age(self.age)
+        W.prnt_date_tags(buff, date, tags_string, data)
