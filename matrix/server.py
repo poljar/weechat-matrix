@@ -337,6 +337,10 @@ class MatrixServer:
         self.send_queue.clear()
         self.receive_queue.clear()
 
+        self.send_buffer = b""
+        self.current_message = None
+        self.reset_parser()
+
         self.lag = 0
         W.bar_item_update("lag")
         self.reconnect_delay = 0
