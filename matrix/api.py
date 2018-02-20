@@ -23,6 +23,11 @@ from enum import Enum, unique
 from functools import partial
 
 try:
+    from json.decoder import JSONDecodeError
+except ImportError:
+    JSONDecodeError = ValueError
+
+try:
     from urllib import quote, urlencode
 except ImportError:
     from urllib.parse import quote, urlencode
