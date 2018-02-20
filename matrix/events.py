@@ -435,7 +435,37 @@ class RedactedMessage(AbstractMessage):
         return cls(event_id, sender, age, censor, reason)
 
     def prnt(self, room, buff, tags):
-        pass
+        nick, color_name = sender_to_nick_and_color(room, self.sender)
+        color = color_for_tags(color_name)
+        date = date_from_age(self.age)
+
+        event_tags = add_event_tags(
+            self.event_id,
+            nick,
+            color,
+            tags
+        )
+
+        reason = (", reason: \"{reason}\"".format(reason=self.reason)
+                  if self.reason else "")
+
+        censor, _ = sender_to_nick_and_color(room, self.censor)
+
+        msg = ("{del_color}<{log_color}Message redacted by: "
+               "{censor}{log_color}{reason}{del_color}>{ncolor}").format(
+                   del_color=W.color("chat_delimiters"),
+                   ncolor=W.color("reset"),
+                   log_color=W.color("logger.color.backlog_line"),
+                   censor=censor,
+                   reason=reason)
+
+        event_tags.append("matrix_redacted")
+
+        tags_string = ",".join(event_tags)
+
+        data = "{author}\t{msg}".format(author=nick, msg=msg)
+
+        W.prnt_date_tags(buff, date, tags_string, data)
 
 
 class Message(AbstractMessage):
