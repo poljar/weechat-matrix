@@ -32,7 +32,17 @@ from matrix.utils import (
 from matrix.colors import Formatted
 
 
-def sanitize_id(string):
+def sanitize_token(string):
+    # type: (str) -> str
+    string = sanitize_string(string)
+
+    if len(string) > 512:
+        raise ValueError
+
+    return string
+
+
+def sanitize_string(string):
     # type: (str) -> str
     if not isinstance(string, str):
         raise TypeError
@@ -47,6 +57,16 @@ def sanitize_id(string):
     }
 
     return string.translate(remap)
+
+
+def sanitize_id(string):
+    # type: (str) -> str
+    string = sanitize_string(string)
+
+    if len(string) > 128:
+        raise ValueError
+
+    return string
 
 
 def sanitize_age(age):
@@ -143,7 +163,7 @@ class MatrixLoginEvent(MatrixEvent):
             return cls(
                 server,
                 sanitize_id(parsed_dict["user_id"]),
-                sanitize_id(parsed_dict["access_token"])
+                sanitize_token(parsed_dict["access_token"])
             )
         except (KeyError, TypeError, ValueError):
             return MatrixErrorEvent.from_dict(
