@@ -249,16 +249,16 @@ class MatrixMessage():
 
     def _decode(self, server, object_hook):
         try:
-            event = json.loads(
+            parsed_dict = json.loads(
                 self.response.body,
                 encoding='utf-8',
-                object_hook=object_hook
             )
-            self.event = event
+
+            self.event = object_hook(parsed_dict)
 
             return (True, None)
 
-        except json.decoder.JSONDecodeError as error:
+        except JSONDecodeError as error:
             return (False, error)
 
 
@@ -422,21 +422,12 @@ class MatrixBacklogMessage(MatrixMessage):
         )
 
     def decode_body(self, server):
-        try:
-            parsed_dict = json.loads(
-                self.response.body,
-                encoding='utf-8',
-            )
-            self.event = MatrixEvents.MatrixBacklogEvent.from_dict(
-                server,
-                self.room_id,
-                parsed_dict
-            )
+        object_hook = partial(
+            MatrixEvents.MatrixBacklogEvent.from_dict,
+            server,
+            self.room_id)
 
-            return (True, None)
-
-        except json.decoder.JSONDecodeError as error:
-            return (False, error)
+        return self._decode(server, object_hook)
 
 
 class MatrixJoinMessage(MatrixMessage):
