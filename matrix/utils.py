@@ -92,7 +92,7 @@ def server_buffer_merge(buffer):
             if first:
                 num = W.buffer_get_integer(W.buffer_search_main(), "number")
                 W.buffer_unmerge(buffer, num + 1)
-                if buffer is not server.server_buffer:
+                if buffer is not first:
                     W.buffer_merge(buffer, first)
     else:
         num = W.buffer_get_integer(W.buffer_search_main(), "number")
