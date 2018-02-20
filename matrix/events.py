@@ -470,12 +470,12 @@ class RedactedMessage(AbstractMessage):
 
 class Message(AbstractMessage):
     def __init__(
-        self,
-        event_id,
-        sender,
-        age,
-        message,
-        formatted_message=None
+            self,
+            event_id,
+            sender,
+            age,
+            message,
+            formatted_message=None
     ):
         self.message = message
         self.formatted_message = formatted_message
