@@ -14,7 +14,6 @@
 # CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-
 from __future__ import unicode_literals
 from builtins import str, bytes
 
@@ -26,12 +25,8 @@ from collections import deque
 from http_parser.pyparser import HttpParser
 
 from matrix.plugin_options import Option, DebugType
-from matrix.utils import (
-    key_from_value,
-    prnt_debug,
-    server_buffer_prnt,
-    create_server_buffer
-)
+from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
+                          create_server_buffer)
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS, OPTIONS
 from matrix.api import MatrixClient, MatrixSyncMessage, MatrixLoginMessage
@@ -41,6 +36,7 @@ class MatrixServer:
     # pylint: disable=too-many-instance-attributes
     def __init__(self, name, config_file):
         # type: (str, weechat.config) -> None
+        # yapf: disable
         self.name = name                     # type: str
         self.user_id = ""
         self.address = ""                    # type: str
@@ -91,43 +87,27 @@ class MatrixServer:
         self.ignore_event_list = []   # type: List[str]
 
         self._create_options(config_file)
+        # yapf: enable
 
     def _create_options(self, config_file):
         options = [
-            Option(
-                'autoconnect', 'boolean', '', 0, 0, 'off',
-                (
-                    "automatically connect to the matrix server when weechat "
-                    "is starting"
-                )
-            ),
-            Option(
-                'address', 'string', '', 0, 0, '',
-                "Hostname or IP address for the server"
-            ),
-            Option(
-                'port', 'integer', '', 0, 65535, '8448',
-                "Port for the server"
-            ),
-            Option(
-                'ssl_verify', 'boolean', '', 0, 0, 'on',
-                (
-                    "Check that the SSL connection is fully trusted"
-                )
-            ),
-            Option(
-                'username', 'string', '', 0, 0, '',
-                "Username to use on server"
-            ),
+            Option('autoconnect', 'boolean', '', 0, 0, 'off',
+                   ("automatically connect to the matrix server when weechat "
+                    "is starting")),
+            Option('address', 'string', '', 0, 0, '',
+                   "Hostname or IP address for the server"),
+            Option('port', 'integer', '', 0, 65535, '8448',
+                   "Port for the server"),
+            Option('ssl_verify', 'boolean', '', 0, 0, 'on',
+                   ("Check that the SSL connection is fully trusted")),
+            Option('username', 'string', '', 0, 0, '',
+                   "Username to use on server"),
             Option(
                 'password', 'string', '', 0, 0, '',
                 ("Password for server (note: content is evaluated, see /help "
-                 "eval)")
-            ),
-            Option(
-                'device_name', 'string', '', 0, 0, 'Weechat Matrix',
-                "Device name to use while logging in to the matrix server"
-            ),
+                 "eval)")),
+            Option('device_name', 'string', '', 0, 0, 'Weechat Matrix',
+                   "Device name to use while logging in to the matrix server"),
         ]
 
         section = W.config_search_section(config_file, 'server')
@@ -137,10 +117,10 @@ class MatrixServer:
                 server=self.name, option=option.name)
 
             self.options[option.name] = W.config_new_option(
-                config_file, section, option_name,
-                option.type, option.description, option.string_values,
-                option.min, option.max, option.value, option.value, 0, "",
-                "", "matrix_config_server_change_cb", self.name, "", "")
+                config_file, section, option_name, option.type,
+                option.description, option.string_values, option.min,
+                option.max, option.value, option.value, 0, "", "",
+                "matrix_config_server_change_cb", self.name, "", "")
 
     def reset_parser(self):
         self.http_parser = HttpParser()
@@ -190,8 +170,7 @@ class MatrixServer:
             prnt_debug(DebugType.MESSAGING, self,
                        ("{prefix} Failed sending message of type {t}. "
                         "Adding to queue").format(
-                            prefix=W.prefix("error"),
-                            t=message.type))
+                            prefix=W.prefix("error"), t=message.type))
             self.send_queue.append(message)
 
     def try_send(self, message):
@@ -206,12 +185,7 @@ class MatrixServer:
                 sent = sock.send(message[total_sent:])
 
             except ssl.SSLWantWriteError:
-                hook = W.hook_fd(
-                    sock.fileno(),
-                    0, 1, 0,
-                    "send_cb",
-                    self.name
-                )
+                hook = W.hook_fd(sock.fileno(), 0, 1, 0, "send_cb", self.name)
                 self.send_fd_hook = hook
                 self.send_buffer = message[total_sent:]
                 return True
@@ -225,14 +199,12 @@ class MatrixServer:
 
                 error_message = ("{prefix}Error while writing to "
                                  "socket: {error}").format(
-                                     prefix=W.prefix("network"),
-                                     error=strerr)
+                                     prefix=W.prefix("network"), error=strerr)
 
                 server_buffer_prnt(self, error_message)
                 server_buffer_prnt(
-                    self,
-                    ("{prefix}matrix: disconnecting from server...").format(
-                        prefix=W.prefix("network")))
+                    self, ("{prefix}matrix: disconnecting from server..."
+                          ).format(prefix=W.prefix("network")))
 
                 self.disconnect()
                 return False
@@ -245,9 +217,8 @@ class MatrixServer:
                     "{prefix}matrix: Error while writing to socket".format(
                         prefix=W.prefix("network")))
                 server_buffer_prnt(
-                    self,
-                    ("{prefix}matrix: disconnecting from server...").format(
-                        prefix=W.prefix("network")))
+                    self, ("{prefix}matrix: disconnecting from server..."
+                          ).format(prefix=W.prefix("network")))
                 self.disconnect()
                 return False
 
@@ -269,7 +240,6 @@ class MatrixServer:
         self.send_buffer = b""
         self.current_message = None
 
-
     def send(self, message):
         # type: (MatrixServer, MatrixMessage) -> bool
         if self.current_message:
@@ -287,8 +257,8 @@ class MatrixServer:
         return True
 
     def reconnect(self):
-        message = ("{prefix}matrix: reconnecting to server...").format(
-            prefix=W.prefix("network"))
+        message = ("{prefix}matrix: reconnecting to server..."
+                  ).format(prefix=W.prefix("network"))
 
         server_buffer_prnt(self, message)
 
@@ -309,8 +279,7 @@ class MatrixServer:
 
         message = ("{prefix}matrix: reconnecting to server in {t} "
                    "seconds").format(
-                       prefix=W.prefix("network"),
-                       t=self.reconnect_delay)
+                       prefix=W.prefix("network"), t=self.reconnect_delay)
 
         server_buffer_prnt(self, message)
 
@@ -347,8 +316,8 @@ class MatrixServer:
         self.reconnect_time = None
 
         if self.server_buffer:
-            message = ("{prefix}matrix: disconnected from server").format(
-                prefix=W.prefix("network"))
+            message = ("{prefix}matrix: disconnected from server"
+                      ).format(prefix=W.prefix("network"))
             server_buffer_prnt(self, message)
 
         if reconnect:
@@ -375,13 +344,8 @@ class MatrixServer:
             create_server_buffer(self)
 
         if not self.timer_hook:
-            self.timer_hook = W.hook_timer(
-                1 * 1000,
-                0,
-                0,
-                "matrix_timer_cb",
-                self.name
-            )
+            self.timer_hook = W.hook_timer(1 * 1000, 0, 0, "matrix_timer_cb",
+                                           self.name)
 
         ssl_message = " (SSL)" if self.ssl_context.check_hostname else ""
 
@@ -394,35 +358,26 @@ class MatrixServer:
 
         W.prnt(self.server_buffer, message)
 
-        W.hook_connect("", self.address, self.port, 1, 0, "",
-                       "connect_cb", self.name)
+        W.hook_connect("", self.address, self.port, 1, 0, "", "connect_cb",
+                       self.name)
 
         return True
 
     def sync(self):
-        message = MatrixSyncMessage(
-            self.client,
-            self.next_batch,
-            OPTIONS.sync_limit
-        )
+        message = MatrixSyncMessage(self.client, self.next_batch,
+                                    OPTIONS.sync_limit)
         self.send_queue.append(message)
 
     def login(self):
         # type: (MatrixServer) -> None
-        message = MatrixLoginMessage(
-            self.client,
-            self.user,
-            self.password,
-            self.device_name
-        )
+        message = MatrixLoginMessage(self.client, self.user, self.password,
+                                     self.device_name)
         self.send_or_queue(message)
 
 
 @utf8_decode
-def matrix_config_server_read_cb(
-        data, config_file, section,
-        option_name, value
-):
+def matrix_config_server_read_cb(data, config_file, section, option_name,
+                                 value):
 
     return_code = W.WEECHAT_CONFIG_OPTION_SET_ERROR
 
@@ -479,8 +434,7 @@ def matrix_timer_cb(server_name, remaining_calls):
 
     current_time = time.time()
 
-    if ((not server.connected) and
-            server.reconnect_time and
+    if ((not server.connected) and server.reconnect_time and
             current_time >= (server.reconnect_time + server.reconnect_delay)):
         server.reconnect()
         return W.WEECHAT_RC_OK
@@ -504,9 +458,10 @@ def matrix_timer_cb(server_name, remaining_calls):
 
     while server.send_queue:
         message = server.send_queue.popleft()
-        prnt_debug(DebugType.MESSAGING, server,
-                   ("Timer hook found message of type {t} in queue. Sending "
-                    "out.".format(t=message.type)))
+        prnt_debug(
+            DebugType.MESSAGING,
+            server, ("Timer hook found message of type {t} in queue. Sending "
+                     "out.".format(t=message.type)))
 
         if not server.send(message):
             # We got an error while sending the last message return the message

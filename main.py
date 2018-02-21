@@ -31,26 +31,16 @@ from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 from matrix.colors import Formatted
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
-from matrix.api import (
-    MessageType,
-    MatrixSendMessage
-)
+from matrix.api import (MessageType, MatrixSendMessage)
 from matrix.messages import handle_http_response
 
 # Weechat searches for the registered callbacks in the scope of the main script
 # file, import the callbacks here so weechat can find them.
-from matrix.commands import (
-    hook_commands,
-    hook_page_up,
-    matrix_command_cb,
-    matrix_command_join_cb,
-    matrix_command_part_cb,
-    matrix_command_invite_cb,
-    matrix_command_topic_cb,
-    matrix_command_pgup_cb,
-    matrix_redact_command_cb,
-    matrix_command_buf_clear_cb
-)
+from matrix.commands import (hook_commands, hook_page_up, matrix_command_cb,
+                             matrix_command_join_cb, matrix_command_part_cb,
+                             matrix_command_invite_cb, matrix_command_topic_cb,
+                             matrix_command_pgup_cb, matrix_redact_command_cb,
+                             matrix_command_buf_clear_cb)
 
 from matrix.server import (
     MatrixServer,
@@ -62,29 +52,16 @@ from matrix.server import (
     matrix_config_server_change_cb,
 )
 
-from matrix.bar_items import (
-    init_bar_items,
-    matrix_bar_item_name,
-    matrix_bar_item_plugin,
-    matrix_bar_item_lag
-)
+from matrix.bar_items import (init_bar_items, matrix_bar_item_name,
+                              matrix_bar_item_plugin, matrix_bar_item_lag)
 
 from matrix.completion import (
-    init_completion,
-    matrix_command_completion_cb,
-    matrix_server_command_completion_cb,
-    matrix_debug_completion_cb,
-    matrix_message_completion_cb,
-    matrix_server_completion_cb
-)
+    init_completion, matrix_command_completion_cb,
+    matrix_server_command_completion_cb, matrix_debug_completion_cb,
+    matrix_message_completion_cb, matrix_server_completion_cb)
 
-from matrix.utils import (
-    key_from_value,
-    server_buffer_prnt,
-    prnt_debug,
-    tags_from_line_data,
-    server_buffer_set_title
-)
+from matrix.utils import (key_from_value, server_buffer_prnt, prnt_debug,
+                          tags_from_line_data, server_buffer_set_title)
 
 from matrix.plugin_options import (
     DebugType,
@@ -92,35 +69,29 @@ from matrix.plugin_options import (
     ServerBufferType,
 )
 
-from matrix.config import (
-    matrix_config_init,
-    matrix_config_read,
-    matrix_config_free,
-    matrix_config_change_cb,
-    matrix_config_reload_cb
-)
+from matrix.config import (matrix_config_init, matrix_config_read,
+                           matrix_config_free, matrix_config_change_cb,
+                           matrix_config_reload_cb)
 
 import matrix.globals
 
 from matrix.globals import W, OPTIONS, SERVERS
 
-
+# yapf: disable
 WEECHAT_SCRIPT_NAME = "matrix"                                 # type: str
 WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"              # type: str
 WEECHAT_SCRIPT_AUTHOR = "Damir Jelić <poljar@termina.org.uk>"  # type: str
 WEECHAT_SCRIPT_VERSION = "0.1"                                 # type: str
 WEECHAT_SCRIPT_LICENSE = "ISC"                                 # type: str
+# yapf: enable
 
 
 def wrap_socket(server, file_descriptor):
     # type: (MatrixServer, int) -> None
     sock = None  # type: socket.socket
 
-    temp_socket = socket.fromfd(
-        file_descriptor,
-        socket.AF_INET,
-        socket.SOCK_STREAM
-    )
+    temp_socket = socket.fromfd(file_descriptor, socket.AF_INET,
+                                socket.SOCK_STREAM)
 
     # For python 2.7 wrap_socket() doesn't work with sockets created from an
     # file descriptor because fromfd() doesn't return a wrapped socket, the bug
@@ -142,8 +113,7 @@ def wrap_socket(server, file_descriptor):
     W.prnt(server.server_buffer, message)
 
     ssl_socket = server.ssl_context.wrap_socket(
-        sock,
-        do_handshake_on_connect=False,
+        sock, do_handshake_on_connect=False,
         server_hostname=server.address)  # type: ssl.SSLSocket
 
     server.socket = ssl_socket
@@ -189,23 +159,15 @@ def try_ssl_handshake(server):
             return True
 
         except ssl.SSLWantReadError:
-            hook = W.hook_fd(
-                server.socket.fileno(),
-                1, 0, 0,
-                "ssl_fd_cb",
-                server.name
-            )
+            hook = W.hook_fd(server.socket.fileno(), 1, 0, 0, "ssl_fd_cb",
+                             server.name)
             server.ssl_hook = hook
 
             return False
 
         except ssl.SSLWantWriteError:
-            hook = W.hook_fd(
-                server.socket.fileno(),
-                0, 1, 0,
-                "ssl_fd_cb",
-                server.name
-            )
+            hook = W.hook_fd(server.socket.fileno(), 0, 1, 0, "ssl_fd_cb",
+                             server.name)
             server.ssl_hook = hook
 
             return False
@@ -215,15 +177,13 @@ def try_ssl_handshake(server):
 
             message = ("{prefix}Error while doing SSL handshake"
                        ": {error}").format(
-                           prefix=W.prefix("network"),
-                           error=str_error)
+                           prefix=W.prefix("network"), error=str_error)
 
             server_buffer_prnt(server, message)
 
             server_buffer_prnt(
-                server,
-                ("{prefix}matrix: disconnecting from server...").format(
-                    prefix=W.prefix("network")))
+                server, ("{prefix}matrix: disconnecting from server..."
+                        ).format(prefix=W.prefix("network")))
 
             server.disconnect()
             return False
@@ -245,15 +205,13 @@ def receive_cb(server_name, file_descriptor):
 
             message = ("{prefix}Error while reading from "
                        "socket: {error}").format(
-                           prefix=W.prefix("network"),
-                           error=str_error)
+                           prefix=W.prefix("network"), error=str_error)
 
             server_buffer_prnt(server, message)
 
             server_buffer_prnt(
-                server,
-                ("{prefix}matrix: disconnecting from server...").format(
-                    prefix=W.prefix("network")))
+                server, ("{prefix}matrix: disconnecting from server..."
+                        ).format(prefix=W.prefix("network")))
 
             server.disconnect()
 
@@ -265,9 +223,8 @@ def receive_cb(server_name, file_descriptor):
                 "{prefix}matrix: Error while reading from socket".format(
                     prefix=W.prefix("network")))
             server_buffer_prnt(
-                server,
-                ("{prefix}matrix: disconnecting from server...").format(
-                    prefix=W.prefix("network")))
+                server, ("{prefix}matrix: disconnecting from server..."
+                        ).format(prefix=W.prefix("network")))
 
             server.disconnect()
             break
@@ -296,9 +253,7 @@ def receive_cb(server_name, file_descriptor):
             prnt_debug(DebugType.MESSAGING, server,
                        ("{prefix}Received message of type {t} and "
                         "status {s}").format(
-                            prefix=W.prefix("error"),
-                            t=message.type,
-                            s=status))
+                            prefix=W.prefix("error"), t=message.type, s=status))
 
             # Message done, reset the parser state.
             server.reset_parser()
@@ -310,12 +265,7 @@ def receive_cb(server_name, file_descriptor):
 
 
 def finalize_connection(server):
-    hook = W.hook_fd(
-        server.socket.fileno(),
-        1, 0, 0,
-        "receive_cb",
-        server.name
-    )
+    hook = W.hook_fd(server.socket.fileno(), 1, 0, 0, "receive_cb", server.name)
 
     server.fd_hook = hook
     server.connected = True
@@ -342,8 +292,7 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
     elif status_value == W.WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND:
         W.prnt(
             server.server_buffer,
-            '{address} not found'.format(address=ip_address)
-        )
+            '{address} not found'.format(address=ip_address))
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND:
         W.prnt(server.server_buffer, 'IP address not found')
@@ -352,10 +301,8 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
         W.prnt(server.server_buffer, 'Connection refused')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_PROXY_ERROR:
-        W.prnt(
-            server.server_buffer,
-            'Proxy fails to establish connection to server'
-        )
+        W.prnt(server.server_buffer,
+               'Proxy fails to establish connection to server')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR:
         W.prnt(server.server_buffer, 'Unable to set local hostname')
@@ -377,8 +324,7 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
     else:
         W.prnt(
             server.server_buffer,
-            'Unexpected error: {status}'.format(status=status_value)
-        )
+            'Unexpected error: {status}'.format(status=status_value))
 
     server.disconnect(reconnect=True)
     return W.WEECHAT_RC_OK
@@ -403,10 +349,7 @@ def room_input_cb(server_name, buffer, input_data):
     formatted_data = Formatted.from_input_line(input_data)
 
     message = MatrixSendMessage(
-        server.client,
-        room_id=room_id,
-        formatted_message=formatted_data
-    )
+        server.client, room_id=room_id, formatted_message=formatted_data)
 
     server.send_or_queue(message)
     return W.WEECHAT_RC_OK
@@ -414,8 +357,8 @@ def room_input_cb(server_name, buffer, input_data):
 
 @utf8_decode
 def room_close_cb(data, buffer):
-    W.prnt("", "Buffer '%s' will be closed!" %
-           W.buffer_get_string(buffer, "name"))
+    W.prnt("",
+           "Buffer '%s' will be closed!" % W.buffer_get_string(buffer, "name"))
     return W.WEECHAT_RC_OK
 
 
@@ -432,21 +375,14 @@ def autoconnect(servers):
 
 
 if __name__ == "__main__":
-    if W.register(WEECHAT_SCRIPT_NAME,
-                  WEECHAT_SCRIPT_AUTHOR,
-                  WEECHAT_SCRIPT_VERSION,
-                  WEECHAT_SCRIPT_LICENSE,
-                  WEECHAT_SCRIPT_DESCRIPTION,
-                  'matrix_unload_cb',
-                  ''):
+    if W.register(WEECHAT_SCRIPT_NAME, WEECHAT_SCRIPT_AUTHOR,
+                  WEECHAT_SCRIPT_VERSION, WEECHAT_SCRIPT_LICENSE,
+                  WEECHAT_SCRIPT_DESCRIPTION, 'matrix_unload_cb', ''):
 
         # TODO if this fails we should abort and unload the script.
 
-        matrix.globals.CONFIG = W.config_new(
-            "matrix",
-            "matrix_config_reload_cb",
-            ""
-        )
+        matrix.globals.CONFIG = W.config_new("matrix",
+                                             "matrix_config_reload_cb", "")
         matrix_config_init(matrix.globals.CONFIG)
         matrix_config_read(matrix.globals.CONFIG)
 

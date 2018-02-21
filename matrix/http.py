@@ -29,12 +29,14 @@ class RequestType(Enum):
 
 
 class HttpResponse:
+
     def __init__(self, status, headers, body):
-        self.status = status    # type: int
+        self.status = status  # type: int
         self.headers = headers  # type: Dict[str, str]
-        self.body = body        # type: bytes
+        self.body = body  # type: bytes
 
 
+# yapf: disable
 class HttpRequest:
     def __init__(
             self,
@@ -52,11 +54,13 @@ class HttpRequest:
         accept_header = 'Accept: */*'  # type: str
         end_separator = '\r\n'         # type: str
         payload = ""                   # type: str
+        # yapf: enable
 
         if request_type == RequestType.GET:
             get = 'GET {location} HTTP/1.1'.format(location=location)
-            request_list = [get, host_header,
-                            user_agent, accept_header, end_separator]
+            request_list = [
+                get, host_header, user_agent, accept_header, end_separator
+            ]
 
         elif (request_type == RequestType.POST or
               request_type == RequestType.PUT):
@@ -69,18 +73,16 @@ class HttpRequest:
                 method = "PUT"
 
             request_line = '{method} {location} HTTP/1.1'.format(
-                method=method,
-                location=location
-            )
+                method=method, location=location)
 
             type_header = 'Content-Type: application/x-www-form-urlencoded'
             length_header = 'Content-Length: {length}'.format(
-                length=len(json_data)
-            )
+                length=len(json_data))
 
-            request_list = [request_line, host_header,
-                            user_agent, accept_header,
-                            length_header, type_header, end_separator]
+            request_list = [
+                request_line, host_header, user_agent, accept_header,
+                length_header, type_header, end_separator
+            ]
             payload = json_data
 
         request = '\r\n'.join(request_list)

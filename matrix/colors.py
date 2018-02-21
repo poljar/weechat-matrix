@@ -30,18 +30,14 @@ try:
 except ImportError:
     from html.parser import HTMLParser
 
-
-FormattedString = namedtuple(
-    'FormattedString',
-    ['text', 'attributes']
-)
+FormattedString = namedtuple('FormattedString', ['text', 'attributes'])
 
 
 class Formatted():
+
     def __init__(self, substrings):
         # type: (List[FormattedString]) -> None
         self.substrings = substrings
-
 
     def is_formatted(self):
         # type: (Formatted) -> bool
@@ -58,7 +54,7 @@ class Formatted():
         can be later converted to HTML or to a string for weechat's print
         functions
         """
-        text = ""        # type: str
+        text = ""  # type: str
         substrings = []  # type: List[FormattedString]
         attributes = DEFAULT_ATRIBUTES.copy()
 
@@ -154,24 +150,16 @@ class Formatted():
         def add_attribute(string, name, value):
             if name == "bold" and value:
                 return "{bold_on}{text}{bold_off}".format(
-                    bold_on="<strong>",
-                    text=string,
-                    bold_off="</strong>")
+                    bold_on="<strong>", text=string, bold_off="</strong>")
             elif name == "italic" and value:
                 return "{italic_on}{text}{italic_off}".format(
-                    italic_on="<em>",
-                    text=string,
-                    italic_off="</em>")
+                    italic_on="<em>", text=string, italic_off="</em>")
             elif name == "underline" and value:
                 return "{underline_on}{text}{underline_off}".format(
-                    underline_on="<u>",
-                    text=string,
-                    underline_off="</u>")
+                    underline_on="<u>", text=string, underline_off="</u>")
             elif name == "strikethrough" and value:
                 return "{strike_on}{text}{strike_off}".format(
-                    strike_on="<del>",
-                    text=string,
-                    strike_off="</del>")
+                    strike_on="<del>", text=string, strike_off="</del>")
             elif name == "quote" and value:
                 return "{quote_on}{text}{quote_off}".format(
                     quote_on="<blockquote>",
@@ -180,8 +168,7 @@ class Formatted():
             elif name == "fgcolor" and value:
                 return "{color_on}{text}{color_off}".format(
                     color_on="<font color={color}>".format(
-                        color=color_weechat_to_html(value)
-                    ),
+                        color=color_weechat_to_html(value)),
                     text=string,
                     color_off="</font>")
 
@@ -286,15 +273,14 @@ class MatrixHtmlParser(HTMLParser):
     # TODO bullets
     def __init__(self):
         HTMLParser.__init__(self)
-        self.text = ""        # type: str
+        self.text = ""  # type: str
         self.substrings = []  # type: List[FormattedString]
         self.attributes = DEFAULT_ATRIBUTES.copy()
 
     def _toggle_attribute(self, attribute):
         if self.text:
             self.substrings.append(
-                FormattedString(self.text, self.attributes.copy())
-            )
+                FormattedString(self.text, self.attributes.copy()))
         self.text = ""
         self.attributes[attribute] = not self.attributes[attribute]
 
@@ -321,8 +307,7 @@ class MatrixHtmlParser(HTMLParser):
 
                     if self.text:
                         self.substrings.append(
-                            FormattedString(self.text, self.attributes.copy())
-                        )
+                            FormattedString(self.text, self.attributes.copy()))
                     self.text = ""
                     self.attributes["fgcolor"] = color
         else:
@@ -342,8 +327,7 @@ class MatrixHtmlParser(HTMLParser):
         elif tag == "font":
             if self.text:
                 self.substrings.append(
-                    FormattedString(self.text, self.attributes.copy())
-                )
+                    FormattedString(self.text, self.attributes.copy()))
             self.text = ""
             self.attributes["fgcolor"] = None
         else:
@@ -355,8 +339,7 @@ class MatrixHtmlParser(HTMLParser):
     def get_substrings(self):
         if self.text:
             self.substrings.append(
-                FormattedString(self.text, self.attributes.copy())
-            )
+                FormattedString(self.text, self.attributes.copy()))
 
         return self.substrings
 
@@ -477,6 +460,7 @@ def color_line_to_weechat(color_string):
 # under the ISC license.
 # More info: https://github.com/tmux/tmux/blob/master/colour.c
 
+
 def colour_dist_sq(R, G, B, r, g, b):
     # pylint: disable=invalid-name,too-many-arguments
     # type: (int, int, int, int, int, int) -> int
@@ -546,21 +530,21 @@ def colour_find_rgb(r, g, b):
 def color_html_to_weechat(color):
     # type: (str) -> str
     first_16 = {
-        (0,     0,   0): "black",         # 0
-        (128,   0,   0): "red",           # 1
-        (0,   128,   0): "green",         # 2
-        (128, 128,   0): "brown",         # 3
-        (0,     0, 128): "blue",          # 4
-        (128,   0, 128): "magenta",       # 5
-        (0,   128, 128): "cyan",          # 6
-        (192, 192, 192): "default",       # 7
-        (128, 128, 128): "gray",          # 8
-        (255,   0,   0): "lightred",      # 9
-        (0,   255,   0): "lightgreen",    # 11
-        (255, 255,   0): "yellow",        # 12
-        (0,     0, 255): "lightblue",     # 13
-        (255,   0, 255): "lightmagenta",  # 14
-        (0,   255, 255): "lightcyan",     # 15
+        (0, 0, 0): "black",  # 0
+        (128, 0, 0): "red",  # 1
+        (0, 128, 0): "green",  # 2
+        (128, 128, 0): "brown",  # 3
+        (0, 0, 128): "blue",  # 4
+        (128, 0, 128): "magenta",  # 5
+        (0, 128, 128): "cyan",  # 6
+        (192, 192, 192): "default",  # 7
+        (128, 128, 128): "gray",  # 8
+        (255, 0, 0): "lightred",  # 9
+        (0, 255, 0): "lightgreen",  # 11
+        (255, 255, 0): "yellow",  # 12
+        (0, 0, 255): "lightblue",  # 13
+        (255, 0, 255): "lightmagenta",  # 14
+        (0, 255, 255): "lightcyan",  # 15
     }
 
     try:
@@ -577,23 +561,23 @@ def color_html_to_weechat(color):
 def color_weechat_to_html(color):
     # type: (str) -> str
     first_16 = {
-        "black":        "black",    # 0
-        "red":          "maroon",   # 1
-        "green":        "green",    # 2
-        "brown":        "olive",    # 3
-        "blue":         "navy",     # 4
-        "magenta":      "purple",   # 5
-        "cyan":         "teal",     # 6
-        "default":      "silver",   # 7
-        "gray":         "grey",     # 8
-        "lightred":     "red",      # 9
-        "lightgreen":   "lime",     # 11
-        "yellow":       "yellow",   # 12
-        "lightblue":    "fuchsia",  # 13
-        "lightmagenta": "aqua",     # 14
-        "lightcyan":    "white",    # 15
+        "black": "black",  # 0
+        "red": "maroon",  # 1
+        "green": "green",  # 2
+        "brown": "olive",  # 3
+        "blue": "navy",  # 4
+        "magenta": "purple",  # 5
+        "cyan": "teal",  # 6
+        "default": "silver",  # 7
+        "gray": "grey",  # 8
+        "lightred": "red",  # 9
+        "lightgreen": "lime",  # 11
+        "yellow": "yellow",  # 12
+        "lightblue": "fuchsia",  # 13
+        "lightmagenta": "aqua",  # 14
+        "lightcyan": "white",  # 15
     }
-
+    #yapf: disable
     hex_colors = {
         "0":   "#000000",
         "1":   "#800000",
@@ -852,6 +836,7 @@ def color_weechat_to_html(color):
         "254": "#e4e4e4",
         "255": "#eeeeee"
     }
+    # yapf: enable
 
     if color in first_16:
         return first_16[color]

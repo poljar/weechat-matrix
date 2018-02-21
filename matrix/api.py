@@ -52,17 +52,18 @@ class MessageType(Enum):
 
 
 class MatrixClient:
+
     def __init__(
             self,
-            host,             # type: str
+            host,  # type: str
             access_token="",  # type: str
-            user_agent=""     # type: str
+            user_agent=""  # type: str
     ):
         # type: (...) -> None
         self.host = host
         self.user_agent = user_agent
         self.access_token = access_token
-        self.txn_id = 0     # type: int
+        self.txn_id = 0  # type: int
 
     def _get_txn_id(self):
         txn_id = self.txn_id
@@ -92,17 +93,13 @@ class MatrixClient:
 
         if sync_filter:
             query_parameters["filter"] = json.dumps(
-                sync_filter,
-                separators=(",", ":")
-            )
+                sync_filter, separators=(",", ":"))
 
         if next_batch:
             query_parameters["since"] = next_batch
 
         path = ("{api}/sync?{query_params}").format(
-            api=MATRIX_API_PATH,
-            query_params=urlencode(query_parameters)
-        )
+            api=MATRIX_API_PATH, query_params=urlencode(query_parameters))
 
         return HttpRequest(RequestType.GET, self.host, path)
 
@@ -110,10 +107,7 @@ class MatrixClient:
         # type: (str, str, str) -> HttpRequest
         query_parameters = {"access_token": self.access_token}
 
-        body = {
-            "msgtype": "m.text",
-            "body": content
-        }
+        body = {"msgtype": "m.text", "body": content}
 
         if formatted_content:
             body["format"] = "org.matrix.custom.html"
@@ -160,14 +154,12 @@ class MatrixClient:
 
         return HttpRequest(RequestType.PUT, self.host, path, content)
 
-    def room_get_messages(
-            self,
-            room_id,
-            start_token,
-            end_token="",
-            limit=10,
-            direction='b'
-    ):
+    def room_get_messages(self,
+                          room_id,
+                          start_token,
+                          end_token="",
+                          limit=10,
+                          direction='b'):
         query_parameters = {
             "access_token": self.access_token,
             "from": start_token,
@@ -222,13 +214,15 @@ class MatrixClient:
 
 
 class MatrixMessage():
+
     def __init__(
             self,
-            message_type,     # type: MessageType
-            request_func,     # type: Callable[[...], HttpRequest]
+            message_type,  # type: MessageType
+            request_func,  # type: Callable[[...], HttpRequest]
             func_args,
     ):
         # type: (...) -> None
+        # yapf: disable
         self.type = message_type          # type: MessageType
 
         self.request = None               # type: HttpRequest
@@ -241,13 +235,12 @@ class MatrixMessage():
         self.event = None
 
         self.request = request_func(**func_args)
+        # yapf: enable
 
     def decode_body(self, server):
         try:
             self.decoded_response = json.loads(
-                self.response.body,
-                encoding='utf-8'
-            )
+                self.response.body, encoding='utf-8')
             return (True, None)
         except Exception as error:
             return (False, error)
@@ -268,33 +261,23 @@ class MatrixMessage():
 
 
 class MatrixLoginMessage(MatrixMessage):
+
     def __init__(self, client, user, password, device_name, device_id=None):
-        data = {
-            "user": user,
-            "password": password,
-            "device_name": device_name
-        }
+        data = {"user": user, "password": password, "device_name": device_name}
 
         if device_id:
             data["device_id"] = device_id
 
-        MatrixMessage.__init__(
-            self,
-            MessageType.LOGIN,
-            client.login,
-            data
-        )
+        MatrixMessage.__init__(self, MessageType.LOGIN, client.login, data)
 
     def decode_body(self, server):
-        object_hook = partial(
-            MatrixEvents.MatrixLoginEvent.from_dict,
-            server
-        )
+        object_hook = partial(MatrixEvents.MatrixLoginEvent.from_dict, server)
 
         return self._decode(server, object_hook)
 
 
 class MatrixSyncMessage(MatrixMessage):
+
     def __init__(self, client, next_batch=None, limit=None):
         data = {}
 
@@ -302,19 +285,13 @@ class MatrixSyncMessage(MatrixMessage):
             data["next_batch"] = next_batch
 
         if limit:
-            data["sync_filter"] = {
-                "room": {"timeline": {"limit": limit}}
-            }
+            data["sync_filter"] = {"room": {"timeline": {"limit": limit}}}
 
-        MatrixMessage.__init__(
-            self,
-            MessageType.SYNC,
-            client.sync,
-            data
-        )
+        MatrixMessage.__init__(self, MessageType.SYNC, client.sync, data)
 
 
 class MatrixSendMessage(MatrixMessage):
+
     def __init__(self, client, room_id, formatted_message):
         self.room_id = room_id
         self.formatted_message = formatted_message
@@ -330,12 +307,8 @@ class MatrixSendMessage(MatrixMessage):
         if self.formatted_message.is_formatted:
             data["formatted_content"] = self.formatted_message.to_html()
 
-        MatrixMessage.__init__(
-            self,
-            MessageType.SEND,
-            client.room_send_message,
-            data
-        )
+        MatrixMessage.__init__(self, MessageType.SEND, client.room_send_message,
+                               data)
 
     def decode_body(self, server):
         object_hook = partial(
@@ -349,21 +322,14 @@ class MatrixSendMessage(MatrixMessage):
 
 
 class MatrixTopicMessage(MatrixMessage):
+
     def __init__(self, client, room_id, topic):
         self.room_id = room_id
         self.topic = topic
 
-        data = {
-            "room_id": self.room_id,
-            "topic": self.topic
-        }
+        data = {"room_id": self.room_id, "topic": self.topic}
 
-        MatrixMessage.__init__(
-            self,
-            MessageType.TOPIC,
-            client.room_topic,
-            data
-        )
+        MatrixMessage.__init__(self, MessageType.TOPIC, client.room_topic, data)
 
     def decode_body(self, server):
         object_hook = partial(
@@ -377,25 +343,19 @@ class MatrixTopicMessage(MatrixMessage):
 
 
 class MatrixRedactMessage(MatrixMessage):
+
     def __init__(self, client, room_id, event_id, reason=None):
         self.room_id = room_id
         self.event_id = event_id
         self.reason = reason
 
-        data = {
-            "room_id": self.room_id,
-            "event_id": self.event_id
-        }
+        data = {"room_id": self.room_id, "event_id": self.event_id}
 
         if reason:
             data["reason"] = reason
 
-        MatrixMessage.__init__(
-            self,
-            MessageType.REDACT,
-            client.room_redact,
-            data
-        )
+        MatrixMessage.__init__(self, MessageType.REDACT, client.room_redact,
+                               data)
 
     def decode_body(self, server):
         object_hook = partial(
@@ -409,6 +369,7 @@ class MatrixRedactMessage(MatrixMessage):
 
 
 class MatrixBacklogMessage(MatrixMessage):
+
     def __init__(self, client, room_id, token, limit):
         self.room_id = room_id
 
@@ -419,106 +380,81 @@ class MatrixBacklogMessage(MatrixMessage):
             "limit": limit
         }
 
-        MatrixMessage.__init__(
-            self,
-            MessageType.ROOM_MSG,
-            client.room_get_messages,
-            data
-        )
+        MatrixMessage.__init__(self, MessageType.ROOM_MSG,
+                               client.room_get_messages, data)
 
     def decode_body(self, server):
-        object_hook = partial(
-            MatrixEvents.MatrixBacklogEvent.from_dict,
-            server,
-            self.room_id)
+        object_hook = partial(MatrixEvents.MatrixBacklogEvent.from_dict, server,
+                              self.room_id)
 
         return self._decode(server, object_hook)
 
 
 class MatrixJoinMessage(MatrixMessage):
+
     def __init__(self, client, room_id):
         self.room_id = room_id
 
         data = {"room_id": self.room_id}
 
-        MatrixMessage.__init__(
-            self,
-            MessageType.JOIN,
-            client.room_join,
-            data
-        )
+        MatrixMessage.__init__(self, MessageType.JOIN, client.room_join, data)
 
     def decode_body(self, server):
-        object_hook = partial(
-            MatrixEvents.MatrixJoinEvent.from_dict,
-            server,
-            self.room_id
-        )
+        object_hook = partial(MatrixEvents.MatrixJoinEvent.from_dict, server,
+                              self.room_id)
 
         return self._decode(server, object_hook)
 
 
 class MatrixPartMessage(MatrixMessage):
+
     def __init__(self, client, room_id):
         self.room_id = room_id
 
         data = {"room_id": self.room_id}
 
-        MatrixMessage.__init__(
-            self,
-            MessageType.PART,
-            client.room_leave,
-            data
-        )
+        MatrixMessage.__init__(self, MessageType.PART, client.room_leave, data)
 
     def decode_body(self, server):
-        object_hook = partial(
-            MatrixEvents.MatrixPartEvent.from_dict,
-            server,
-            self.room_id
-        )
+        object_hook = partial(MatrixEvents.MatrixPartEvent.from_dict, server,
+                              self.room_id)
 
         return self._decode(server, object_hook)
 
 
 class MatrixInviteMessage(MatrixMessage):
+
     def __init__(self, client, room_id, user_id):
         self.room_id = room_id
         self.user_id = user_id
 
-        data = {"room_id": self.room_id,
-                "user_id": self.user_id}
+        data = {"room_id": self.room_id, "user_id": self.user_id}
 
-        MatrixMessage.__init__(
-            self,
-            MessageType.INVITE,
-            client.room_invite,
-            data
-        )
+        MatrixMessage.__init__(self, MessageType.INVITE, client.room_invite,
+                               data)
 
     def decode_body(self, server):
-        object_hook = partial(
-            MatrixEvents.MatrixInviteEvent.from_dict,
-            server,
-            self.room_id,
-            self.user_id
-        )
+        object_hook = partial(MatrixEvents.MatrixInviteEvent.from_dict, server,
+                              self.room_id, self.user_id)
 
         return self._decode(server, object_hook)
 
 
 class MatrixUser:
+
     def __init__(self, name, display_name):
-        self.name = name                  # type: str
+        self.name = name  # type: str
         self.display_name = display_name  # type: str
-        self.power_level = 0              # type: int
-        self.nick_color = ""              # type: str
-        self.prefix = ""                  # type: str
+        self.power_level = 0  # type: int
+        self.nick_color = ""  # type: str
+        self.prefix = ""  # type: str
 
 
 class MatrixRoom:
+
     def __init__(self, room_id):
         # type: (str) -> None
+        # yapf: disable
         self.room_id = room_id  # type: str
         self.alias = room_id    # type: str
         self.topic = ""         # type: str
@@ -527,3 +463,4 @@ class MatrixRoom:
         self.prev_batch = ""    # type: str
         self.users = dict()     # type: Dict[str, MatrixUser]
         self.encrypted = False  # type: bool
+        # yapf: enable
