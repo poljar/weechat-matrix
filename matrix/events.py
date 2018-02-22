@@ -475,7 +475,7 @@ class RedactedMessage(AbstractMessage):
     def from_dict(cls, event):
         event_id = sanitize_id(event["event_id"])
         sender = sanitize_id(event["sender"])
-        age = sanitize_ag(event["unsigned"]["age"])
+        age = sanitize_age(event["unsigned"]["age"])
 
         censor = sanitize_id(event['unsigned']['redacted_because']['sender'])
         reason = None
