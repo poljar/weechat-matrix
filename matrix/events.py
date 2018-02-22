@@ -296,21 +296,21 @@ class MatrixInviteEvent(MatrixEvent):
 
 class MatrixBacklogEvent(MatrixEvent):
 
-    def __init__(self, server, room_id, end_token, messages):
+    def __init__(self, server, room_id, end_token, events):
         self.room_id = room_id
         self.end_token = end_token
-        self.messages = messages
+        self.events = events
         MatrixEvent.__init__(self, server)
 
     @staticmethod
-    def _message_from_event(room_id, event):
-        if room_id != event["room_id"]:
+    def _room_event_from_dict(room_id, event_dict):
+        if room_id != event_dict["room_id"]:
             raise ValueError
 
-        if "redacted_by" in event["unsigned"]:
-            return RedactedMessage.from_dict(event)
+        if "redacted_by" in event_dict["unsigned"]:
+            return RoomRedactedMessageEvent.from_dict(event_dict)
 
-        return Message.from_dict(event)
+        return RoomMessageEvent.from_dict(event_dict)
 
     @classmethod
     def from_dict(cls, server, room_id, parsed_dict):
@@ -320,16 +320,16 @@ class MatrixBacklogEvent(MatrixEvent):
             if not parsed_dict["chunk"]:
                 return cls(server, room_id, end_token, [])
 
-            message_func = partial(MatrixBacklogEvent._message_from_event,
-                                   room_id)
+            event_func = partial(MatrixBacklogEvent._room_event_from_dict,
+                                 room_id)
 
             message_events = list(
                 filter(lambda event: event["type"] == "m.room.message",
                        parsed_dict["chunk"]))
 
-            messages = [message_func(m) for m in message_events]
+            events = [event_func(m) for m in message_events]
 
-            return cls(server, room_id, end_token, messages)
+            return cls(server, room_id, end_token, events)
         except (KeyError, ValueError, TypeError):
             return MatrixErrorEvent.from_dict(server, "Error fetching backlog",
                                               False, parsed_dict)
@@ -339,8 +339,8 @@ class MatrixBacklogEvent(MatrixEvent):
         buf = self.server.buffers[self.room_id]
         tags = tags_for_message("backlog")
 
-        for message in self.messages:
-            message.prnt(room, buf, tags)
+        for event in self.events:
+            event.execute(room, buf, tags)
 
         room.prev_batch = self.end_token
         room.backlog_pending = False
@@ -397,7 +397,7 @@ class MatrixSyncEvent(MatrixEvent):
 
         tags = tags_for_message("message")
         for message in info.events:
-            message.prnt(room, buf, tags)
+            message.execute(room, buf, tags)
 
     def execute(self):
         server = self.server
@@ -423,18 +423,18 @@ class RoomInfo():
 
     @staticmethod
     def _message_from_event(event):
-        # The transaction id will only be present for events that are send out from
-        # this client, since we print out our own messages as soon as we get a
-        # receive confirmation from the server we don't care about our own messages
-        # in a sync event. More info under:
+        # The transaction id will only be present for events that are send out
+        # from this client, since we print out our own messages as soon as we
+        # get a receive confirmation from the server we don't care about our
+        # own messages in a sync event. More info under:
         # https://github.com/matrix-org/matrix-doc/blob/master/api/client-server/definitions/event.yaml#L53
         if "transaction_id" in event["unsigned"]:
             return None
 
         if "redacted_by" in event["unsigned"]:
-            return RedactedMessage.from_dict(event)
+            return RoomRedactedMessageEvent.from_dict(event)
 
-        return Message.from_dict(event)
+        return RoomMessageEvent.from_dict(event)
 
     @staticmethod
     def _event_from_dict(event):
@@ -458,7 +458,7 @@ class RoomInfo():
         return cls(room_id, prev_batch, filtered_events)
 
 
-class AbstractMessage():
+class RoomEvent():
 
     def __init__(self, event_id, sender, age):
         self.event_id = event_id
@@ -466,12 +466,12 @@ class AbstractMessage():
         self.age = age
 
 
-class RedactedMessage(AbstractMessage):
+class RoomRedactedMessageEvent(RoomEvent):
 
     def __init__(self, event_id, sender, age, censor, reason=None):
         self.censor = censor
         self.reason = reason
-        AbstractMessage.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, age)
 
     @classmethod
     def from_dict(cls, event):
@@ -488,7 +488,7 @@ class RedactedMessage(AbstractMessage):
 
         return cls(event_id, sender, age, censor, reason)
 
-    def prnt(self, room, buff, tags):
+    def execute(self, room, buff, tags):
         nick, color_name = sender_to_nick_and_color(room, self.sender)
         color = color_for_tags(color_name)
         date = date_from_age(self.age)
@@ -517,12 +517,12 @@ class RedactedMessage(AbstractMessage):
         W.prnt_date_tags(buff, date, tags_string, data)
 
 
-class Message(AbstractMessage):
+class RoomMessageEvent(RoomEvent):
 
     def __init__(self, event_id, sender, age, message, formatted_message=None):
         self.message = message
         self.formatted_message = formatted_message
-        AbstractMessage.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, age)
 
     @classmethod
     def from_dict(cls, event):
@@ -544,7 +544,7 @@ class Message(AbstractMessage):
 
         return cls(event_id, sender, age, msg, formatted_msg)
 
-    def prnt(self, room, buff, tags):
+    def execute(self, room, buff, tags):
         msg = (self.formatted_message.to_weechat()
                if self.formatted_message else self.message)
 
