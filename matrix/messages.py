@@ -28,18 +28,12 @@ from matrix.colors import Formatted
 
 from matrix.globals import W, OPTIONS
 
-from matrix.api import (
-    MessageType,
-    MatrixRoom,
-    MatrixUser
-)
+from matrix.api import (MessageType, MatrixUser)
 
-from matrix.utils import (
-    server_buffer_prnt,
-    tags_from_line_data,
-    prnt_debug,
-    color_for_tags
-)
+from matrix.rooms import MatrixRoom
+
+from matrix.utils import (server_buffer_prnt, tags_from_line_data, prnt_debug,
+                          color_for_tags)
 from matrix.plugin_options import RedactType, DebugType
 
 
@@ -60,26 +54,14 @@ def add_user_to_nicklist(buf, user):
 
     group = W.nicklist_search_group(buf, "", group_name)
     # TODO make it configurable so we can use a display name or user_id here
-    W.nicklist_add_nick(
-        buf,
-        group,
-        user.display_name,
-        user.nick_color,
-        user.prefix,
-        get_prefix_color(user.prefix),
-        1
-    )
+    W.nicklist_add_nick(buf, group, user.display_name, user.nick_color,
+                        user.prefix, get_prefix_color(user.prefix), 1)
 
 
 def matrix_create_room_buffer(server, room_id):
     # type: (MatrixServer, str) -> None
-    buf = W.buffer_new(
-        room_id,
-        "room_input_cb",
-        server.name,
-        "room_close_cb",
-        server.name
-    )
+    buf = W.buffer_new(room_id, "room_input_cb", server.name, "room_close_cb",
+                       server.name)
 
     W.buffer_set(buf, "localvar_set_type", 'channel')
     W.buffer_set(buf, "type", 'formatted')
@@ -142,10 +124,8 @@ def matrix_handle_room_members(server, room_id, event):
 
         if full_name == server.user_id:
             user.nick_color = "weechat.color.chat_nick_self"
-            W.buffer_set(
-                buf,
-                "highlight_words",
-                ",".join([full_name, user.name, user.display_name]))
+            W.buffer_set(buf, "highlight_words",
+                         ",".join([full_name, user.name, user.display_name]))
         else:
             user.nick_color = W.info_get("nick_color_name", user.name)
 
@@ -346,8 +326,7 @@ def matrix_redact_line(data, tags, event):
 
     tags.append("matrix_new_redacted")
 
-    new_data = {'tags_array': ','.join(tags),
-                'message': message}
+    new_data = {'tags_array': ','.join(tags), 'message': message}
 
     W.hdata_update(hdata_line_data, data, new_data)
 
@@ -363,11 +342,7 @@ def matrix_handle_room_redaction(server, room_id, event):
     if own_lines:
         hdata_line = W.hdata_get('line')
 
-        line = W.hdata_pointer(
-            W.hdata_get('lines'),
-            own_lines,
-            'last_line'
-        )
+        line = W.hdata_pointer(W.hdata_get('lines'), own_lines, 'last_line')
 
         while line:
             data = W.hdata_pointer(hdata_line, line, 'data')
@@ -501,11 +476,11 @@ def matrix_handle_room_events(server, room_id, room_events):
             matrix_handle_room_power_levels(server, room_id, event)
 
         # These events are unimportant for us.
-        elif event["type"] in ["m.room.create", "m.room.join_rules",
-                               "m.room.history_visibility",
-                               "m.room.canonical_alias",
-                               "m.room.guest_access",
-                               "m.room.third_party_invite"]:
+        elif event["type"] in [
+                "m.room.create", "m.room.join_rules",
+                "m.room.history_visibility", "m.room.canonical_alias",
+                "m.room.guest_access", "m.room.third_party_invite"
+        ]:
             pass
 
         elif event["type"] == "m.room.name":
@@ -538,8 +513,7 @@ def matrix_handle_room_events(server, room_id, room_events):
         else:
             message = ("{prefix}Handling of room event type "
                        "{type} not implemented").format(
-                           type=event['type'],
-                           prefix=W.prefix("error"))
+                           type=event['type'], prefix=W.prefix("error"))
             W.prnt(server.server_buffer, message)
 
 
@@ -582,11 +556,8 @@ def matrix_handle_room_info(server, room_info):
         matrix_handle_room_events(server, room_id, room['timeline']['events'])
 
     for room_id, room in room_info['invite'].items():
-        matrix_handle_invite_events(
-            server,
-            room_id,
-            room['invite_state']['events']
-        )
+        matrix_handle_invite_events(server, room_id,
+                                    room['invite_state']['events'])
 
 
 def matrix_sort_old_messages(server, room_id):
@@ -598,11 +569,7 @@ def matrix_sort_old_messages(server, room_id):
     if own_lines:
         hdata_line = W.hdata_get('line')
         hdata_line_data = W.hdata_get('line_data')
-        line = W.hdata_pointer(
-            W.hdata_get('lines'),
-            own_lines,
-            'first_line'
-        )
+        line = W.hdata_pointer(W.hdata_get('lines'), own_lines, 'first_line')
 
         while line:
             data = W.hdata_pointer(hdata_line, line, 'data')
@@ -611,18 +578,18 @@ def matrix_sort_old_messages(server, room_id):
 
             if data:
                 date = W.hdata_time(hdata_line_data, data, 'date')
-                print_date = W.hdata_time(hdata_line_data, data,
-                                          'date_printed')
+                print_date = W.hdata_time(hdata_line_data, data, 'date_printed')
                 tags = tags_from_line_data(data)
                 prefix = W.hdata_string(hdata_line_data, data, 'prefix')
-                message = W.hdata_string(hdata_line_data, data,
-                                         'message')
+                message = W.hdata_string(hdata_line_data, data, 'message')
 
-                line_data = {'date': date,
-                             'date_printed': print_date,
-                             'tags_array': ','.join(tags),
-                             'prefix': prefix,
-                             'message': message}
+                line_data = {
+                    'date': date,
+                    'date_printed': print_date,
+                    'tags_array': ','.join(tags),
+                    'prefix': prefix,
+                    'message': message
+                }
 
                 lines.append(line_data)
 
@@ -645,11 +612,7 @@ def matrix_update_buffer_lines(new_lines, own_lines):
     hdata_line = W.hdata_get('line')
     hdata_line_data = W.hdata_get('line_data')
 
-    line = W.hdata_pointer(
-        W.hdata_get('lines'),
-        own_lines,
-        'first_line'
-    )
+    line = W.hdata_pointer(W.hdata_get('lines'), own_lines, 'first_line')
 
     while line:
         data = W.hdata_pointer(hdata_line, line, 'data')
@@ -661,8 +624,8 @@ def matrix_update_buffer_lines(new_lines, own_lines):
 
 
 def matrix_handle_message(
-        server,        # type: MatrixServer
-        message,       # type: MatrixMessage
+        server,  # type: MatrixServer
+        message,  # type: MatrixMessage
 ):
     # type: (...) -> None
     message_type = message.type
@@ -702,20 +665,8 @@ def matrix_handle_message(
         matrix_sort_old_messages(server, message.room_id)
 
     elif message_type is MessageType.SYNC:
-        next_batch = response['next_batch']
-
-        # we got the same batch again, nothing to do
-        if next_batch == server.next_batch:
-            server.sync()
-            return
-
-        room_info = response['rooms']
-        matrix_handle_room_info(server, room_info)
-
-        server.next_batch = next_batch
-
-        # TODO add a delay to this
-        server.sync()
+        event = message.event
+        event.execute()
 
     else:
         server_buffer_prnt(
@@ -737,8 +688,7 @@ def handle_http_response(server, message):
             # TODO try to resend the message if decoding has failed?
             message = ("{prefix}matrix: Error decoding json response from "
                        "server: {error}").format(
-                           prefix=W.prefix("error"),
-                           error=error)
+                           prefix=W.prefix("error"), error=error)
 
             W.prnt(server.server_buffer, message)
             return
@@ -805,11 +755,9 @@ def handle_http_response(server, message):
 
     else:
         server_buffer_prnt(
-            server,
-            ("{prefix}Unhandled {status_code} error, please inform "
-             "the developers about this.").format(
-                 prefix=W.prefix("error"),
-                 status_code=status_code))
+            server, ("{prefix}Unhandled {status_code} error, please inform "
+                     "the developers about this.").format(
+                         prefix=W.prefix("error"), status_code=status_code))
 
         server_buffer_prnt(server, pprint.pformat(message.type))
         server_buffer_prnt(server, pprint.pformat(message.request.payload))
@@ -828,7 +776,8 @@ def handle_http_response(server, message):
                         s=(message.send_time - message.creation_time) * 1000,
                         r=(message.receive_time - message.send_time) * 1000,
                         h=(done_time - message.receive_time) * 1000,
-                        total=(done_time - message.creation_time) * 1000,)
+                        total=(done_time - message.creation_time) * 1000,
+                    )
     prnt_debug(DebugType.TIMING, server, info_message)
 
     return

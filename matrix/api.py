@@ -289,6 +289,11 @@ class MatrixSyncMessage(MatrixMessage):
 
         MatrixMessage.__init__(self, MessageType.SYNC, client.sync, data)
 
+    def decode_body(self, server):
+        object_hook = partial(MatrixEvents.MatrixSyncEvent.from_dict, server)
+
+        return self._decode(server, object_hook)
+
 
 class MatrixSendMessage(MatrixMessage):
 
@@ -448,19 +453,3 @@ class MatrixUser:
         self.power_level = 0  # type: int
         self.nick_color = ""  # type: str
         self.prefix = ""  # type: str
-
-
-class MatrixRoom:
-
-    def __init__(self, room_id):
-        # type: (str) -> None
-        # yapf: disable
-        self.room_id = room_id  # type: str
-        self.alias = room_id    # type: str
-        self.topic = ""         # type: str
-        self.topic_author = ""  # type: str
-        self.topic_date = None  # type: datetime.datetime
-        self.prev_batch = ""    # type: str
-        self.users = dict()     # type: Dict[str, MatrixUser]
-        self.encrypted = False  # type: bool
-        # yapf: enable
