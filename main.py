@@ -53,7 +53,8 @@ from matrix.server import (
 )
 
 from matrix.bar_items import (init_bar_items, matrix_bar_item_name,
-                              matrix_bar_item_plugin, matrix_bar_item_lag)
+                              matrix_bar_item_plugin, matrix_bar_item_lag,
+                              matrix_bar_item_buffer_modes)
 
 from matrix.completion import (
     init_completion, matrix_command_completion_cb,

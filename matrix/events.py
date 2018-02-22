@@ -344,6 +344,7 @@ class MatrixBacklogEvent(MatrixEvent):
 
         room.prev_batch = self.end_token
         room.backlog_pending = False
+        W.bar_item_update("buffer_modes")
 
 
 class MatrixSyncEvent(MatrixEvent):

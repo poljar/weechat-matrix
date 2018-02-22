@@ -85,7 +85,28 @@ def matrix_bar_item_lag(data, item, window, buffer, extra_info):
     return ""
 
 
+@utf8_decode
+def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
+    # pylint: disable=unused-argument
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            room_id = key_from_value(server.buffers, buffer)
+            room = server.rooms[room_id]
+            modes = []
+
+            if room.encrypted:
+                modes.append("🔐")
+
+            if room.backlog_pending:
+                modes.append("⏳")
+
+            return "".join(modes)
+
+    return ""
+
+
 def init_bar_items():
     W.bar_item_new("(extra)buffer_plugin", "matrix_bar_item_plugin", "")
     W.bar_item_new("(extra)buffer_name", "matrix_bar_item_name", "")
     W.bar_item_new("(extra)lag", "matrix_bar_item_lag", "")
+    W.bar_item_new("(extra)buffer_modes", "matrix_bar_item_buffer_modes", "")

@@ -109,6 +109,7 @@ def matrix_fetch_old_messages(server, room_id):
         token=prev_batch,
         limit=OPTIONS.backlog_limit)
     room.backlog_pending = True
+    W.bar_item_update("buffer_modes")
 
     server.send_or_queue(message)
 
