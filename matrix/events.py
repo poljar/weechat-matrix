@@ -126,7 +126,7 @@ class MatrixErrorEvent(MatrixEvent):
     def from_dict(cls, server, error_prefix, fatal, parsed_dict):
         try:
             message = "{prefix}: {error}".format(
-                prefix=error_prefix, error=parsed_dict["error"])
+                prefix=error_prefix, error=sanitize_text(parsed_dict["error"]))
             return cls(server, message, fatal=fatal)
         except KeyError:
             return cls(
@@ -370,7 +370,7 @@ class MatrixSyncEvent(MatrixEvent):
     @classmethod
     def from_dict(cls, server, parsed_dict):
         try:
-            next_batch = parsed_dict["next_batch"]
+            next_batch = sanitize_id(parsed_dict["next_batch"])
             room_info_dict = parsed_dict["rooms"]
 
             join_infos, invite_infos = MatrixSyncEvent._infos_from_dict(
@@ -475,7 +475,7 @@ class RedactedMessage(AbstractMessage):
     def from_dict(cls, event):
         event_id = sanitize_id(event["event_id"])
         sender = sanitize_id(event["sender"])
-        age = event["unsigned"]["age"]
+        age = sanitize_ag(event["unsigned"]["age"])
 
         censor = sanitize_id(event['unsigned']['redacted_because']['sender'])
         reason = None
