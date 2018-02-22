@@ -43,21 +43,17 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
     for server in SERVERS.values():
         if buffer in server.buffers.values():
             color = ("status_name_ssl"
-                     if server.ssl_context.check_hostname else
-                     "status_name")
+                     if server.ssl_context.check_hostname else "status_name")
 
             room_id = key_from_value(server.buffers, buffer)
 
             room = server.rooms[room_id]
 
-            return "{color}{name}".format(
-                color=W.color(color),
-                name=room.alias)
+            return "{color}{name}".format(color=W.color(color), name=room.alias)
 
         elif buffer == server.server_buffer:
             color = ("status_name_ssl"
-                     if server.ssl_context.check_hostname else
-                     "status_name")
+                     if server.ssl_context.check_hostname else "status_name")
 
             return "{color}server{del_color}[{color}{name}{del_color}]".format(
                 color=W.color(color),
@@ -82,8 +78,7 @@ def matrix_bar_item_lag(data, item, window, buffer, extra_info):
                 lag_string = "Lag: {color}{lag}{ncolor}".format(
                     lag=lag.format((server.lag / 1000)),
                     color=color,
-                    ncolor=W.color("reset")
-                )
+                    ncolor=W.color("reset"))
                 return lag_string
             return ""
 
@@ -91,6 +86,6 @@ def matrix_bar_item_lag(data, item, window, buffer, extra_info):
 
 
 def init_bar_items():
-    W.bar_item_new("(extra)buffer_plugin",  "matrix_bar_item_plugin",  "")
+    W.bar_item_new("(extra)buffer_plugin", "matrix_bar_item_plugin", "")
     W.bar_item_new("(extra)buffer_name", "matrix_bar_item_name", "")
     W.bar_item_new("(extra)lag", "matrix_bar_item_lag", "")

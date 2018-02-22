@@ -31,7 +31,6 @@ from builtins import bytes, str
 from collections import Mapping, Iterable
 from functools import wraps
 
-
 # These functions were written by Trygve Aaberge for wee-slack and are under a
 # MIT License.
 # More info can be found in the wee-slack repository under the commit:
@@ -40,17 +39,20 @@ from functools import wraps
 
 
 class WeechatWrapper(object):
+
     def __init__(self, wrapped_class):
         self.wrapped_class = wrapped_class
 
     # Helper method used to encode/decode method calls.
     def wrap_for_utf8(self, method):
+
         def hooked(*args, **kwargs):
             result = method(*encode_to_utf8(args), **encode_to_utf8(kwargs))
             # Prevent wrapped_class from becoming unwrapped
             if result == self.wrapped_class:
                 return self
             return decode_from_utf8(result)
+
         return hooked
 
     # Encode and decode everything sent to/received from weechat. We use the
@@ -67,11 +69,7 @@ class WeechatWrapper(object):
     def prnt_date_tags(self, buffer, date, tags, message):
         message = message.replace("\n", "\n \t")
         return self.wrap_for_utf8(self.wrapped_class.prnt_date_tags)(
-            buffer,
-            date,
-            tags,
-            message
-        )
+            buffer, date, tags, message)
 
 
 def utf8_decode(function):
@@ -79,6 +77,7 @@ def utf8_decode(function):
     Decode all arguments from byte strings to unicode strings. Use this for
     functions called from outside of this script, e.g. callbacks from weechat.
     """
+
     @wraps(function)
     def wrapper(*args, **kwargs):
 
@@ -87,6 +86,7 @@ def utf8_decode(function):
             return function(*args, **kwargs)
 
         return function(*decode_from_utf8(args), **decode_from_utf8(kwargs))
+
     return wrapper
 
 

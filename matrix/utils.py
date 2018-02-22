@@ -44,29 +44,21 @@ def server_buffer_prnt(server, string):
 def tags_from_line_data(line_data):
     # type: (weechat.hdata) -> List[str]
     tags_count = W.hdata_get_var_array_size(
-        W.hdata_get('line_data'),
-        line_data,
-        'tags_array')
+        W.hdata_get('line_data'), line_data, 'tags_array')
 
     tags = [
         W.hdata_string(
-            W.hdata_get('line_data'),
-            line_data,
-            '%d|tags_array' % i
-        ) for i in range(tags_count)]
+            W.hdata_get('line_data'), line_data, '%d|tags_array' % i)
+        for i in range(tags_count)
+    ]
 
     return tags
 
 
 def create_server_buffer(server):
     # type: (MatrixServer) -> None
-    server.server_buffer = W.buffer_new(
-        server.name,
-        "server_buffer_cb",
-        server.name,
-        "",
-        ""
-    )
+    server.server_buffer = W.buffer_new(server.name, "server_buffer_cb",
+                                        server.name, "", "")
 
     server_buffer_set_title(server)
     W.buffer_set(server.server_buffer, "localvar_set_type", 'server')
@@ -107,9 +99,7 @@ def server_buffer_set_title(server):
         ip_string = ""
 
     title = ("Matrix: {address}:{port}{ip}").format(
-        address=server.address,
-        port=server.port,
-        ip=ip_string)
+        address=server.address, port=server.port, ip=ip_string)
 
     W.buffer_set(server.server_buffer, "title", title)
 
@@ -155,17 +145,9 @@ def sender_to_nick_and_color(room, sender):
 
 def tags_for_message(message_type):
     default_tags = {
-        "message": [
-            "matrix_message",
-            "notify_message",
-            "log1"
-        ],
-        "backlog": [
-            "matrix_message",
-            "notify_message",
-            "no_log",
-            "no_highlight"
-        ]
+        "message": ["matrix_message", "notify_message", "log1"],
+        "backlog":
+        ["matrix_message", "notify_message", "no_log", "no_highlight"]
     }
 
     return default_tags[message_type]

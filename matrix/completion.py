@@ -23,16 +23,13 @@ from matrix.utils import tags_from_line_data
 
 def add_servers_to_completion(completion):
     for server_name in SERVERS:
-        W.hook_completion_list_add(
-            completion,
-            server_name,
-            0,
-            W.WEECHAT_LIST_POS_SORT
-        )
+        W.hook_completion_list_add(completion, server_name, 0,
+                                   W.WEECHAT_LIST_POS_SORT)
 
 
 @utf8_decode
-def matrix_server_command_completion_cb(data, completion_item, buffer, completion):
+def matrix_server_command_completion_cb(data, completion_item, buffer,
+                                        completion):
     buffer_input = W.buffer_get_string(buffer, "input").split()
 
     args = buffer_input[1:]
@@ -40,12 +37,8 @@ def matrix_server_command_completion_cb(data, completion_item, buffer, completio
 
     def complete_commands():
         for command in commands:
-            W.hook_completion_list_add(
-                completion,
-                command,
-                0,
-                W.WEECHAT_LIST_POS_SORT
-            )
+            W.hook_completion_list_add(completion, command, 0,
+                                       W.WEECHAT_LIST_POS_SORT)
 
     if len(args) == 1:
         complete_commands()
@@ -74,29 +67,18 @@ def matrix_server_completion_cb(data, completion_item, buffer, completion):
 @utf8_decode
 def matrix_command_completion_cb(data, completion_item, buffer, completion):
     for command in [
-            "connect",
-            "disconnect",
-            "reconnect",
-            "server",
-            "help",
-            "debug"
+            "connect", "disconnect", "reconnect", "server", "help", "debug"
     ]:
-        W.hook_completion_list_add(
-            completion,
-            command,
-            0,
-            W.WEECHAT_LIST_POS_SORT)
+        W.hook_completion_list_add(completion, command, 0,
+                                   W.WEECHAT_LIST_POS_SORT)
     return W.WEECHAT_RC_OK
 
 
 @utf8_decode
 def matrix_debug_completion_cb(data, completion_item, buffer, completion):
     for debug_type in ["messaging", "network", "timing"]:
-        W.hook_completion_list_add(
-            completion,
-            debug_type,
-            0,
-            W.WEECHAT_LIST_POS_SORT)
+        W.hook_completion_list_add(completion, debug_type, 0,
+                                   W.WEECHAT_LIST_POS_SORT)
     return W.WEECHAT_RC_OK
 
 
@@ -104,46 +86,31 @@ def matrix_debug_completion_cb(data, completion_item, buffer, completion):
 def matrix_message_completion_cb(data, completion_item, buffer, completion):
     own_lines = W.hdata_pointer(W.hdata_get('buffer'), buffer, 'own_lines')
     if own_lines:
-        line = W.hdata_pointer(
-            W.hdata_get('lines'),
-            own_lines,
-            'last_line'
-        )
+        line = W.hdata_pointer(W.hdata_get('lines'), own_lines, 'last_line')
 
         line_number = 1
 
         while line:
-            line_data = W.hdata_pointer(
-                W.hdata_get('line'),
-                line,
-                'data'
-            )
+            line_data = W.hdata_pointer(W.hdata_get('line'), line, 'data')
 
             if line_data:
-                message = W.hdata_string(W.hdata_get('line_data'), line_data,
-                                         'message')
+                message = W.hdata_string(
+                    W.hdata_get('line_data'), line_data, 'message')
 
                 tags = tags_from_line_data(line_data)
 
                 # Only add non redacted user messages to the completion
-                if (message
-                        and 'matrix_message' in tags
-                        and 'matrix_redacted' not in tags):
+                if (message and 'matrix_message' in tags and
+                        'matrix_redacted' not in tags):
 
                     if len(message) > OPTIONS.redaction_comp_len + 2:
-                        message = (
-                            message[:OPTIONS.redaction_comp_len]
-                            + '..')
+                        message = (message[:OPTIONS.redaction_comp_len] + '..')
 
                     item = ("{number}:\"{message}\"").format(
-                        number=line_number,
-                        message=message)
+                        number=line_number, message=message)
 
-                    W.hook_completion_list_add(
-                        completion,
-                        item,
-                        0,
-                        W.WEECHAT_LIST_POS_END)
+                    W.hook_completion_list_add(completion, item, 0,
+                                               W.WEECHAT_LIST_POS_END)
                     line_number += 1
 
             line = W.hdata_move(W.hdata_get('line'), line, -1)
@@ -152,37 +119,17 @@ def matrix_message_completion_cb(data, completion_item, buffer, completion):
 
 
 def init_completion():
-    W.hook_completion(
-        "matrix_server_commands",
-        "Matrix server completion",
-        "matrix_server_command_completion_cb",
-        ""
-    )
+    W.hook_completion("matrix_server_commands", "Matrix server completion",
+                      "matrix_server_command_completion_cb", "")
 
-    W.hook_completion(
-        "matrix_servers",
-        "Matrix server completion",
-        "matrix_server_completion_cb",
-        ""
-    )
+    W.hook_completion("matrix_servers", "Matrix server completion",
+                      "matrix_server_completion_cb", "")
 
-    W.hook_completion(
-        "matrix_commands",
-        "Matrix command completion",
-        "matrix_command_completion_cb",
-        ""
-    )
+    W.hook_completion("matrix_commands", "Matrix command completion",
+                      "matrix_command_completion_cb", "")
 
-    W.hook_completion(
-        "matrix_messages",
-        "Matrix message completion",
-        "matrix_message_completion_cb",
-        ""
-    )
+    W.hook_completion("matrix_messages", "Matrix message completion",
+                      "matrix_message_completion_cb", "")
 
-    W.hook_completion(
-        "matrix_debug_types",
-        "Matrix debugging type completion",
-        "matrix_debug_completion_cb",
-        ""
-    )
+    W.hook_completion("matrix_debug_types", "Matrix debugging type completion",
+                      "matrix_debug_completion_cb", "")

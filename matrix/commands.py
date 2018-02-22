@@ -24,15 +24,9 @@ import matrix.globals
 from matrix.globals import W, OPTIONS, SERVERS
 
 from matrix.utf import utf8_decode
-from matrix.api import (
-    MessageType,
-    MatrixTopicMessage,
-    MatrixRedactMessage,
-    MatrixBacklogMessage,
-    MatrixJoinMessage,
-    MatrixPartMessage,
-    MatrixInviteMessage
-)
+from matrix.api import (MessageType, MatrixTopicMessage, MatrixRedactMessage,
+                        MatrixBacklogMessage, MatrixJoinMessage,
+                        MatrixPartMessage, MatrixInviteMessage)
 from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
 from matrix.server import MatrixServer
@@ -41,60 +35,52 @@ from matrix.server import MatrixServer
 def hook_commands():
     W.hook_command(
         # Command name and short description
-        'matrix', 'Matrix chat protocol command',
+        'matrix',
+        'Matrix chat protocol command',
         # Synopsis
-        (
-            'server add <server-name> <hostname>[:<port>] ||'
-            'server delete|list|listfull <server-name> ||'
-            'connect <server-name> ||'
-            'disconnect <server-name> ||'
-            'reconnect <server-name> ||'
-            'debug <debug-type> ||'
-            'help <matrix-command>'
-        ),
+        ('server add <server-name> <hostname>[:<port>] ||'
+         'server delete|list|listfull <server-name> ||'
+         'connect <server-name> ||'
+         'disconnect <server-name> ||'
+         'reconnect <server-name> ||'
+         'debug <debug-type> ||'
+         'help <matrix-command>'),
         # Description
-        (
-            '    server: list, add, or remove Matrix servers\n'
-            '   connect: connect to Matrix servers\n'
-            'disconnect: disconnect from one or all Matrix servers\n'
-            ' reconnect: reconnect to server(s)\n\n'
-            '      help: show detailed command help\n\n'
-            '     debug: enable or disable debugging\n\n'
-            'Use /matrix help [command] to find out more\n'
-        ),
+        ('    server: list, add, or remove Matrix servers\n'
+         '   connect: connect to Matrix servers\n'
+         'disconnect: disconnect from one or all Matrix servers\n'
+         ' reconnect: reconnect to server(s)\n\n'
+         '      help: show detailed command help\n\n'
+         '     debug: enable or disable debugging\n\n'
+         'Use /matrix help [command] to find out more\n'),
         # Completions
-        (
-            'server %(matrix_server_commands)|%* ||'
-            'connect %(matrix_servers) ||'
-            'disconnect %(matrix_servers) ||'
-            'reconnect %(matrix_servers) ||'
-            'debug %(matrix_debug_types) ||'
-            'help %(matrix_commands)'
-        ),
+        ('server %(matrix_server_commands)|%* ||'
+         'connect %(matrix_servers) ||'
+         'disconnect %(matrix_servers) ||'
+         'reconnect %(matrix_servers) ||'
+         'debug %(matrix_debug_types) ||'
+         'help %(matrix_commands)'),
         # Function name
-        'matrix_command_cb', '')
+        'matrix_command_cb',
+        '')
 
     W.hook_command(
         # Command name and short description
-        'redact', 'redact messages',
+        'redact',
+        'redact messages',
         # Synopsis
-        (
-            '<message-number>[:<"message-part">] [<reason>]'
-        ),
+        ('<message-number>[:<"message-part">] [<reason>]'),
         # Description
-        (
-            "message-number: number of the message to redact (message numbers"
-            "\n                start from the last recieved as "
-            "1 and count up)\n"
-            "  message-part: a shortened part of the message\n"
-            "        reason: the redaction reason\n"
-        ),
+        ("message-number: number of the message to redact (message numbers"
+         "\n                start from the last recieved as "
+         "1 and count up)\n"
+         "  message-part: a shortened part of the message\n"
+         "        reason: the redaction reason\n"),
         # Completions
-        (
-            '%(matrix_messages)'
-        ),
+        ('%(matrix_messages)'),
         # Function name
-        'matrix_redact_command_cb', '')
+        'matrix_redact_command_cb',
+        '')
 
     W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
@@ -121,8 +107,7 @@ def matrix_fetch_old_messages(server, room_id):
         server.client,
         room_id=room_id,
         token=prev_batch,
-        limit=OPTIONS.backlog_limit
-    )
+        limit=OPTIONS.backlog_limit)
     room.backlog_pending = True
 
     server.send_or_queue(message)
@@ -140,11 +125,8 @@ def check_server_existence(server_name, servers):
 
 
 def hook_page_up():
-    OPTIONS.page_up_hook = W.hook_command_run(
-        '/window page_up',
-        'matrix_command_pgup_cb',
-        ''
-    )
+    OPTIONS.page_up_hook = W.hook_command_run('/window page_up',
+                                              'matrix_command_pgup_cb', '')
 
 
 @utf8_decode
@@ -171,8 +153,7 @@ def matrix_command_pgup_cb(data, buffer, command):
             window = W.window_search_with_buffer(buffer)
 
             first_line_displayed = bool(
-                W.window_get_integer(window, "first_line_displayed")
-            )
+                W.window_get_integer(window, "first_line_displayed"))
 
             if first_line_displayed:
                 room_id = key_from_value(server.buffers, buffer)
@@ -185,22 +166,19 @@ def matrix_command_pgup_cb(data, buffer, command):
 
 @utf8_decode
 def matrix_command_join_cb(data, buffer, command):
+
     def join(server, args):
         split_args = args.split(" ", 1)
 
         # TODO handle join for non public rooms
         if len(split_args) != 2:
             message = ("{prefix}Error with command \"/join\" (help on "
-                       "command: /help join)").format(
-                           prefix=W.prefix("error"))
+                       "command: /help join)").format(prefix=W.prefix("error"))
             W.prnt("", message)
             return
 
         _, room_id = split_args
-        message = MatrixJoinMessage(
-            server.client,
-            room_id=room_id
-        )
+        message = MatrixJoinMessage(server.client, room_id=room_id)
         server.send_or_queue(message)
 
     for server in SERVERS.values():
@@ -216,6 +194,7 @@ def matrix_command_join_cb(data, buffer, command):
 
 @utf8_decode
 def matrix_command_part_cb(data, buffer, command):
+
     def part(server, buffer, args):
         rooms = []
 
@@ -223,9 +202,9 @@ def matrix_command_part_cb(data, buffer, command):
 
         if len(split_args) == 1:
             if buffer == server.server_buffer:
-                message = ("{prefix}Error with command \"/part\" (help on "
-                           "command: /help part)").format(
-                               prefix=W.prefix("error"))
+                message = (
+                    "{prefix}Error with command \"/part\" (help on "
+                    "command: /help part)").format(prefix=W.prefix("error"))
                 W.prnt("", message)
                 return
 
@@ -236,10 +215,7 @@ def matrix_command_part_cb(data, buffer, command):
             rooms = rooms.split(" ")
 
         for room_id in rooms:
-            message = MatrixPartMessage(
-                server.client,
-                room_id=room_id
-            )
+            message = MatrixPartMessage(server.client, room_id=room_id)
             server.send_or_queue(message)
 
     for server in SERVERS.values():
@@ -255,14 +231,15 @@ def matrix_command_part_cb(data, buffer, command):
 
 @utf8_decode
 def matrix_command_invite_cb(data, buffer, command):
+
     def invite(server, buf, args):
         split_args = args.split(" ", 1)
 
         # TODO handle join for non public rooms
         if len(split_args) != 2:
-            message = ("{prefix}Error with command \"/invite\" (help on "
-                       "command: /help invite)").format(
-                           prefix=W.prefix("error"))
+            message = (
+                "{prefix}Error with command \"/invite\" (help on "
+                "command: /help invite)").format(prefix=W.prefix("error"))
             W.prnt("", message)
             return
 
@@ -270,10 +247,7 @@ def matrix_command_invite_cb(data, buffer, command):
         room_id = key_from_value(server.buffers, buf)
 
         message = MatrixInviteMessage(
-            server.client,
-            room_id=room_id,
-            user_id=invitee
-        )
+            server.client, room_id=room_id, user_id=invitee)
         server.send_or_queue(message)
 
     for server in SERVERS.values():
@@ -288,28 +262,20 @@ def event_id_from_line(buf, target_number):
     # type: (weechat.buffer, int) -> str
     own_lines = W.hdata_pointer(W.hdata_get('buffer'), buf, 'own_lines')
     if own_lines:
-        line = W.hdata_pointer(
-            W.hdata_get('lines'),
-            own_lines,
-            'last_line'
-        )
+        line = W.hdata_pointer(W.hdata_get('lines'), own_lines, 'last_line')
 
         line_number = 1
 
         while line:
-            line_data = W.hdata_pointer(
-                W.hdata_get('line'),
-                line,
-                'data'
-            )
+            line_data = W.hdata_pointer(W.hdata_get('line'), line, 'data')
 
             if line_data:
                 tags = tags_from_line_data(line_data)
 
                 # Only count non redacted user messages
-                if ("matrix_message" in tags
-                        and 'matrix_redacted' not in tags
-                        and "matrix_new_redacted" not in tags):
+                if ("matrix_message" in tags and
+                        'matrix_redacted' not in tags and
+                        "matrix_new_redacted" not in tags):
 
                     if line_number == target_number:
                         for tag in tags:
@@ -334,8 +300,8 @@ def matrix_redact_command_cb(data, buffer, args):
 
             if not matches:
                 message = ("{prefix}matrix: Invalid command arguments (see "
-                           "the help for the command /help redact)").format(
-                               prefix=W.prefix("error"))
+                           "the help for the command /help redact)"
+                          ).format(prefix=W.prefix("error"))
                 W.prnt("", message)
                 return W.WEECHAT_RC_ERROR
 
@@ -347,8 +313,7 @@ def matrix_redact_command_cb(data, buffer, args):
             if not event_id:
                 message = ("{prefix}matrix: No such message with number "
                            "{number} found").format(
-                               prefix=W.prefix("error"),
-                               number=line)
+                               prefix=W.prefix("error"), number=line)
                 W.prnt("", message)
                 return W.WEECHAT_RC_OK
 
@@ -356,16 +321,15 @@ def matrix_redact_command_cb(data, buffer, args):
                 server.client,
                 room_id=room_id,
                 event_id=event_id,
-                reason=reason
-            )
+                reason=reason)
             server.send_or_queue(message)
 
             return W.WEECHAT_RC_OK
 
         elif buffer == server.server_buffer:
             message = ("{prefix}matrix: command \"redact\" must be "
-                       "executed on a Matrix channel buffer").format(
-                           prefix=W.prefix("error"))
+                       "executed on a Matrix channel buffer"
+                      ).format(prefix=W.prefix("error"))
             W.prnt("", message)
             return W.WEECHAT_RC_OK
 
@@ -384,15 +348,13 @@ def matrix_command_debug(args):
         if debug_type in OPTIONS.debug:
             message = ("{prefix}matrix: Disabling matrix {t} "
                        "debugging.").format(
-                           prefix=W.prefix("error"),
-                           t=debug_type)
+                           prefix=W.prefix("error"), t=debug_type)
             W.prnt("", message)
             OPTIONS.debug.remove(debug_type)
         else:
             message = ("{prefix}matrix: Enabling matrix {t} "
                        "debugging.").format(
-                           prefix=W.prefix("error"),
-                           t=debug_type)
+                           prefix=W.prefix("error"), t=debug_type)
             W.prnt("", message)
             OPTIONS.debug.append(debug_type)
 
@@ -406,8 +368,7 @@ def matrix_command_debug(args):
         else:
             message = ("{prefix}matrix: Unknown matrix debug "
                        "type \"{t}\".").format(
-                           prefix=W.prefix("error"),
-                           t=command)
+                           prefix=W.prefix("error"), t=command)
             W.prnt("", message)
 
 
@@ -517,8 +478,7 @@ def matrix_command_help(args):
         else:
             message = ("{prefix}matrix: No help available, \"{command}\" "
                        "is not a matrix command").format(
-                           prefix=W.prefix("error"),
-                           command=command)
+                           prefix=W.prefix("error"), command=command)
 
         W.prnt("", "")
         W.prnt("", message)
@@ -527,6 +487,7 @@ def matrix_command_help(args):
 
 
 def matrix_server_command_listfull(args):
+
     def get_value_string(value, default_value):
         if value == default_value:
             if not value:
@@ -691,11 +652,7 @@ def matrix_server_command_add(args):
         except ValueError:
             host, port = args[1], None
 
-        return_code = W.config_option_set(
-            server.options["address"],
-            host,
-            1
-        )
+        return_code = W.config_option_set(server.options["address"], host, 1)
 
         if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
             remove_server(server)
@@ -712,11 +669,7 @@ def matrix_server_command_add(args):
             return
 
         if port:
-            return_code = W.config_option_set(
-                server.options["port"],
-                port,
-                1
-            )
+            return_code = W.config_option_set(server.options["port"], port, 1)
             if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
                 remove_server(server)
                 message = ("{prefix}Failed to set port for server "
@@ -733,11 +686,7 @@ def matrix_server_command_add(args):
 
     if len(args) >= 3:
         user = args[2]
-        return_code = W.config_option_set(
-            server.options["username"],
-            user,
-            1
-        )
+        return_code = W.config_option_set(server.options["username"], user, 1)
 
         if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
             remove_server(server)
@@ -756,11 +705,8 @@ def matrix_server_command_add(args):
     if len(args) == 4:
         password = args[3]
 
-        return_code = W.config_option_set(
-            server.options["password"],
-            password,
-            1
-        )
+        return_code = W.config_option_set(server.options["password"], password,
+                                          1)
         if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
             remove_server(server)
             message = ("{prefix}Failed to set password for server "
@@ -783,14 +729,13 @@ def matrix_server_command_add(args):
 
 
 def matrix_server_command(command, args):
+
     def list_servers(_):
         if SERVERS:
             W.prnt("", "\nAll matrix servers:")
             for server in SERVERS:
                 W.prnt("", "    {color}{server}".format(
-                    color=W.color("chat_server"),
-                    server=server
-                ))
+                    color=W.color("chat_server"), server=server))
 
     # TODO the argument for list and listfull is used as a match word to
     # find/filter servers, we're currently match exactly to the whole name
@@ -805,13 +750,13 @@ def matrix_server_command(command, args):
     else:
         message = ("{prefix}matrix: Error: unknown matrix server command, "
                    "\"{command}\" (type /matrix help server for help)").format(
-                       prefix=W.prefix("error"),
-                       command=command)
+                       prefix=W.prefix("error"), command=command)
         W.prnt("", message)
 
 
 @utf8_decode
 def matrix_command_cb(data, buffer, args):
+
     def connect_server(args):
         for server_name in args:
             if check_server_existence(server_name, SERVERS):
@@ -865,8 +810,7 @@ def matrix_command_cb(data, buffer, args):
     else:
         message = ("{prefix}matrix: Error: unknown matrix command, "
                    "\"{command}\" (type /help matrix for help)").format(
-                       prefix=W.prefix("error"),
-                       command=command)
+                       prefix=W.prefix("error"), command=command)
         W.prnt("", message)
 
     return W.WEECHAT_RC_OK
@@ -917,18 +861,15 @@ def matrix_command_topic_cb(data, buffer, command):
                 return W.WEECHAT_RC_OK_EAT
 
             message = MatrixTopicMessage(
-                server.client,
-                room_id=room_id,
-                topic=topic
-            )
+                server.client, room_id=room_id, topic=topic)
             server.send_or_queue(message)
 
             return W.WEECHAT_RC_OK_EAT
 
         elif buffer == server.server_buffer:
             message = ("{prefix}matrix: command \"topic\" must be "
-                       "executed on a Matrix channel buffer").format(
-                           prefix=W.prefix("error"))
+                       "executed on a Matrix channel buffer"
+                      ).format(prefix=W.prefix("error"))
             W.prnt(buffer, message)
             return W.WEECHAT_RC_OK_EAT
 

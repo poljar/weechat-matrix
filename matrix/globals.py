@@ -23,9 +23,8 @@ from matrix.plugin_options import PluginOptions
 
 import weechat
 
-
 W = weechat if sys.hexversion >= 0x3000000 else WeechatWrapper(weechat)
 
 OPTIONS = PluginOptions()  # type: PluginOptions
-SERVERS = dict()           # type: Dict[str, MatrixServer]
-CONFIG = None              # type: weechat.config
+SERVERS = dict()  # type: Dict[str, MatrixServer]
+CONFIG = None  # type: weechat.config
