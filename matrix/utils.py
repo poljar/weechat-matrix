@@ -15,8 +15,10 @@
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 from __future__ import unicode_literals
+from builtins import str
 
 import time
+import math
 
 from matrix.globals import W, SERVERS, OPTIONS
 
@@ -162,3 +164,75 @@ def add_event_tags(event_id, nick, color, tags):
     tags.append("matrix_id_{event_id}".format(event_id=event_id))
 
     return tags
+
+
+def sanitize_token(string):
+    # type: (str) -> str
+    string = sanitize_string(string)
+
+    if len(string) > 512:
+        raise ValueError
+
+    return string
+
+
+def sanitize_string(string):
+    # type: (str) -> str
+    if not isinstance(string, str):
+        raise TypeError
+
+    remap = {
+        ord('\b'): None,
+        ord('\f'): None,
+        ord('\n'): None,
+        ord('\r'): None,
+        ord('\t'): None,
+        ord('\0'): None
+    }
+
+    return string.translate(remap)
+
+
+def sanitize_id(string):
+    # type: (str) -> str
+
+    string = sanitize_string(string)
+
+    if len(string) > 128:
+        raise ValueError
+
+    return string
+
+
+def sanitize_age(age):
+    # type: (int) -> int
+    if not isinstance(age, int):
+        raise TypeError
+
+    if math.isnan(age):
+        raise ValueError
+
+    if math.isinf(age):
+        raise ValueError
+
+    if age < 0:
+        raise ValueError
+
+    return age
+
+
+def sanitize_text(string):
+    # type: (str) -> str
+    if not isinstance(string, str):
+        raise TypeError
+
+    # yapf: disable
+    remap = {
+        ord('\b'): None,
+        ord('\f'): None,
+        ord('\r'): None,
+        ord('\0'): None
+    }
+    # yapf: enable
+
+    return string.translate(remap)
