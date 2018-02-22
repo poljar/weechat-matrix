@@ -315,10 +315,10 @@ class MatrixBacklogEvent(MatrixEvent):
     @classmethod
     def from_dict(cls, server, room_id, parsed_dict):
         try:
-            if not parsed_dict["chunk"]:
-                return cls(server, room_id, None, [])
-
             end_token = sanitize_id(parsed_dict["end"])
+
+            if not parsed_dict["chunk"]:
+                return cls(server, room_id, end_token, [])
 
             message_func = partial(MatrixBacklogEvent._message_from_event,
                                    room_id)
