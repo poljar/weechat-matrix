@@ -25,14 +25,15 @@ class MatrixRoom:
     def __init__(self, room_id):
         # type: (str) -> None
         # yapf: disable
-        self.room_id = room_id  # type: str
-        self.alias = room_id    # type: str
-        self.topic = ""         # type: str
-        self.topic_author = ""  # type: str
-        self.topic_date = None  # type: datetime.datetime
-        self.prev_batch = ""    # type: str
-        self.users = dict()     # type: Dict[str, MatrixUser]
-        self.encrypted = False  # type: bool
+        self.room_id = room_id        # type: str
+        self.alias = room_id          # type: str
+        self.topic = ""               # type: str
+        self.topic_author = ""        # type: str
+        self.topic_date = None        # type: datetime.datetime
+        self.prev_batch = ""          # type: str
+        self.users = dict()           # type: Dict[str, MatrixUser]
+        self.encrypted = False        # type: bool
+        self.backlog_pending = False  # type: bool
         # yapf: enable
 
 

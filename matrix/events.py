@@ -343,6 +343,7 @@ class MatrixBacklogEvent(MatrixEvent):
             message.prnt(room, buf, tags)
 
         room.prev_batch = self.end_token
+        room.backlog_pending = False
 
 
 class MatrixSyncEvent(MatrixEvent):

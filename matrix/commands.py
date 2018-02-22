@@ -108,6 +108,10 @@ def hook_commands():
 
 def matrix_fetch_old_messages(server, room_id):
     room = server.rooms[room_id]
+
+    if room.backlog_pending:
+        return
+
     prev_batch = room.prev_batch
 
     if not prev_batch:
@@ -119,6 +123,7 @@ def matrix_fetch_old_messages(server, room_id):
         token=prev_batch,
         limit=OPTIONS.backlog_limit
     )
+    room.backlog_pending = True
 
     server.send_or_queue(message)
 
