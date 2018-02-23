@@ -270,7 +270,7 @@ class MatrixBacklogEvent(MatrixEvent):
         tags = tags_for_message("backlog")
 
         for event in self.events:
-            event.execute(room, buf, tags)
+            event.execute(room, buf, list(tags))
 
         room.prev_batch = self.end_token
         room.backlog_pending = False
@@ -326,8 +326,8 @@ class MatrixSyncEvent(MatrixEvent):
             room.prev_batch = info.prev_batch
 
         tags = tags_for_message("message")
-        for message in info.events:
-            message.execute(room, buf, tags)
+        for event in info.events:
+            event.execute(server, room, buf, list(tags))
 
     def execute(self):
         server = self.server
