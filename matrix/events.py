@@ -326,6 +326,10 @@ class MatrixSyncEvent(MatrixEvent):
             room.prev_batch = info.prev_batch
 
         tags = tags_for_message("message")
+
+        for event in info.membership_events:
+            event.execute(server, room, buf, list(tags))
+
         for event in info.events:
             event.execute(server, room, buf, list(tags))
 

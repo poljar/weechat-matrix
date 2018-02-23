@@ -86,10 +86,11 @@ def matrix_create_room_buffer(server, room_id):
 
 class RoomInfo():
 
-    def __init__(self, room_id, prev_batch, events):
-        # type: (str, str, List[Any]) -> None
+    def __init__(self, room_id, prev_batch, membership_events, events):
+        # type: (str, str, List[Any], List[Any]) -> None
         self.room_id = room_id
         self.prev_batch = prev_batch
+        self.membership_events = membership_events
         self.events = events
 
     @staticmethod
@@ -122,29 +123,28 @@ class RoomInfo():
         return None
 
     @staticmethod
-    def _event_from_dict(event):
-        if event["type"] == "m.room.message":
-            return RoomInfo._message_from_event(event)
-        elif event["type"] == "m.room.member":
-            return RoomInfo._membership_from_dict(event)
-        else:
-            return None
+    def _parse_events(parsed_dict):
+        membership_events = []
+        other_events = []
+
+        for event in parsed_dict:
+            if event["type"] == "m.room.message":
+                other_events.append(RoomInfo._message_from_event(event))
+            elif event["type"] == "m.room.member":
+                membership_events.append(RoomInfo._membership_from_dict(event))
+
+        return (list(filter(None, membership_events)), other_events)
 
     @classmethod
     def from_dict(cls, room_id, parsed_dict):
         prev_batch = sanitize_id(parsed_dict['timeline']['prev_batch'])
 
-        events = []
-
         state_dict = parsed_dict['state']['events']
         timeline_dict = parsed_dict['timeline']['events']
 
-        for event in timeline_dict:
-            events.append(RoomInfo._event_from_dict(event))
+        membership_events, other_events = RoomInfo._parse_events(timeline_dict)
 
-        filtered_events = list(filter(None, events))
-
-        return cls(room_id, prev_batch, filtered_events)
+        return cls(room_id, prev_batch, membership_events, other_events)
 
 
 class RoomEvent():
