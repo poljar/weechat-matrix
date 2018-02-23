@@ -142,7 +142,12 @@ class RoomInfo():
         state_dict = parsed_dict['state']['events']
         timeline_dict = parsed_dict['timeline']['events']
 
-        membership_events, other_events = RoomInfo._parse_events(timeline_dict)
+        membership_events, other_events = RoomInfo._parse_events(state_dict)
+        timeline_member_events, timeline_events = RoomInfo._parse_events(
+            timeline_dict)
+
+        membership_events.extend(timeline_member_events)
+        other_events.extend(timeline_events)
 
         return cls(room_id, prev_batch, membership_events, other_events)
 
