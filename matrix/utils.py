@@ -204,21 +204,36 @@ def sanitize_id(string):
     return string
 
 
-def sanitize_age(age):
-    # type: (int) -> int
-    if not isinstance(age, int):
+def sanitize_int(number, minimum=None, maximum=None):
+    # type: (int, int, int) -> int
+    if not isinstance(number, int):
         raise TypeError
 
-    if math.isnan(age):
+    if math.isnan(number):
         raise ValueError
 
-    if math.isinf(age):
+    if math.isinf(number):
         raise ValueError
 
-    if age < 0:
-        raise ValueError
+    if minimum:
+        if number < minimum:
+            raise ValueError
 
-    return age
+    if maximum:
+        if number > maximum:
+            raise ValueError
+
+    return number
+
+
+def sanitize_age(age):
+    # type: (int) -> int
+    return sanitize_int(age, 0)
+
+
+def sanitize_power_level(level):
+    # type: (int) -> int
+    return sanitize_int(level, 0, 100)
 
 
 def sanitize_text(string):

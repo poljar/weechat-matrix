@@ -367,7 +367,7 @@ def matrix_handle_room_power_levels(server, room_id, event):
 
         nick_pointer = W.nicklist_search_nick(buf, "", user.display_name)
         W.nicklist_remove_nick(buf, nick_pointer)
-        add_user_to_nicklist(buf, user)
+        add_user_to_nicklist(buf, full_name, user)
 
 
 def matrix_handle_room_events(server, room_id, room_events):

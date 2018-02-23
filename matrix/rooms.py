@@ -17,13 +17,19 @@
 from __future__ import unicode_literals
 from builtins import str
 
+from collections import namedtuple
+from functools import partial
+
 from matrix.globals import W
 
 from matrix.colors import Formatted
 from matrix.utils import (strip_matrix_server, color_for_tags, date_from_age,
                           sender_to_nick_and_color, tags_for_message,
                           add_event_tags, sanitize_id, sanitize_age,
-                          sanitize_text, shorten_sender, add_user_to_nicklist)
+                          sanitize_text, shorten_sender, add_user_to_nicklist,
+                          get_prefix_for_level, sanitize_power_level)
+
+PowerLevel = namedtuple('PowerLevel', ['user', 'level'])
 
 
 class MatrixRoom:
@@ -132,6 +138,8 @@ class RoomInfo():
                 other_events.append(RoomInfo._message_from_event(event))
             elif event["type"] == "m.room.member":
                 membership_events.append(RoomInfo._membership_from_dict(event))
+            elif event["type"] == "m.room.power_levels":
+                other_events.append(RoomPowerLevels.from_dict(event))
 
         return (list(filter(None, membership_events)), other_events)
 
@@ -317,3 +325,44 @@ class RoomMemberLeave(RoomEvent):
                 W.nicklist_remove_nick(buff, nick_pointer)
 
             del room.users[self.sender]
+
+
+class RoomPowerLevels(RoomEvent):
+
+    def __init__(self, event_id, sender, age, power_levels):
+        self.power_levels = power_levels
+        RoomEvent.__init__(self, event_id, sender, age)
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        age = sanitize_age(event_dict["unsigned"]["age"])
+        power_levels = []
+
+        for user, level in event_dict["content"]["users"].items():
+            power_levels.append(
+                PowerLevel(sanitize_id(user), sanitize_power_level(level)))
+
+        return cls(event_id, sender, age, power_levels)
+
+    def _set_power_level(self, room, buff, power_level):
+        user_id = power_level.user
+        level = power_level.level
+
+        if user_id not in room.users:
+            return
+
+        user = room.users[user_id]
+        user.power_level = level
+        user.prefix = get_prefix_for_level(level)
+
+        nick_pointer = W.nicklist_search_nick(buff, "", user_id)
+
+        if nick_pointer:
+            W.nicklist_remove_nick(buff, nick_pointer)
+            add_user_to_nicklist(buff, user_id, user)
+
+    def execute(self, server, room, buff, tags):
+        level_func = partial(self._set_power_level, room, buff)
+        map(level_func, self.power_levels)
