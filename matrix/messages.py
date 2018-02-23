@@ -28,34 +28,20 @@ from matrix.colors import Formatted
 
 from matrix.globals import W, OPTIONS
 
-from matrix.api import (MessageType, MatrixUser)
+from matrix.api import MessageType
+from matrix.rooms import MatrixUser
 
 from matrix.rooms import MatrixRoom
 
 from matrix.utils import (server_buffer_prnt, tags_from_line_data, prnt_debug,
-                          color_for_tags)
+                          color_for_tags, add_user_to_nicklist,
+                          get_prefix_for_level)
 from matrix.plugin_options import RedactType, DebugType
 
 
 def strip_matrix_server(string):
     # type: (str) -> str
     return string.rsplit(":", 1)[0]
-
-
-def add_user_to_nicklist(buf, user):
-    group_name = "999|..."
-
-    if user.power_level >= 100:
-        group_name = "000|o"
-    elif user.power_level >= 50:
-        group_name = "001|h"
-    elif user.power_level > 0:
-        group_name = "002|v"
-
-    group = W.nicklist_search_group(buf, "", group_name)
-    # TODO make it configurable so we can use a display name or user_id here
-    W.nicklist_add_nick(buf, group, user.display_name, user.nick_color,
-                        user.prefix, get_prefix_color(user.prefix), 1)
 
 
 def matrix_create_room_buffer(server, room_id):
@@ -133,7 +119,7 @@ def matrix_handle_room_members(server, room_id, event):
 
         nick_pointer = W.nicklist_search_nick(buf, "", user.display_name)
         if not nick_pointer:
-            add_user_to_nicklist(buf, user)
+            add_user_to_nicklist(buf, full_name, user)
         else:
             # TODO we can get duplicate display names
             pass
@@ -362,29 +348,6 @@ def matrix_handle_room_redaction(server, room_id, event):
             line = W.hdata_move(hdata_line, line, -1)
 
     return W.WEECHAT_RC_OK
-
-
-def get_prefix_for_level(level):
-    # type: (int) -> str
-    if level >= 100:
-        return "&"
-    elif level >= 50:
-        return "@"
-    elif level > 0:
-        return "+"
-    return ""
-
-
-# TODO make this configurable
-def get_prefix_color(prefix):
-    # type: (str) -> str
-    if prefix == "&":
-        return "lightgreen"
-    elif prefix == "@":
-        return "lightgreen"
-    elif prefix == "+":
-        return "yellow"
-    return ""
 
 
 def matrix_handle_room_power_levels(server, room_id, event):

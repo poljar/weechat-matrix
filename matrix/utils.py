@@ -236,3 +236,42 @@ def sanitize_text(string):
     # yapf: enable
 
     return string.translate(remap)
+
+
+def add_user_to_nicklist(buf, user_id, user):
+    group_name = "999|..."
+
+    if user.power_level >= 100:
+        group_name = "000|o"
+    elif user.power_level >= 50:
+        group_name = "001|h"
+    elif user.power_level > 0:
+        group_name = "002|v"
+
+    group = W.nicklist_search_group(buf, "", group_name)
+    # TODO make it configurable so we can use a display name or user_id here
+    W.nicklist_add_nick(buf, group, user_id, user.nick_color, user.prefix,
+                        get_prefix_color(user.prefix), 1)
+
+
+def get_prefix_for_level(level):
+    # type: (int) -> str
+    if level >= 100:
+        return "&"
+    elif level >= 50:
+        return "@"
+    elif level > 0:
+        return "+"
+    return ""
+
+
+# TODO make this configurable
+def get_prefix_color(prefix):
+    # type: (str) -> str
+    if prefix == "&":
+        return "lightgreen"
+    elif prefix == "@":
+        return "lightgreen"
+    elif prefix == "+":
+        return "yellow"
+    return ""

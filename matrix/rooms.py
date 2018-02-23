@@ -23,7 +23,7 @@ from matrix.colors import Formatted
 from matrix.utils import (strip_matrix_server, color_for_tags, date_from_age,
                           sender_to_nick_and_color, tags_for_message,
                           add_event_tags, sanitize_id, sanitize_age,
-                          sanitize_text)
+                          sanitize_text, shorten_sender, add_user_to_nicklist)
 
 
 class MatrixRoom:
@@ -40,6 +40,18 @@ class MatrixRoom:
         self.users = dict()           # type: Dict[str, MatrixUser]
         self.encrypted = False        # type: bool
         self.backlog_pending = False  # type: bool
+        # yapf: enable
+
+
+class MatrixUser:
+
+    def __init__(self, name, display_name):
+        # yapf: disable
+        self.name = name                  # type: str
+        self.display_name = display_name  # type: str
+        self.power_level = 0              # type: int
+        self.nick_color = ""              # type: str
+        self.prefix = ""                  # type: str
         # yapf: enable
 
 
@@ -96,9 +108,27 @@ class RoomInfo():
         return RoomMessageEvent.from_dict(event)
 
     @staticmethod
+    def _membership_from_dict(event_dict):
+        if (event_dict["membership"] not in [
+                "invite", "join", "knock", "leave", "ban"
+        ]):
+            raise ValueError
+
+        if event_dict["membership"] == "join":
+            return RoomMemberJoin.from_dict(event_dict)
+        elif event_dict["membership"] == "leave":
+            return RoomMemberLeave.from_dict(event_dict)
+
+        return None
+
+    @staticmethod
     def _event_from_dict(event):
-        if event['type'] == 'm.room.message':
+        if event["type"] == "m.room.message":
             return RoomInfo._message_from_event(event)
+        elif event["type"] == "m.room.member":
+            return RoomInfo._membership_from_dict(event)
+        else:
+            return None
 
     @classmethod
     def from_dict(cls, room_id, parsed_dict):
@@ -147,7 +177,7 @@ class RoomRedactedMessageEvent(RoomEvent):
 
         return cls(event_id, sender, age, censor, reason)
 
-    def execute(self, room, buff, tags):
+    def execute(self, server, room, buff, tags):
         nick, color_name = sender_to_nick_and_color(room, self.sender)
         color = color_for_tags(color_name)
         date = date_from_age(self.age)
@@ -203,7 +233,7 @@ class RoomMessageEvent(RoomEvent):
 
         return cls(event_id, sender, age, msg, formatted_msg)
 
-    def execute(self, room, buff, tags):
+    def execute(self, server, room, buff, tags):
         msg = (self.formatted_message.to_weechat()
                if self.formatted_message else self.message)
 
@@ -218,3 +248,67 @@ class RoomMessageEvent(RoomEvent):
 
         date = date_from_age(self.age)
         W.prnt_date_tags(buff, date, tags_string, data)
+
+
+class RoomMemberJoin(RoomEvent):
+
+    def __init__(self, event_id, sender, age, display_name):
+        self.display_name = display_name
+        RoomEvent.__init__(self, event_id, sender, age)
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        age = sanitize_age(event_dict["unsigned"]["age"])
+        display_name = sanitize_text(event_dict["content"]["displayname"])
+
+        return cls(event_id, sender, age, display_name)
+
+    def execute(self, server, room, buff, tags):
+        short_name = shorten_sender(self.sender)
+
+        if self.sender in room.users:
+            user = room.users[self.sender]
+            if self.display_name:
+                user.display_name = self.display_name
+        else:
+            user = MatrixUser(short_name, self.display_name)
+
+        if not user.nick_color:
+            if self.sender == server.user_id:
+                user.nick_color = "weechat.color.chat_nick_self"
+                W.buffer_set(buff, "highlight_words", ",".join(
+                    [self.sender, user.name, user.display_name]))
+            else:
+                user.nick_color = W.info_get("nick_color_name", user.name)
+
+        room.users[self.sender] = user
+
+        nick_pointer = W.nicklist_search_nick(buff, "", self.sender)
+
+        if not nick_pointer:
+            add_user_to_nicklist(buff, self.sender, user)
+
+
+class RoomMemberLeave(RoomEvent):
+
+    def __init__(self, event_id, sender, age):
+        RoomEvent.__init__(self, event_id, sender, age)
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        age = sanitize_age(event_dict["unsigned"]["age"])
+
+        return cls(event_id, sender, age)
+
+    def execute(self, server, room, buff, tags):
+        if self.sender in room.users:
+            nick_pointer = W.nicklist_search_nick(buff, "", self.sender)
+
+            if nick_pointer:
+                W.nicklist_remove_nick(buff, nick_pointer)
+
+            del room.users[self.sender]

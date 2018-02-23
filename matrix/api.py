@@ -443,13 +443,3 @@ class MatrixInviteMessage(MatrixMessage):
                               self.room_id, self.user_id)
 
         return self._decode(server, object_hook)
-
-
-class MatrixUser:
-
-    def __init__(self, name, display_name):
-        self.name = name  # type: str
-        self.display_name = display_name  # type: str
-        self.power_level = 0  # type: int
-        self.nick_color = ""  # type: str
-        self.prefix = ""  # type: str
