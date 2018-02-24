@@ -141,7 +141,7 @@ class RoomInfo():
             elif event["type"] == "m.room.power_levels":
                 other_events.append(RoomPowerLevels.from_dict(event))
 
-        return (list(filter(None, membership_events)), other_events)
+        return (membership_events, other_events)
 
     @classmethod
     def from_dict(cls, room_id, parsed_dict):
@@ -157,7 +157,8 @@ class RoomInfo():
         membership_events.extend(timeline_member_events)
         other_events.extend(timeline_events)
 
-        return cls(room_id, prev_batch, membership_events, other_events)
+        return cls(room_id, prev_batch, list(filter(None, membership_events)),
+                   list(filter(None, other_events)))
 
 
 class RoomEvent():
