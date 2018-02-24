@@ -19,6 +19,7 @@ from builtins import str
 
 from collections import namedtuple
 from functools import partial
+from datetime import datetime
 
 from matrix.globals import W
 
@@ -140,6 +141,8 @@ class RoomInfo():
                 membership_events.append(RoomInfo._membership_from_dict(event))
             elif event["type"] == "m.room.power_levels":
                 other_events.append(RoomPowerLevels.from_dict(event))
+            elif event["type"] == "m.room.topic":
+                other_events.append(RoomTopicEvent.from_dict(event))
 
         return (membership_events, other_events)
 
@@ -367,3 +370,50 @@ class RoomPowerLevels(RoomEvent):
     def execute(self, server, room, buff, tags):
         level_func = partial(self._set_power_level, room, buff)
         map(level_func, self.power_levels)
+
+
+class RoomTopicEvent(RoomEvent):
+
+    def __init__(self, event_id, sender, age, topic):
+        self.topic = topic
+        RoomEvent.__init__(self, event_id, sender, age)
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        age = sanitize_age(event_dict["unsigned"]["age"])
+
+        topic = sanitize_text(event_dict["content"]["topic"])
+
+        return cls(event_id, sender, age, topic)
+
+    def execute(self, server, room, buff, tags):
+        topic = self.topic
+
+        nick, color_name = sender_to_nick_and_color(room, self.sender)
+
+        author = ("{nick_color}{user}{ncolor}").format(
+            nick_color=W.color(color_name), user=nick, ncolor=W.color("reset"))
+
+        # TODO print old topic if configured so
+        message = ("{prefix}{nick} has changed "
+                   "the topic for {chan_color}{room}{ncolor} "
+                   "to \"{topic}\"").format(
+                       prefix=W.prefix("network"),
+                       nick=author,
+                       chan_color=W.color("chat_channel"),
+                       ncolor=W.color("reset"),
+                       room=strip_matrix_server(room.alias),
+                       topic=topic)
+
+        tags = ["matrix_topic", "log3", "matrix_id_{}".format(self.event_id)]
+
+        date = date_from_age(self.age)
+
+        W.buffer_set(buff, "title", topic)
+        W.prnt_date_tags(buff, date, ",".join(tags), message)
+
+        room.topic = topic
+        room.topic_author = self.sender
+        room.topic_date = datetime.fromtimestamp(date_from_age(self.age))
