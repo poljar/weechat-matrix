@@ -87,6 +87,9 @@ def matrix_create_room_buffer(server, room_id):
     W.buffer_set(buf, "nicklist", "1")
     W.buffer_set(buf, "nicklist_display_groups", "0")
 
+    # TODO make this configurable
+    W.buffer_set(buf, "highlight_tags_restrict", "matrix_message")
+
     server.buffers[room_id] = buf
     server.rooms[room_id] = MatrixRoom(room_id)
 
