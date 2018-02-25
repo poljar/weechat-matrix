@@ -156,6 +156,8 @@ class RoomInfo():
                     other_events.append(RoomNameEvent.from_dict(event))
                 elif event["type"] == "m.room.aliases":
                     other_events.append(RoomAliasEvent.from_dict(event))
+                elif event["type"] == "m.room.encryption":
+                    other_events.append(RoomEncryptionEvent.from_dict(event))
         except (ValueError, TypeError, KeyError) as error:
             message = ("{prefix}matrix: Error parsing "
                        "room event of type {type}: {error}").format(
@@ -563,3 +565,23 @@ class RoomAliasEvent(RoomNameEvent):
         name = sanitize_id(event_dict['content']['aliases'][-1])
 
         return cls(event_id, sender, age, name)
+
+
+class RoomEncryptionEvent(RoomEvent):
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        age = sanitize_age(event_dict["unsigned"]["age"])
+
+        return cls(event_id, sender, age)
+
+    def execute(self, server, room, buff, tags):
+        room.encrypted = True
+
+        message = ("{prefix}This room is encrypted, encryption is "
+                   "currently unsuported. Message sending is disabled for "
+                   "this room.").format(prefix=W.prefix("error"))
+
+        W.prnt(buff, message)
