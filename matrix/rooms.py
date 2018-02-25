@@ -524,7 +524,6 @@ class RoomNameEvent(RoomEvent):
         if not self.name:
             return
 
-        W.prnt("", self.name)
         room.alias = self.name
         W.buffer_set(buff, "name", self.name)
         W.buffer_set(buff, "short_name", self.name)
