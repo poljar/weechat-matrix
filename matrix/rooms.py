@@ -289,7 +289,12 @@ class RoomMemberJoin(RoomEvent):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
         age = sanitize_age(event_dict["unsigned"]["age"])
-        display_name = sanitize_text(event_dict["content"]["displayname"])
+        display_name = None
+
+        if event_dict["content"]:
+            if "display_name" in event_dict["content"]:
+                display_name = sanitize_text(
+                    event_dict["content"]["displayname"])
 
         return cls(event_id, sender, age, display_name)
 
@@ -305,9 +310,13 @@ class RoomMemberJoin(RoomEvent):
 
         if not user.nick_color:
             if self.sender == server.user_id:
+                highlight_words = [self.sender, user.name]
+
+                if self.display_name:
+                    highlight_words.append(self.display_name)
+
                 user.nick_color = "weechat.color.chat_nick_self"
-                W.buffer_set(buff, "highlight_words", ",".join(
-                    [self.sender, user.name, user.display_name]))
+                W.buffer_set(buff, "highlight_words", ",".join(highlight_words))
             else:
                 user.nick_color = W.info_get("nick_color_name", user.name)
 
