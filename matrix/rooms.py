@@ -150,6 +150,10 @@ class RoomInfo():
                 other_events.append(RoomTopicEvent.from_dict(event))
             elif event["type"] == "m.room.redaction":
                 other_events.append(RoomRedactionEvent.from_dict(event))
+            elif event["type"] == "m.room.name":
+                other_events.append(RoomNameEvent.from_dict(event))
+            elif event["type"] == "m.room.aliases":
+                other_events.append(RoomAliasEvent.from_dict(event))
 
         return (membership_events, other_events)
 
@@ -498,3 +502,46 @@ class RoomRedactionEvent(RoomEvent):
             return
 
         self._redact_line(data_pointer, tags, room, buff)
+
+
+class RoomNameEvent(RoomEvent):
+
+    def __init__(self, event_id, sender, age, name):
+        self.name = name
+        RoomEvent.__init__(self, event_id, sender, age)
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        age = sanitize_age(event_dict["unsigned"]["age"])
+
+        name = sanitize_id(event_dict['content']['name'])
+
+        return cls(event_id, sender, age, name)
+
+    def execute(self, server, room, buff, tags):
+        if not self.name:
+            return
+
+        W.prnt("", self.name)
+        room.alias = self.name
+        W.buffer_set(buff, "name", self.name)
+        W.buffer_set(buff, "short_name", self.name)
+        W.buffer_set(buff, "localvar_set_channel", self.name)
+
+
+class RoomAliasEvent(RoomNameEvent):
+
+    def __init__(self, event_id, sender, age, name):
+        RoomNameEvent.__init__(self, event_id, sender, age, name)
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        age = sanitize_age(event_dict["unsigned"]["age"])
+
+        name = sanitize_id(event_dict['content']['aliases'][-1])
+
+        return cls(event_id, sender, age, name)
