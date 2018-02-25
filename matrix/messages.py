@@ -23,63 +23,21 @@ import datetime
 
 from matrix.globals import W
 
-from matrix.api import MessageType
+import matrix.api as API
 
-from matrix.utils import (server_buffer_prnt, tags_from_line_data, prnt_debug,
-                          color_for_tags, add_user_to_nicklist,
-                          get_prefix_for_level)
+from matrix.utils import server_buffer_prnt, prnt_debug
 from matrix.plugin_options import DebugType
 
 
-def matrix_handle_message(
-        server,  # type: MatrixServer
-        message,  # type: MatrixMessage
-):
-    # type: (...) -> None
-    message_type = message.type
-    response = message.decoded_response
+def print_message_error(server, message):
+    server_buffer_prnt(server, ("{prefix}Unhandled {status_code} error, please "
+                                "inform the developers about this.").format(
+                                    prefix=W.prefix("error"),
+                                    status_code=message.response.status))
 
-    if message_type is MessageType.LOGIN:
-        event = message.event
-        event.execute()
-
-    elif message_type is MessageType.TOPIC:
-        event = message.event
-        event.execute()
-
-    elif message_type is MessageType.JOIN:
-        event = message.event
-        event.execute()
-
-    elif message_type is MessageType.PART:
-        event = message.event
-        event.execute()
-
-    elif message_type is MessageType.INVITE:
-        event = message.event
-        event.execute()
-
-    elif message_type is MessageType.SEND:
-        event = message.event
-        event.execute()
-
-    elif message_type == MessageType.REDACT:
-        event = message.event
-        event.execute()
-
-    elif message_type == MessageType.ROOM_MSG:
-        event = message.event
-        event.execute()
-
-    elif message_type is MessageType.SYNC:
-        event = message.event
-        event.execute()
-
-    else:
-        server_buffer_prnt(
-            server,
-            "Handling of message type {type} not implemented".format(
-                type=message_type))
+    server_buffer_prnt(server, pprint.pformat(message.__class__.__name__))
+    server_buffer_prnt(server, pprint.pformat(message.request.payload))
+    server_buffer_prnt(server, pprint.pformat(message.response.body))
 
 
 def handle_http_response(server, message):
@@ -92,83 +50,23 @@ def handle_http_response(server, message):
         ret, error = message.decode_body(server)
 
         if not ret:
-            # TODO try to resend the message if decoding has failed?
             message = ("{prefix}matrix: Error decoding json response from "
                        "server: {error}").format(
                            prefix=W.prefix("error"), error=error)
-
             W.prnt(server.server_buffer, message)
             return
 
-    status_code = message.response.status
-    if status_code == 200:
-        matrix_handle_message(
-            server,
-            message,
-        )
-
-    # TODO handle try again response
-    elif status_code == 504:
-        if message.type == MessageType.SYNC:
-            server.sync()
-
-    elif status_code == 403:
-        if message.type == MessageType.LOGIN:
-            event = message.event
-            event.execute()
-
-        elif message.type == MessageType.TOPIC:
-            event = message.event
-            event.execute()
-
-        elif message.type == MessageType.REDACT:
-            event = message.event
-            event.execute()
-
-        elif message.type == MessageType.SEND:
-            event = message.event
-            event.execute()
-
-        elif message.type == MessageType.JOIN:
-            event = message.event
-            event.execute()
-
-        elif message.type == MessageType.PART:
-            event = message.event
-            event.execute()
-
-        elif message.type == MessageType.INVITE:
-            event = message.event
-            event.execute()
-
-        else:
-            error_message = ("{prefix}Unhandled 403 error, please inform the "
-                             "developers about this: {error}").format(
-                                 prefix=W.prefix("error"),
-                                 error=message.response.body)
-            server_buffer_prnt(server, error_message)
-
-    elif status_code == 404:
-        if message.type == MessageType.JOIN:
-            event = message.event
-            event.execute()
-
-        else:
-            error_message = ("{prefix}Unhandled 404 error, please inform the "
-                             "developers about this: {error}").format(
-                                 prefix=W.prefix("error"),
-                                 error=message.response.body)
-            server_buffer_prnt(server, error_message)
-
+        event = message.event
+        event.execute()
     else:
-        server_buffer_prnt(
-            server, ("{prefix}Unhandled {status_code} error, please inform "
-                     "the developers about this.").format(
-                         prefix=W.prefix("error"), status_code=status_code))
-
-        server_buffer_prnt(server, pprint.pformat(message.type))
-        server_buffer_prnt(server, pprint.pformat(message.request.payload))
-        server_buffer_prnt(server, pprint.pformat(message.response.body))
+        status_code = message.response.status
+        if status_code == 504:
+            if isinstance(message, API.MatrixSyncMessage):
+                server.sync()
+            else:
+                print_message_error(server, message)
+        else:
+            print_message_error(server, message)
 
     creation_date = datetime.datetime.fromtimestamp(message.creation_time)
     done_time = time.time()
