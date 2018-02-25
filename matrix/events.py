@@ -19,10 +19,11 @@ from builtins import str
 
 import time
 from functools import partial
+from operator import itemgetter
 
-from matrix.globals import W, OPTIONS
+from matrix.globals import W
 from matrix.utils import (color_for_tags, tags_for_message, sanitize_id,
-                          sanitize_token, sanitize_text)
+                          sanitize_token, sanitize_text, tags_from_line_data)
 from matrix.rooms import (matrix_create_room_buffer, RoomInfo, RoomMessageEvent,
                           RoomRedactedMessageEvent)
 
@@ -242,6 +243,70 @@ class MatrixBacklogEvent(MatrixEvent):
 
         return RoomMessageEvent.from_dict(event_dict)
 
+    @staticmethod
+    def buffer_sort_messages(buff):
+        lines = []
+
+        own_lines = W.hdata_pointer(W.hdata_get('buffer'), buff, 'own_lines')
+
+        if own_lines:
+            hdata_line = W.hdata_get('line')
+            hdata_line_data = W.hdata_get('line_data')
+            line = W.hdata_pointer(
+                W.hdata_get('lines'), own_lines, 'first_line')
+
+            while line:
+                data = W.hdata_pointer(hdata_line, line, 'data')
+
+                line_data = {}
+
+                if data:
+                    date = W.hdata_time(hdata_line_data, data, 'date')
+                    print_date = W.hdata_time(hdata_line_data, data,
+                                              'date_printed')
+                    tags = tags_from_line_data(data)
+                    prefix = W.hdata_string(hdata_line_data, data, 'prefix')
+                    message = W.hdata_string(hdata_line_data, data, 'message')
+
+                    line_data = {
+                        'date': date,
+                        'date_printed': print_date,
+                        'tags_array': ','.join(tags),
+                        'prefix': prefix,
+                        'message': message
+                    }
+
+                    lines.append(line_data)
+
+                line = W.hdata_move(hdata_line, line, 1)
+
+            sorted_lines = sorted(lines, key=itemgetter('date'))
+            lines = []
+
+            # We need to convert the dates to a string for hdata_update(), this
+            # will reverse the list at the same time
+            while sorted_lines:
+                line = sorted_lines.pop()
+                new_line = {k: str(v) for k, v in line.items()}
+                lines.append(new_line)
+
+            MatrixBacklogEvent.update_buffer_lines(lines, own_lines)
+
+    @staticmethod
+    def update_buffer_lines(new_lines, own_lines):
+        hdata_line = W.hdata_get('line')
+        hdata_line_data = W.hdata_get('line_data')
+
+        line = W.hdata_pointer(W.hdata_get('lines'), own_lines, 'first_line')
+
+        while line:
+            data = W.hdata_pointer(hdata_line, line, 'data')
+
+            if data:
+                W.hdata_update(hdata_line_data, data, new_lines.pop())
+
+            line = W.hdata_move(hdata_line, line, 1)
+
     @classmethod
     def from_dict(cls, server, room_id, parsed_dict):
         try:
@@ -266,13 +331,14 @@ class MatrixBacklogEvent(MatrixEvent):
 
     def execute(self):
         room = self.server.rooms[self.room_id]
-        buf = self.server.buffers[self.room_id]
+        buff = self.server.buffers[self.room_id]
         tags = tags_for_message("backlog")
 
         for event in self.events:
-            event.execute(self.server, room, buf, list(tags))
+            event.execute(self.server, room, buff, list(tags))
 
         room.prev_batch = self.end_token
+        MatrixBacklogEvent.buffer_sort_messages(buff)
         room.backlog_pending = False
         W.bar_item_update("buffer_modes")
 
