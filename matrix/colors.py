@@ -22,6 +22,7 @@ from __future__ import unicode_literals
 from builtins import str
 from collections import namedtuple
 from matrix.globals import W
+from matrix.utils import string_strikethrough
 
 import webcolors
 
@@ -847,8 +848,3 @@ def color_weechat_to_html(color):
         return webcolors.hex_to_name(hex_color)
     except ValueError:
         return hex_color
-
-
-def string_strikethrough(string):
-    # type (str) -> str
-    return "".join(["{}\u0336".format(c) for c in string])

@@ -290,3 +290,42 @@ def get_prefix_color(prefix):
     elif prefix == "+":
         return "yellow"
     return ""
+
+
+def string_strikethrough(string):
+    return "".join(["{}\u0336".format(c) for c in string])
+
+
+def line_pointer_and_tags_from_event(buff, event_id):
+    # type: (str, str) -> str
+    own_lines = W.hdata_pointer(W.hdata_get('buffer'), buff, 'own_lines')
+
+    if own_lines:
+        hdata_line = W.hdata_get('line')
+
+        line_pointer = W.hdata_pointer(
+            W.hdata_get('lines'), own_lines, 'last_line')
+
+        while line_pointer:
+            data_pointer = W.hdata_pointer(hdata_line, line_pointer, 'data')
+
+            if data_pointer:
+                tags = tags_from_line_data(data_pointer)
+
+                message_id = event_id_from_tags(tags)
+
+                if event_id == message_id:
+                    return data_pointer, tags
+
+            line_pointer = W.hdata_move(hdata_line, line_pointer, -1)
+
+    return None, []
+
+
+def event_id_from_tags(tags):
+    # type: (List[str]) -> str
+    for tag in tags:
+        if tag.startswith("matrix_id"):
+            return tag[10:]
+
+    return ""

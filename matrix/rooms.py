@@ -21,14 +21,16 @@ from collections import namedtuple
 from functools import partial
 from datetime import datetime
 
-from matrix.globals import W
+from matrix.globals import W, OPTIONS
+from matrix.plugin_options import RedactType
 
 from matrix.colors import Formatted
-from matrix.utils import (strip_matrix_server, color_for_tags, date_from_age,
-                          sender_to_nick_and_color, tags_for_message,
-                          add_event_tags, sanitize_id, sanitize_age,
-                          sanitize_text, shorten_sender, add_user_to_nicklist,
-                          get_prefix_for_level, sanitize_power_level)
+from matrix.utils import (
+    strip_matrix_server, color_for_tags, date_from_age,
+    sender_to_nick_and_color, tags_for_message, add_event_tags, sanitize_id,
+    sanitize_age, sanitize_text, shorten_sender, add_user_to_nicklist,
+    get_prefix_for_level, sanitize_power_level, string_strikethrough,
+    line_pointer_and_tags_from_event)
 
 PowerLevel = namedtuple('PowerLevel', ['user', 'level'])
 
@@ -146,6 +148,8 @@ class RoomInfo():
                 other_events.append(RoomPowerLevels.from_dict(event))
             elif event["type"] == "m.room.topic":
                 other_events.append(RoomTopicEvent.from_dict(event))
+            elif event["type"] == "m.room.redaction":
+                other_events.append(RoomRedactionEvent.from_dict(event))
 
         return (membership_events, other_events)
 
@@ -420,3 +424,74 @@ class RoomTopicEvent(RoomEvent):
         room.topic = topic
         room.topic_author = self.sender
         room.topic_date = datetime.fromtimestamp(date_from_age(self.age))
+
+
+class RoomRedactionEvent(RoomEvent):
+
+    def __init__(self, event_id, sender, age, redaction_id, reason=None):
+        self.redaction_id = redaction_id
+        self.reason = reason
+        RoomEvent.__init__(self, event_id, sender, age)
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        age = sanitize_age(event_dict["unsigned"]["age"])
+
+        redaction_id = sanitize_id(event_dict["redacts"])
+
+        reason = (sanitize_text(event_dict["content"]["reason"])
+                  if "reason" in event_dict["content"] else None)
+
+        return cls(event_id, sender, age, redaction_id, reason)
+
+    @staticmethod
+    def already_redacted(tags):
+        if "matrix_redacted" in tags:
+            return True
+        return False
+
+    def _redact_line(self, data_pointer, tags, room, buff):
+        hdata_line_data = W.hdata_get('line_data')
+
+        message = W.hdata_string(hdata_line_data, data_pointer, 'message')
+        censor, _ = sender_to_nick_and_color(room, self.sender)
+
+        reason = ("" if not self.reason else
+                  ", reason: \"{reason}\"".format(reason=self.reason))
+
+        redaction_msg = ("{del_color}<{log_color}Message redacted by: "
+                         "{censor}{log_color}{reason}{del_color}>"
+                         "{ncolor}").format(
+                             del_color=W.color("chat_delimiters"),
+                             ncolor=W.color("reset"),
+                             log_color=W.color("logger.color.backlog_line"),
+                             censor=censor,
+                             reason=reason)
+
+        if OPTIONS.redaction_type == RedactType.STRIKETHROUGH:
+            message = string_strikethrough(message)
+            message = message + " " + redaction_msg
+        elif OPTIONS.redaction_type == RedactType.DELETE:
+            message = redaction_msg
+        elif OPTIONS.redaction_type == RedactType.NOTICE:
+            message = message + " " + redaction_msg
+
+        tags.append("matrix_redacted")
+
+        new_data = {'tags_array': ','.join(tags), 'message': message}
+
+        W.hdata_update(hdata_line_data, data_pointer, new_data)
+
+    def execute(self, server, room, buff, tags):
+        data_pointer, tags = line_pointer_and_tags_from_event(
+            buff, self.redaction_id)
+
+        if not data_pointer:
+            return
+
+        if RoomRedactionEvent.already_redacted(tags):
+            return
+
+        self._redact_line(data_pointer, tags, room, buff)

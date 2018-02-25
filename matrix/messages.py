@@ -35,7 +35,7 @@ from matrix.rooms import MatrixRoom
 
 from matrix.utils import (server_buffer_prnt, tags_from_line_data, prnt_debug,
                           color_for_tags, add_user_to_nicklist,
-                          get_prefix_for_level)
+                          get_prefix_for_level, string_strikethrough)
 from matrix.plugin_options import RedactType, DebugType
 
 
@@ -276,10 +276,6 @@ def event_id_from_tags(tags):
             return tag[10:]
 
     return ""
-
-
-def string_strikethrough(string):
-    return "".join(["{}\u0336".format(c) for c in string])
 
 
 def matrix_redact_line(data, tags, event):
