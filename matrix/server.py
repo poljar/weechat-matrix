@@ -173,7 +173,8 @@ class MatrixServer:
             prnt_debug(DebugType.MESSAGING, self,
                        ("{prefix} Failed sending message of type {t}. "
                         "Adding to queue").format(
-                            prefix=W.prefix("error"), t=message.type))
+                            prefix=W.prefix("error"),
+                            t=message.__class__.__name__))
             self.send_queue.append(message)
 
     def try_send(self, message):
@@ -425,7 +426,7 @@ class MatrixServer:
             "\n    Receive delay: {r} ms"
             "\n    Handling time: {h} ms"
             "\n    Total time: {total} ms").format(
-                t=message.type,
+                t=message.__class__.__name__,
                 c=creation_date,
                 s=(message.send_time - message.creation_time) * 1000,
                 r=(message.receive_time - message.send_time) * 1000,
@@ -522,7 +523,7 @@ def matrix_timer_cb(server_name, remaining_calls):
         prnt_debug(
             DebugType.MESSAGING,
             server, ("Timer hook found message of type {t} in queue. Sending "
-                     "out.".format(t=message.type)))
+                     "out.".format(t=message.__class__.__name__)))
 
         if not server.send(message):
             # We got an error while sending the last message return the message

@@ -249,7 +249,9 @@ def receive_cb(server_name, file_descriptor):
             prnt_debug(DebugType.MESSAGING, server,
                        ("{prefix}Received message of type {t} and "
                         "status {s}").format(
-                            prefix=W.prefix("error"), t=message.type, s=status))
+                            prefix=W.prefix("error"),
+                            t=message.__class__.__name__,
+                            s=status))
 
             # Message done, reset the parser state.
             server.reset_parser()
