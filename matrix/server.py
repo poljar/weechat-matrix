@@ -87,7 +87,6 @@ class MatrixServer:
         self.receive_queue = deque()  # type: Deque[MatrixMessage]
 
         self.message_queue = deque()  # type: Deque[MatrixMessage]
-        self.ignore_event_list = []   # type: List[str]
 
         self._create_options(config_file)
         # yapf: enable

@@ -106,10 +106,6 @@ class MatrixSendEvent(MatrixEvent):
 
         date = int(time.time())
 
-        # This message will be part of the next sync, we already printed it out
-        # so ignore it in the sync.
-        self.server.ignore_event_list.append(event_id)
-
         tag = ("notify_none,no_highlight,self_msg,log1,nick_{a},"
                "prefix_nick_{color},matrix_id_{event_id},"
                "matrix_message").format(
