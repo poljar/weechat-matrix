@@ -470,13 +470,16 @@ class RoomRedactionEvent(RoomEvent):
                              censor=censor,
                              reason=reason)
 
+        new_message = ""
+
         if OPTIONS.redaction_type == RedactType.STRIKETHROUGH:
-            message = string_strikethrough(message)
-            message = message + " " + redaction_msg
-        elif OPTIONS.redaction_type == RedactType.DELETE:
-            message = redaction_msg
+            new_message = string_strikethrough(message)
         elif OPTIONS.redaction_type == RedactType.NOTICE:
-            message = message + " " + redaction_msg
+            new_message = message
+        elif OPTIONS.redaction_type == RedactType.DELETE:
+            pass
+
+        message = " ".join(s for s in [new_message, redaction_msg] if s)
 
         tags.append("matrix_redacted")
 
