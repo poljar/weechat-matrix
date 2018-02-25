@@ -136,7 +136,8 @@ def sender_to_nick_and_color(room, sender):
 
     if sender in room.users:
         user = room.users[sender]
-        nick = user.display_name
+        nick = (user.display_name if user.display_name
+                else user.name)
         nick_color_name = user.nick_color
     else:
         nick = shorten_sender(sender)
