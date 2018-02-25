@@ -25,12 +25,12 @@ from matrix.globals import W, OPTIONS
 from matrix.plugin_options import RedactType
 
 from matrix.colors import Formatted
-from matrix.utils import (
-    strip_matrix_server, color_for_tags, date_from_age,
-    sender_to_nick_and_color, tags_for_message, add_event_tags, sanitize_id,
-    sanitize_age, sanitize_text, shorten_sender, add_user_to_nicklist,
-    get_prefix_for_level, sanitize_power_level, string_strikethrough,
-    line_pointer_and_tags_from_event)
+from matrix.utils import (strip_matrix_server, color_for_tags, date_from_age,
+                          sender_to_nick_and_color, add_event_tags, sanitize_id,
+                          sanitize_age, sanitize_text, shorten_sender,
+                          add_user_to_nicklist, get_prefix_for_level,
+                          sanitize_power_level, string_strikethrough,
+                          line_pointer_and_tags_from_event)
 
 PowerLevel = namedtuple('PowerLevel', ['user', 'level'])
 
