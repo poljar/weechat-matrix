@@ -31,8 +31,7 @@ from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 from matrix.colors import Formatted
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
-from matrix.api import (MessageType, MatrixSendMessage)
-from matrix.messages import handle_http_response
+from matrix.api import MatrixSendMessage
 
 # Weechat searches for the registered callbacks in the scope of the main script
 # file, import the callbacks here so weechat can find them.
@@ -62,13 +61,9 @@ from matrix.completion import (
     matrix_message_completion_cb, matrix_server_completion_cb)
 
 from matrix.utils import (key_from_value, server_buffer_prnt, prnt_debug,
-                          tags_from_line_data, server_buffer_set_title)
+                          server_buffer_set_title)
 
-from matrix.plugin_options import (
-    DebugType,
-    RedactType,
-    ServerBufferType,
-)
+from matrix.plugin_options import (DebugType, RedactType)
 
 from matrix.config import (matrix_config_init, matrix_config_read,
                            matrix_config_free, matrix_config_change_cb,
@@ -76,7 +71,7 @@ from matrix.config import (matrix_config_init, matrix_config_read,
 
 import matrix.globals
 
-from matrix.globals import W, OPTIONS, SERVERS
+from matrix.globals import W, SERVERS
 
 # yapf: disable
 WEECHAT_SCRIPT_NAME = "matrix"                                 # type: str
@@ -259,7 +254,7 @@ def receive_cb(server_name, file_descriptor):
             # Message done, reset the parser state.
             server.reset_parser()
 
-            handle_http_response(server, message)
+            server.handle_response(message)
             break
 
     return W.WEECHAT_RC_OK

@@ -20,6 +20,8 @@ from builtins import str, bytes
 import ssl
 import socket
 import time
+import datetime
+import pprint
 
 from collections import deque
 from http_parser.pyparser import HttpParser
@@ -29,6 +31,7 @@ from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
                           create_server_buffer)
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS, OPTIONS
+import matrix.api as API
 from matrix.api import MatrixClient, MatrixSyncMessage, MatrixLoginMessage
 
 
@@ -373,6 +376,65 @@ class MatrixServer:
         message = MatrixLoginMessage(self.client, self.user, self.password,
                                      self.device_name)
         self.send_or_queue(message)
+
+    def _print_message_error(self, message):
+        server_buffer_prnt(self,
+                           ("{prefix}Unhandled {status_code} error, please "
+                            "inform the developers about this.").format(
+                                prefix=W.prefix("error"),
+                                status_code=message.response.status))
+
+        server_buffer_prnt(self, pprint.pformat(message.__class__.__name__))
+        server_buffer_prnt(self, pprint.pformat(message.request.payload))
+        server_buffer_prnt(self, pprint.pformat(message.response.body))
+
+    def handle_response(self, message):
+        # type: (MatrixMessage) -> None
+
+        assert message.response
+
+        if ('content-type' in message.response.headers and
+                message.response.headers['content-type'] == 'application/json'):
+            ret, error = message.decode_body(self)
+
+            if not ret:
+                message = ("{prefix}matrix: Error decoding json response from "
+                           "server: {error}").format(
+                               prefix=W.prefix("error"), error=error)
+                W.prnt(self.server_buffer, message)
+                return
+
+            event = message.event
+            event.execute()
+        else:
+            status_code = message.response.status
+            if status_code == 504:
+                if isinstance(message, API.MatrixSyncMessage):
+                    self.sync()
+                else:
+                    self._print_message_error(message)
+            else:
+                self._print_message_error(message)
+
+        creation_date = datetime.datetime.fromtimestamp(message.creation_time)
+        done_time = time.time()
+        info_message = (
+            "Message of type {t} created at {c}."
+            "\nMessage lifetime information:"
+            "\n    Send delay: {s} ms"
+            "\n    Receive delay: {r} ms"
+            "\n    Handling time: {h} ms"
+            "\n    Total time: {total} ms").format(
+                t=message.type,
+                c=creation_date,
+                s=(message.send_time - message.creation_time) * 1000,
+                r=(message.receive_time - message.send_time) * 1000,
+                h=(done_time - message.receive_time) * 1000,
+                total=(done_time - message.creation_time) * 1000,
+            )
+        prnt_debug(DebugType.TIMING, self, info_message)
+
+        return
 
 
 @utf8_decode
