@@ -173,6 +173,9 @@ def sanitize_token(string):
     if len(string) > 512:
         raise ValueError
 
+    if string == "":
+        raise ValueError
+
     return string
 
 
@@ -195,10 +198,12 @@ def sanitize_string(string):
 
 def sanitize_id(string):
     # type: (str) -> str
-
     string = sanitize_string(string)
 
     if len(string) > 128:
+        raise ValueError
+
+    if string == "":
         raise ValueError
 
     return string
