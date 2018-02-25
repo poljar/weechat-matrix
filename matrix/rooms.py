@@ -139,21 +139,31 @@ class RoomInfo():
         membership_events = []
         other_events = []
 
-        for event in parsed_dict:
-            if event["type"] == "m.room.message":
-                other_events.append(RoomInfo._message_from_event(event))
-            elif event["type"] == "m.room.member":
-                membership_events.append(RoomInfo._membership_from_dict(event))
-            elif event["type"] == "m.room.power_levels":
-                other_events.append(RoomPowerLevels.from_dict(event))
-            elif event["type"] == "m.room.topic":
-                other_events.append(RoomTopicEvent.from_dict(event))
-            elif event["type"] == "m.room.redaction":
-                other_events.append(RoomRedactionEvent.from_dict(event))
-            elif event["type"] == "m.room.name":
-                other_events.append(RoomNameEvent.from_dict(event))
-            elif event["type"] == "m.room.aliases":
-                other_events.append(RoomAliasEvent.from_dict(event))
+        try:
+            for event in parsed_dict:
+                if event["type"] == "m.room.message":
+                    other_events.append(RoomInfo._message_from_event(event))
+                elif event["type"] == "m.room.member":
+                    membership_events.append(
+                        RoomInfo._membership_from_dict(event))
+                elif event["type"] == "m.room.power_levels":
+                    other_events.append(RoomPowerLevels.from_dict(event))
+                elif event["type"] == "m.room.topic":
+                    other_events.append(RoomTopicEvent.from_dict(event))
+                elif event["type"] == "m.room.redaction":
+                    other_events.append(RoomRedactionEvent.from_dict(event))
+                elif event["type"] == "m.room.name":
+                    other_events.append(RoomNameEvent.from_dict(event))
+                elif event["type"] == "m.room.aliases":
+                    other_events.append(RoomAliasEvent.from_dict(event))
+        except (ValueError, TypeError, KeyError) as error:
+            message = ("{prefix}matrix: Error parsing "
+                       "room event of type {type}: {error}").format(
+                           prefix=W.prefix("error"),
+                           type=event["type"],
+                           error=str(error))
+            W.prnt("", message)
+            raise
 
         return (membership_events, other_events)
 
