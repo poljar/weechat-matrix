@@ -260,6 +260,8 @@ class RoomMessageEvent(RoomEvent):
             return RoomMessageMedia.from_dict(event)
         elif event['content']['msgtype'] == 'm.video':
             return RoomMessageMedia.from_dict(event)
+        elif event['content']['msgtype'] == 'm.emote':
+            return RoomMessageEmote.from_dict(event)
         return RoomMessageUnknown.from_dict(event)
 
     def _print_message(self, message, room, buff, tags):
@@ -332,6 +334,41 @@ class RoomMessageText(RoomMessageEvent):
                if self.formatted_message else self.message)
 
         self._print_message(msg, room, buff, tags)
+
+
+class RoomMessageEmote(RoomMessageEvent):
+
+    def __init__(self, event_id, sender, age, message):
+        self.message = message
+        RoomEvent.__init__(self, event_id, sender, age)
+
+    def execute(self, server, room, buff, tags):
+        nick, color_name = sender_to_nick_and_color(room, self.sender)
+        color = color_for_tags(color_name)
+
+        event_tags = add_event_tags(self.event_id, nick, color, tags)
+        event_tags.append("matrix_action")
+
+        tags_string = ",".join(event_tags)
+
+        data = "{prefix}{nick_color}{author}{ncolor} {msg}".format(
+            prefix=W.prefix("action"),
+            nick_color=W.color(color_name),
+            author=nick,
+            ncolor=W.color("reset"),
+            msg=self.message)
+
+        date = date_from_age(self.age)
+        W.prnt_date_tags(buff, date, tags_string, data)
+
+    @classmethod
+    def from_dict(cls, event):
+        event_id = sanitize_id(event["event_id"])
+        sender = sanitize_id(event["sender"])
+        age = sanitize_age(event["unsigned"]["age"])
+        msg = sanitize_text(event["content"]["body"])
+
+        return cls(event_id, sender, age, msg)
 
 
 class RoomMessageMedia(RoomMessageEvent):
