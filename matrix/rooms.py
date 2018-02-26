@@ -278,11 +278,11 @@ class RoomMessageEvent(RoomEvent):
         W.prnt_date_tags(buff, date, tags_string, data)
 
 
-class RoomMessageUnknown(RoomMessageEvent):
+class RoomMessageSimple(RoomMessageEvent):
 
-    def __init__(self, event_id, sender, age, message_type, body):
+    def __init__(self, event_id, sender, age, message, message_type):
+        self.message = message
         self.message_type = message_type
-        self.body = body
         RoomEvent.__init__(self, event_id, sender, age)
 
     @classmethod
@@ -291,14 +291,17 @@ class RoomMessageUnknown(RoomMessageEvent):
         sender = sanitize_id(event["sender"])
         age = sanitize_age(event["unsigned"]["age"])
 
-        body = sanitize_text(event["content"]["body"])
+        message = sanitize_text(event["content"]["body"])
         message_type = sanitize_text(event["content"]["msgtype"])
 
-        return cls(event_id, sender, age, message_type, body)
+        return cls(event_id, sender, age, message, message_type)
+
+
+class RoomMessageUnknown(RoomMessageSimple):
 
     def execute(self, server, room, buff, tags):
         msg = ("Unknown message of type {t}, body: {body}").format(
-            t=self.message_type, body=self.body)
+            t=self.message_type, body=self.message)
 
         self._print_message(msg, room, buff, tags)
 
@@ -336,11 +339,7 @@ class RoomMessageText(RoomMessageEvent):
         self._print_message(msg, room, buff, tags)
 
 
-class RoomMessageEmote(RoomMessageEvent):
-
-    def __init__(self, event_id, sender, age, message):
-        self.message = message
-        RoomEvent.__init__(self, event_id, sender, age)
+class RoomMessageEmote(RoomMessageSimple):
 
     def execute(self, server, room, buff, tags):
         nick, color_name = sender_to_nick_and_color(room, self.sender)
@@ -360,15 +359,6 @@ class RoomMessageEmote(RoomMessageEvent):
 
         date = date_from_age(self.age)
         W.prnt_date_tags(buff, date, tags_string, data)
-
-    @classmethod
-    def from_dict(cls, event):
-        event_id = sanitize_id(event["event_id"])
-        sender = sanitize_id(event["sender"])
-        age = sanitize_age(event["unsigned"]["age"])
-        msg = sanitize_text(event["content"]["body"])
-
-        return cls(event_id, sender, age, msg)
 
 
 class RoomMessageMedia(RoomMessageEvent):
