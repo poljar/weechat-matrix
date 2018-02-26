@@ -24,8 +24,8 @@ from operator import itemgetter
 from matrix.globals import W
 from matrix.utils import (color_for_tags, tags_for_message, sanitize_id,
                           sanitize_token, sanitize_text, tags_from_line_data)
-from matrix.rooms import (matrix_create_room_buffer, RoomInfo, RoomMessageEvent,
-                          RoomRedactedMessageEvent)
+from matrix.rooms import (matrix_create_room_buffer, RoomInfo, RoomMessageText,
+                          RoomMessageEvent, RoomRedactedMessageEvent)
 
 
 class MatrixEvent():
@@ -92,37 +92,34 @@ class MatrixLoginEvent(MatrixEvent):
 
 class MatrixSendEvent(MatrixEvent):
 
-    def __init__(self, server, room_id, event_id, message):
+    def __init__(self, server, room_id, message):
         self.room_id = room_id
-        self.event_id = event_id
         self.message = message
         MatrixEvent.__init__(self, server)
 
     def execute(self):
-        room_id = self.room_id
-        author = self.server.user
-        event_id = self.event_id
-        weechat_message = self.message.to_weechat()
+        tags = [
+            "matrix_message", "notify_none", "no_highlight", "self_msg", "log1"
+        ]
 
-        date = int(time.time())
+        buff = self.server.buffers[self.room_id]
+        room = self.server.rooms[self.room_id]
 
-        tag = ("notify_none,no_highlight,self_msg,log1,nick_{a},"
-               "prefix_nick_{color},matrix_id_{event_id},"
-               "matrix_message").format(
-                   a=author,
-                   color=color_for_tags("weechat.color.chat_nick_self"),
-                   event_id=event_id)
-
-        message = "{author}\t{msg}".format(author=author, msg=weechat_message)
-
-        buf = self.server.buffers[room_id]
-        W.prnt_date_tags(buf, date, tag, message)
+        self.message.execute(self.server, room, buff, tags)
 
     @classmethod
     def from_dict(cls, server, room_id, message, parsed_dict):
         try:
-            return cls(server, room_id, sanitize_id(parsed_dict["event_id"]),
-                       message)
+            event_id = sanitize_id(parsed_dict["event_id"])
+            sender = server.user_id
+            age = 0
+            plain_message = message.to_plain()
+            formatted_message = message
+
+            message = RoomMessageText(event_id, sender, age, plain_message,
+                                      formatted_message)
+
+            return cls(server, room_id, message)
         except (KeyError, TypeError, ValueError):
             return MatrixErrorEvent.from_dict(server, "Error sending message",
                                               False, parsed_dict)
