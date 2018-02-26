@@ -29,8 +29,9 @@ except ImportError:
 
 try:
     from urllib import quote, urlencode
+    from urlparse import urlparse
 except ImportError:
-    from urllib.parse import quote, urlencode
+    from urllib.parse import quote, urlencode, urlparse
 
 from matrix.http import RequestType, HttpRequest
 import matrix.events as MatrixEvents
@@ -198,6 +199,24 @@ class MatrixClient:
                     query_parameters=urlencode(query_parameters))
 
         return HttpRequest(RequestType.POST, self.host, path, content)
+
+    def mxc_to_http(self, mxc):
+        # type: (str) -> str
+        url = urlparse(mxc)
+
+        if url.scheme != "mxc":
+            return None
+
+        if not url.netloc or not url.path:
+            return None
+
+        http_url = ("https://{host}/_matrix/media/r0/download/"
+                    "{server_name}{mediaId}").format(
+                        host=self.host,
+                        server_name=url.netloc,
+                        mediaId=url.path)
+
+        return http_url
 
 
 class MatrixMessage():

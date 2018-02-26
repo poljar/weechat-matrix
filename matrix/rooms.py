@@ -248,6 +248,61 @@ class RoomRedactedMessageEvent(RoomEvent):
 
 class RoomMessageEvent(RoomEvent):
 
+    @classmethod
+    def from_dict(cls, event):
+        if event['content']['msgtype'] == 'm.text':
+            return RoomMessageText.from_dict(event)
+        elif event['content']['msgtype'] == 'm.image':
+            return RoomMessageMedia.from_dict(event)
+        elif event['content']['msgtype'] == 'm.audio':
+            return RoomMessageMedia.from_dict(event)
+        elif event['content']['msgtype'] == 'm.file':
+            return RoomMessageMedia.from_dict(event)
+        elif event['content']['msgtype'] == 'm.video':
+            return RoomMessageMedia.from_dict(event)
+        return RoomMessageUnknown.from_dict(event)
+
+    def _print_message(self, message, room, buff, tags):
+        nick, color_name = sender_to_nick_and_color(room, self.sender)
+        color = color_for_tags(color_name)
+
+        event_tags = add_event_tags(self.event_id, nick, color, tags)
+
+        tags_string = ",".join(event_tags)
+
+        data = "{author}\t{msg}".format(author=nick, msg=message)
+
+        date = date_from_age(self.age)
+        W.prnt_date_tags(buff, date, tags_string, data)
+
+
+class RoomMessageUnknown(RoomMessageEvent):
+
+    def __init__(self, event_id, sender, age, message_type, body):
+        self.message_type = message_type
+        self.body = body
+        RoomEvent.__init__(self, event_id, sender, age)
+
+    @classmethod
+    def from_dict(cls, event):
+        event_id = sanitize_id(event["event_id"])
+        sender = sanitize_id(event["sender"])
+        age = sanitize_age(event["unsigned"]["age"])
+
+        body = sanitize_text(event["content"]["body"])
+        message_type = sanitize_text(event["content"]["msgtype"])
+
+        return cls(event_id, sender, age, message_type, body)
+
+    def execute(self, server, room, buff, tags):
+        msg = ("Unknown message of type {t}, body: {body}").format(
+            t=self.message_type, body=self.body)
+
+        self._print_message(msg, room, buff, tags)
+
+
+class RoomMessageText(RoomMessageEvent):
+
     def __init__(self, event_id, sender, age, message, formatted_message=None):
         self.message = message
         self.formatted_message = formatted_message
@@ -262,14 +317,13 @@ class RoomMessageEvent(RoomEvent):
         msg = ""
         formatted_msg = None
 
-        if event['content']['msgtype'] == 'm.text':
-            msg = sanitize_text(event['content']['body'])
+        msg = sanitize_text(event['content']['body'])
 
-            if ('format' in event['content'] and
-                    'formatted_body' in event['content']):
-                if event['content']['format'] == "org.matrix.custom.html":
-                    formatted_msg = Formatted.from_html(
-                        sanitize_text(event['content']['formatted_body']))
+        if ('format' in event['content'] and
+                'formatted_body' in event['content']):
+            if event['content']['format'] == "org.matrix.custom.html":
+                formatted_msg = Formatted.from_html(
+                    sanitize_text(event['content']['formatted_body']))
 
         return cls(event_id, sender, age, msg, formatted_msg)
 
@@ -277,17 +331,37 @@ class RoomMessageEvent(RoomEvent):
         msg = (self.formatted_message.to_weechat()
                if self.formatted_message else self.message)
 
-        nick, color_name = sender_to_nick_and_color(room, self.sender)
-        color = color_for_tags(color_name)
+        self._print_message(msg, room, buff, tags)
 
-        event_tags = add_event_tags(self.event_id, nick, color, tags)
 
-        tags_string = ",".join(event_tags)
+class RoomMessageMedia(RoomMessageEvent):
 
-        data = "{author}\t{msg}".format(author=nick, msg=msg)
+    def __init__(self, event_id, sender, age, url, description):
+        self.url = url
+        self.description = description
+        RoomEvent.__init__(self, event_id, sender, age)
 
-        date = date_from_age(self.age)
-        W.prnt_date_tags(buff, date, tags_string, data)
+    @classmethod
+    def from_dict(cls, event):
+        event_id = sanitize_id(event["event_id"])
+        sender = sanitize_id(event["sender"])
+        age = sanitize_age(event["unsigned"]["age"])
+
+        mxc_url = sanitize_text(event['content']['url'])
+        description = sanitize_text(event["content"]["body"])
+
+        return cls(event_id, sender, age, mxc_url, description)
+
+    def execute(self, server, room, buff, tags):
+        http_url = server.client.mxc_to_http(self.url)
+        url = http_url if http_url else self.url
+
+        description = (" ({})".format(self.description)
+                       if self.description else "")
+
+        msg = "{url}{desc}".format(url=url, desc=description)
+
+        self._print_message(msg, room, buff, tags)
 
 
 class RoomMemberJoin(RoomEvent):
