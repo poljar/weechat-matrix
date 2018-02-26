@@ -262,6 +262,8 @@ class RoomMessageEvent(RoomEvent):
             return RoomMessageMedia.from_dict(event)
         elif event['content']['msgtype'] == 'm.emote':
             return RoomMessageEmote.from_dict(event)
+        elif event['content']['msgtype'] == 'm.notice':
+            return RoomMessageNotice.from_dict(event)
         return RoomMessageUnknown.from_dict(event)
 
     def _print_message(self, message, room, buff, tags):
@@ -359,6 +361,17 @@ class RoomMessageEmote(RoomMessageSimple):
 
         date = date_from_age(self.age)
         W.prnt_date_tags(buff, date, tags_string, data)
+
+
+class RoomMessageNotice(RoomMessageText):
+
+    def execute(self, server, room, buff, tags):
+        msg = "{color}{message}{ncolor}".format(
+            color=W.color("irc.color.notice"),
+            message=self.message,
+            ncolor=W.color("reset"))
+
+        self._print_message(msg, room, buff, tags)
 
 
 class RoomMessageMedia(RoomMessageEvent):
