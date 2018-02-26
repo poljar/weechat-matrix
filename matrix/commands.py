@@ -26,10 +26,12 @@ from matrix.globals import W, OPTIONS, SERVERS
 from matrix.utf import utf8_decode
 from matrix.api import (MatrixTopicMessage, MatrixRedactMessage,
                         MatrixBacklogMessage, MatrixJoinMessage,
-                        MatrixPartMessage, MatrixInviteMessage)
+                        MatrixPartMessage, MatrixInviteMessage,
+                        MatrixEmoteMessage)
 from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
 from matrix.server import MatrixServer
+from matrix.colors import Formatted
 
 
 def hook_commands():
@@ -82,6 +84,20 @@ def hook_commands():
         'matrix_redact_command_cb',
         '')
 
+    W.hook_command(
+        # Command name and short description
+        "me",
+        "send an emote message to the current room",
+        # Synopsis
+        ("<message>"),
+        # Description
+        ("message: message to send"),
+        # Completions
+        "",
+        # Function name
+        "matrix_me_command_cb",
+        "")
+
     W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
     W.hook_command_run('/join', 'matrix_command_join_cb', '')
@@ -90,6 +106,40 @@ def hook_commands():
 
     if OPTIONS.enable_backlog:
         hook_page_up()
+
+
+@utf8_decode
+def matrix_me_command_cb(data, buffer, args):
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+
+            if not server.connected:
+                message = ("{prefix}matrix: you are not connected to "
+                           "the server").format(prefix=W.prefix("error"))
+                W.prnt(server.server_buffer, message)
+                return W.WEECHAT_RC_ERROR
+
+            room_id = key_from_value(server.buffers, buffer)
+
+            if not args:
+                return W.WEECHAT_RC_OK
+
+            formatted_data = Formatted.from_input_line(args)
+            message = MatrixEmoteMessage(
+                server.client,
+                room_id=room_id,
+                formatted_message=formatted_data)
+
+            server.send_or_queue(message)
+
+            return W.WEECHAT_RC_OK
+
+        elif buffer == server.server_buffer:
+            message = ("{prefix}matrix: command \"me\" must be "
+                       "executed on a Matrix channel buffer"
+                      ).format(prefix=W.prefix("error"))
+            W.prnt("", message)
+            return W.WEECHAT_RC_OK
 
 
 def matrix_fetch_old_messages(server, room_id):

@@ -39,7 +39,7 @@ from matrix.commands import (hook_commands, hook_page_up, matrix_command_cb,
                              matrix_command_join_cb, matrix_command_part_cb,
                              matrix_command_invite_cb, matrix_command_topic_cb,
                              matrix_command_pgup_cb, matrix_redact_command_cb,
-                             matrix_command_buf_clear_cb)
+                             matrix_command_buf_clear_cb, matrix_me_command_cb)
 
 from matrix.server import (
     MatrixServer,

@@ -25,7 +25,8 @@ from matrix.globals import W
 from matrix.utils import (color_for_tags, tags_for_message, sanitize_id,
                           sanitize_token, sanitize_text, tags_from_line_data)
 from matrix.rooms import (matrix_create_room_buffer, RoomInfo, RoomMessageText,
-                          RoomMessageEvent, RoomRedactedMessageEvent)
+                          RoomMessageEvent, RoomRedactedMessageEvent,
+                          RoomMessageEmote)
 
 
 class MatrixEvent():
@@ -118,6 +119,26 @@ class MatrixSendEvent(MatrixEvent):
 
             message = RoomMessageText(event_id, sender, age, plain_message,
                                       formatted_message)
+
+            return cls(server, room_id, message)
+        except (KeyError, TypeError, ValueError):
+            return MatrixErrorEvent.from_dict(server, "Error sending message",
+                                              False, parsed_dict)
+
+
+class MatrixEmoteEvent(MatrixSendEvent):
+
+    @classmethod
+    def from_dict(cls, server, room_id, message, parsed_dict):
+        try:
+            event_id = sanitize_id(parsed_dict["event_id"])
+            sender = server.user_id
+            age = 0
+            plain_message = message.to_plain()
+            formatted_message = message
+
+            message = RoomMessageEmote(event_id, sender, age, plain_message,
+                                       formatted_message)
 
             return cls(server, room_id, message)
         except (KeyError, TypeError, ValueError):

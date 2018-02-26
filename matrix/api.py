@@ -91,11 +91,15 @@ class MatrixClient:
 
         return HttpRequest(RequestType.GET, self.host, path)
 
-    def room_send_message(self, room_id, content, formatted_content=None):
+    def room_send_message(self,
+                          room_id,
+                          message_type,
+                          content,
+                          formatted_content=None):
         # type: (str, str, str) -> HttpRequest
         query_parameters = {"access_token": self.access_token}
 
-        body = {"msgtype": "m.text", "body": content}
+        body = {"msgtype": message_type, "body": content}
 
         if formatted_content:
             body["format"] = "org.matrix.custom.html"
@@ -301,15 +305,17 @@ class MatrixSyncMessage(MatrixMessage):
 
 class MatrixSendMessage(MatrixMessage):
 
-    def __init__(self, client, room_id, formatted_message):
+    def __init__(self,
+                 client,
+                 room_id,
+                 formatted_message,
+                 message_type="m.text"):
         self.room_id = room_id
         self.formatted_message = formatted_message
 
-        assert self.room_id
-        assert self.formatted_message
-
         data = {
             "room_id": self.room_id,
+            "message_type": message_type,
             "content": self.formatted_message.to_plain()
         }
 
@@ -321,6 +327,23 @@ class MatrixSendMessage(MatrixMessage):
     def decode_body(self, server):
         object_hook = partial(
             MatrixEvents.MatrixSendEvent.from_dict,
+            server,
+            self.room_id,
+            self.formatted_message,
+        )
+
+        return self._decode(server, object_hook)
+
+
+class MatrixEmoteMessage(MatrixSendMessage):
+
+    def __init__(self, client, room_id, formatted_message):
+        MatrixSendMessage.__init__(self, client, room_id, formatted_message,
+                                   "m.emote")
+
+    def decode_body(self, server):
+        object_hook = partial(
+            MatrixEvents.MatrixEmoteEvent.from_dict,
             server,
             self.room_id,
             self.formatted_message,
