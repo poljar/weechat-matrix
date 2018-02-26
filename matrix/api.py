@@ -294,7 +294,7 @@ class MatrixSendMessage(MatrixMessage):
             "content": self.formatted_message.to_plain()
         }
 
-        if self.formatted_message.is_formatted:
+        if self.formatted_message.is_formatted():
             data["formatted_content"] = self.formatted_message.to_html()
 
         MatrixMessage.__init__(self, client.room_send_message, data)
