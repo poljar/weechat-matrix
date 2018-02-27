@@ -79,6 +79,10 @@ class MatrixLoginEvent(MatrixEvent):
         self.server.user_id = self.user_id
         self.server.client.access_token = self.access_token
 
+        message = "{prefix}matrix: Logged in as {user}".format(
+            prefix=W.prefix("network"), user=self.user_id)
+
+        W.prnt(self.server.server_buffer, message)
         self.server.sync()
 
     @classmethod

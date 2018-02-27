@@ -377,6 +377,10 @@ class MatrixServer:
                                      self.device_name)
         self.send_or_queue(message)
 
+        msg = "{prefix}matrix: Logging in...".format(prefix=W.prefix("network"))
+
+        W.prnt(self.server_buffer, msg)
+
     def _print_message_error(self, message):
         server_buffer_prnt(self,
                            ("{prefix}Unhandled {status_code} error, please "
