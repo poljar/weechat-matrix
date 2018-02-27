@@ -17,6 +17,7 @@
 from __future__ import unicode_literals
 from builtins import str, bytes
 
+import os
 import ssl
 import socket
 import time
@@ -46,6 +47,7 @@ class MatrixServer:
         self.port = 8448                     # type: int
         self.options = dict()                # type: Dict[str, weechat.config]
         self.device_name = "Weechat Matrix"  # type: str
+        self.device_id = ""                  # type: str
 
         self.user = ""                       # type: str
         self.password = ""                   # type: str
@@ -89,7 +91,39 @@ class MatrixServer:
         self.message_queue = deque()  # type: Deque[MatrixMessage]
 
         self._create_options(config_file)
+        self._create_session_dir()
+        self._load_devide_id()
         # yapf: enable
+
+    def _create_session_dir(self):
+        path = os.path.join("matrix", self.name)
+        if not W.mkdir_home(path, 0o700):
+            message = ("{prefix}matrix: Error creating server session "
+                       "directory").format(prefix=W.prefix("error"))
+            W.prnt("", message)
+
+    def _get_session_path(self):
+        home_dir = W.info_get('weechat_dir', '')
+        return os.path.join(home_dir, "matrix", self.name)
+
+    def _load_devide_id(self):
+        file_name = "{}{}".format(self.name, ".device_id")
+        path = os.path.join(self._get_session_path(), file_name)
+
+        if not os.path.isfile(path):
+            return
+
+        with open(path, 'r') as f:
+            device_id = f.readline().rstrip()
+            if device_id:
+                self.device_id = device_id
+
+    def save_device_id(self):
+        file_name = "{}{}".format(self.name, ".device_id")
+        path = os.path.join(self._get_session_path(), file_name)
+
+        with open(path, 'w') as f:
+            f.write(self.device_id)
 
     def _create_options(self, config_file):
         options = [
@@ -374,7 +408,7 @@ class MatrixServer:
     def login(self):
         # type: (MatrixServer) -> None
         message = MatrixLoginMessage(self.client, self.user, self.password,
-                                     self.device_name)
+                                     self.device_name, self.device_id)
         self.send_or_queue(message)
 
         msg = "{prefix}matrix: Logging in...".format(prefix=W.prefix("network"))

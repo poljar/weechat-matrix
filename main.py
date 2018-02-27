@@ -423,6 +423,7 @@ def room_close_cb(data, buffer):
 @utf8_decode
 def matrix_unload_cb():
     matrix_config_free(matrix.globals.CONFIG)
+    W.prnt("", "unloading")
     return W.WEECHAT_RC_OK
 
 
@@ -437,8 +438,12 @@ if __name__ == "__main__":
                   WEECHAT_SCRIPT_VERSION, WEECHAT_SCRIPT_LICENSE,
                   WEECHAT_SCRIPT_DESCRIPTION, 'matrix_unload_cb', ''):
 
-        # TODO if this fails we should abort and unload the script.
+        if not W.mkdir_home("matrix", 0o700):
+            message = ("{prefix}matrix: Error creating session "
+                       "directory").format(prefix=W.prefix("error"))
+            W.prnt("", message)
 
+        # TODO if this fails we should abort and unload the script.
         matrix.globals.CONFIG = W.config_new("matrix",
                                              "matrix_config_reload_cb", "")
         matrix_config_init(matrix.globals.CONFIG)

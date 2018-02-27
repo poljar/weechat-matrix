@@ -68,15 +68,18 @@ class MatrixErrorEvent(MatrixEvent):
 
 class MatrixLoginEvent(MatrixEvent):
 
-    def __init__(self, server, user_id, access_token):
+    def __init__(self, server, user_id, device_id, access_token):
         self.user_id = user_id
         self.access_token = access_token
+        self.device_id = device_id
         MatrixEvent.__init__(self, server)
 
     def execute(self):
         self.server.access_token = self.access_token
         self.server.user_id = self.user_id
         self.server.client.access_token = self.access_token
+        self.server.device_id = self.device_id
+        self.server.save_device_id()
 
         message = "{prefix}matrix: Logged in as {user}".format(
             prefix=W.prefix("network"), user=self.user_id)
@@ -88,6 +91,7 @@ class MatrixLoginEvent(MatrixEvent):
     def from_dict(cls, server, parsed_dict):
         try:
             return cls(server, sanitize_id(parsed_dict["user_id"]),
+                       sanitize_id(parsed_dict["device_id"]),
                        sanitize_token(parsed_dict["access_token"]))
         except (KeyError, TypeError, ValueError):
             return MatrixErrorEvent.from_dict(server, "Error logging in", True,

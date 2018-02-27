@@ -58,7 +58,7 @@ class MatrixClient:
         self.txn_id = self.txn_id + 1
         return txn_id
 
-    def login(self, user, password, device_name=""):
+    def login(self, user, password, device_name="", device_id=""):
         # type (str, str, str) -> HttpRequest
         path = ("{api}/login").format(api=MATRIX_API_PATH)
 
@@ -67,6 +67,9 @@ class MatrixClient:
             "user": user,
             "password": password
         }
+
+        if device_id:
+            post_data["device_id"] = device_id
 
         if device_name:
             post_data["initial_device_display_name"] = device_name
