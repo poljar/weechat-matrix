@@ -130,6 +130,16 @@ def shorten_sender(sender):
     return strip_matrix_server(sender)[1:]
 
 
+def sender_to_prefix_and_color(room, sender):
+    if sender in room.users:
+        user = room.users[sender]
+        prefix = user.prefix
+        prefix_color = get_prefix_color(prefix)
+        return prefix, prefix_color
+
+    return None, None
+
+
 def sender_to_nick_and_color(room, sender):
     nick = sender
     nick_color_name = "default"
@@ -139,7 +149,7 @@ def sender_to_nick_and_color(room, sender):
         nick = (user.display_name if user.display_name else user.name)
         nick_color_name = user.nick_color
     else:
-        nick = shorten_sender(sender)
+        nick = sender
         nick_color_name = W.info_get("nick_color_name", nick)
 
     return (nick, nick_color_name)

@@ -24,12 +24,12 @@ from matrix.globals import W, OPTIONS
 from matrix.plugin_options import RedactType
 
 from matrix.colors import Formatted
-from matrix.utils import (strip_matrix_server, color_for_tags, date_from_age,
-                          sender_to_nick_and_color, add_event_tags, sanitize_id,
-                          sanitize_age, sanitize_text, shorten_sender,
-                          add_user_to_nicklist, get_prefix_for_level,
-                          sanitize_power_level, string_strikethrough,
-                          line_pointer_and_tags_from_event)
+from matrix.utils import (
+    strip_matrix_server, color_for_tags, date_from_age,
+    sender_to_nick_and_color, add_event_tags, sanitize_id, sanitize_age,
+    sanitize_text, shorten_sender, add_user_to_nicklist, get_prefix_for_level,
+    sanitize_power_level, string_strikethrough,
+    line_pointer_and_tags_from_event, sender_to_prefix_and_color)
 
 PowerLevel = namedtuple('PowerLevel', ['user', 'level'])
 
@@ -273,7 +273,17 @@ class RoomMessageEvent(RoomEvent):
 
         tags_string = ",".join(event_tags)
 
-        data = "{author}\t{msg}".format(author=nick, msg=message)
+        prefix, prefix_color = sender_to_prefix_and_color(room, self.sender)
+
+        prefix_string = "{}{}{}".format(
+            W.color(prefix_color), prefix, W.color("reset"))
+
+        data = "{prefix}{color}{author}{ncolor}\t{msg}".format(
+            prefix=prefix_string,
+            color=W.color(color_name),
+            author=nick,
+            ncolor=W.color("reset"),
+            msg=message)
 
         date = date_from_age(self.age)
         W.prnt_date_tags(buff, date, tags_string, data)
