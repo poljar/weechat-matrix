@@ -275,8 +275,8 @@ class RoomMessageEvent(RoomEvent):
 
         prefix, prefix_color = sender_to_prefix_and_color(room, self.sender)
 
-        prefix_string = "{}{}{}".format(
-            W.color(prefix_color), prefix, W.color("reset"))
+        prefix_string = ("" if not prefix else "{}{}{}".format(
+            W.color(prefix_color), prefix, W.color("reset")))
 
         data = "{prefix}{color}{author}{ncolor}\t{msg}".format(
             prefix=prefix_string,
