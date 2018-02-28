@@ -27,6 +27,7 @@ from itertools import chain
 
 # pylint: disable=redefined-builtin
 from builtins import str
+from future.utils import bytes_to_native_str as n
 
 # pylint: disable=unused-import
 from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
@@ -94,8 +95,8 @@ def print_certificate_info(buff, sock, cert):
 
     key_type = ("RSA" if public_key.type() == crypto.TYPE_RSA else "DSA")
     key_size = str(public_key.bits())
-    sha256_fingerprint = x509.digest(b"SHA256").replace(":", "")
-    sha1_fingerprint = x509.digest(b"SHA1").replace(":", "")
+    sha256_fingerprint = x509.digest(n(b"SHA256"))
+    sha1_fingerprint = x509.digest(n(b"SHA1"))
     signature_algorithm = x509.get_signature_algorithm()
 
     key_info = ("key info: {key_type} key {bits} bits, signed using "
