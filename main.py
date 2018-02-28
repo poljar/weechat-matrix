@@ -21,6 +21,9 @@ import socket
 import ssl
 import time
 import pprint
+import OpenSSL.crypto as crypto
+import textwrap
+from itertools import chain
 
 # pylint: disable=redefined-builtin
 from builtins import str
@@ -80,6 +83,62 @@ WEECHAT_SCRIPT_AUTHOR = "Damir Jelić <poljar@termina.org.uk>"  # type: str
 WEECHAT_SCRIPT_VERSION = "0.1"                                 # type: str
 WEECHAT_SCRIPT_LICENSE = "ISC"                                 # type: str
 # yapf: enable
+
+
+def print_certificate_info(buff, sock, cert):
+    cert_pem = ssl.DER_cert_to_PEM_cert(sock.getpeercert(True))
+
+    x509 = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
+
+    public_key = x509.get_pubkey()
+
+    key_type = ("RSA" if public_key.type() == crypto.TYPE_RSA else "DSA")
+    key_size = str(public_key.bits())
+    sha256_fingerprint = x509.digest(b"SHA256").replace(":", "")
+    sha1_fingerprint = x509.digest(b"SHA1").replace(":", "")
+    signature_algorithm = x509.get_signature_algorithm()
+
+    key_info = ("key info: {key_type} key {bits} bits, signed using "
+                "{algo}").format(
+                    key_type=key_type, bits=key_size, algo=signature_algorithm)
+
+    validity_info = ("        Begins on:  {before}\n"
+                     "        Expires on: {after}").format(
+                         before=cert["notBefore"], after=cert["notAfter"])
+
+    rdns = chain(*cert["subject"])
+    subject = ", ".join(["{}={}".format(name, value) for name, value in rdns])
+
+    rdns = chain(*cert["issuer"])
+    issuer = ", ".join(["{}={}".format(name, value) for name, value in rdns])
+
+    subject = "subject: {sub}, serial number {serial}".format(
+        sub=subject, serial=cert["serialNumber"])
+
+    issuer = "issuer: {issuer}".format(issuer=issuer)
+
+    fingerprints = ("        SHA1:   {}\n"
+                    "        SHA256: {}").format(sha1_fingerprint,
+                                                 sha256_fingerprint)
+
+    wrapper = textwrap.TextWrapper(
+        initial_indent="    - ", subsequent_indent="        ")
+
+    message = ("{prefix}matrix: received certificate\n"
+               " - certificate info:\n"
+               "{subject}\n"
+               "{issuer}\n"
+               "{key_info}\n"
+               "    - period of validity:\n{validity_info}\n"
+               "    - fingerprints:\n{fingerprints}").format(
+                   prefix=W.prefix("network"),
+                   subject=wrapper.fill(subject),
+                   issuer=wrapper.fill(issuer),
+                   key_info=wrapper.fill(key_info),
+                   validity_info=validity_info,
+                   fingerprints=fingerprints)
+
+    W.prnt(buff, message)
 
 
 def wrap_socket(server, file_descriptor):
@@ -146,9 +205,9 @@ def try_ssl_handshake(server):
                                   cipher=cipher[0])
             W.prnt(server.server_buffer, cipher_message)
 
-            # TODO print out the certificates
-            # cert = sock.getpeercert()
-            # W.prnt(server.server_buffer, pprint.pformat(cert))
+            cert = sock.getpeercert()
+            if cert:
+                print_certificate_info(server.server_buffer, sock, cert)
 
             finalize_connection(server)
 
