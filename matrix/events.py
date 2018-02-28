@@ -17,13 +17,12 @@
 from __future__ import unicode_literals
 from builtins import str
 
-import time
 from functools import partial
 from operator import itemgetter
 
 from matrix.globals import W
-from matrix.utils import (color_for_tags, tags_for_message, sanitize_id,
-                          sanitize_token, sanitize_text, tags_from_line_data)
+from matrix.utils import (tags_for_message, sanitize_id, sanitize_token,
+                          sanitize_text, tags_from_line_data)
 from matrix.rooms import (matrix_create_room_buffer, RoomInfo, RoomMessageText,
                           RoomMessageEvent, RoomRedactedMessageEvent,
                           RoomMessageEmote)
