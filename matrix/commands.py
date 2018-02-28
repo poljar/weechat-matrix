@@ -54,7 +54,7 @@ def hook_commands():
          ' reconnect: reconnect to server(s)\n\n'
          '      help: show detailed command help\n\n'
          '     debug: enable or disable debugging\n\n'
-         'Use /matrix help [command] to find out more\n'),
+         'Use /matrix help [command] to find out more.\n'),
         # Completions
         ('server %(matrix_server_commands)|%* ||'
          'connect %(matrix_servers) ||'
@@ -350,8 +350,7 @@ def matrix_redact_command_cb(data, buffer, args):
             matches = re.match(r"(\d+)(:\".*\")? ?(.*)?", args)
 
             if not matches:
-                message = ("{prefix}matrix: Invalid command arguments (see "
-                           "the help for the command /help redact)"
+                message = ("{prefix}matrix: Invalid command arguments (see /help redact)"
                           ).format(prefix=W.prefix("error"))
                 W.prnt("", message)
                 return W.WEECHAT_RC_ERROR
@@ -390,8 +389,8 @@ def matrix_redact_command_cb(data, buffer, args):
 def matrix_command_debug(args):
     if not args:
         message = ("{prefix}matrix: Too few arguments for command "
-                   "\"/matrix debug\" (see the help for the command: "
-                   "/matrix help debug").format(prefix=W.prefix("error"))
+                   "\"/matrix debug\" (see /matrix help debug)"
+                  ).format(prefix=W.prefix("error"))
         W.prnt("", message)
         return
 
@@ -426,8 +425,8 @@ def matrix_command_debug(args):
 def matrix_command_help(args):
     if not args:
         message = ("{prefix}matrix: Too few arguments for command "
-                   "\"/matrix help\" (see the help for the command: "
-                   "/matrix help help").format(prefix=W.prefix("error"))
+                   "\"/matrix help\" (see /matrix help help)"
+                  ).format(prefix=W.prefix("error"))
         W.prnt("", message)
         return
 
@@ -666,14 +665,14 @@ def matrix_server_command_delete(args):
 def matrix_server_command_add(args):
     if len(args) < 2:
         message = ("{prefix}matrix: Too few arguments for command "
-                   "\"/matrix server add\" (see the help for the command: "
-                   "/matrix help server").format(prefix=W.prefix("error"))
+                   "\"/matrix server add\" (see /matrix help server)"
+                  ).format(prefix=W.prefix("error"))
         W.prnt("", message)
         return
     elif len(args) > 4:
         message = ("{prefix}matrix: Too many arguments for command "
-                   "\"/matrix server add\" (see the help for the command: "
-                   "/matrix help server").format(prefix=W.prefix("error"))
+                   "\"/matrix server add\" (see /matrix help server)"
+                  ).format(prefix=W.prefix("error"))
         W.prnt("", message)
         return
 
@@ -828,8 +827,7 @@ def matrix_command_cb(data, buffer, args):
 
     if len(split_args) < 1:
         message = ("{prefix}matrix: Too few arguments for command "
-                   "\"/matrix\" (see the help for the command: "
-                   "/help matrix").format(prefix=W.prefix("error"))
+                   "\"/matrix\" (see /help matrix)").format(prefix=W.prefix("error"))
         W.prnt("", message)
         return W.WEECHAT_RC_ERROR
 
