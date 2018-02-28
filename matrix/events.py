@@ -425,7 +425,8 @@ class MatrixSyncEvent(MatrixEvent):
             server.sync()
             return
 
-        map(self._execute_joined_info, self.joined_room_infos)
+        for room_info in self.joined_room_infos:
+            self._execute_joined_info(room_info)
 
         server.next_batch = self.next_batch
         server.sync()
