@@ -18,7 +18,6 @@ from __future__ import unicode_literals
 from builtins import str
 
 from collections import namedtuple
-from functools import partial
 from datetime import datetime
 
 from matrix.globals import W, OPTIONS
@@ -514,8 +513,8 @@ class RoomPowerLevels(RoomEvent):
             add_user_to_nicklist(buff, user_id, user)
 
     def execute(self, server, room, buff, tags):
-        level_func = partial(self._set_power_level, room, buff)
-        map(level_func, self.power_levels)
+        for level in self.power_levels:
+            self._set_power_level(room, buff, level)
 
 
 class RoomTopicEvent(RoomEvent):
