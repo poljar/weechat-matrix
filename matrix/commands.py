@@ -493,9 +493,9 @@ def matrix_command_help(args):
                        "       port: port of server (default: 8448)\n"
                        "\n"
                        "Examples:"
-                       "\n  /server listfull"
-                       "\n  /server add matrix matrix.org:80"
-                       "\n  /server del matrix").format(
+                       "\n  /matrix server listfull"
+                       "\n  /matrix server add matrix matrix.org:80"
+                       "\n  /matrix server del matrix").format(
                            delimiter_color=W.color("chat_delimiters"),
                            cmd_color=W.color("chat_buffer"),
                            ncolor=W.color("reset"))
