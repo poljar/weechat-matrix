@@ -168,7 +168,7 @@ def matrix_fetch_old_messages(server, room_id):
 
 def check_server_existence(server_name, servers):
     if server_name not in servers:
-        message = "{prefix}matrix: No such server: {server} found".format(
+        message = "{prefix}matrix: No such server: {server}".format(
             prefix=W.prefix("error"), server=server_name)
         W.prnt("", message)
         return False
