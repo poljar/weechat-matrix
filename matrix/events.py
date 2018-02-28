@@ -284,13 +284,15 @@ class MatrixBacklogEvent(MatrixEvent):
                     tags = tags_from_line_data(data)
                     prefix = W.hdata_string(hdata_line_data, data, 'prefix')
                     message = W.hdata_string(hdata_line_data, data, 'message')
+                    highlight = W.hdata_char(hdata_line_data, data, "highlight")
 
                     line_data = {
                         'date': date,
                         'date_printed': print_date,
                         'tags_array': ','.join(tags),
                         'prefix': prefix,
-                        'message': message
+                        'message': message,
+                        'highlight': highlight
                     }
 
                     lines.append(line_data)
