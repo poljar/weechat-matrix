@@ -121,14 +121,14 @@ class RoomInfo():
 
     @staticmethod
     def _membership_from_dict(event_dict):
-        if (event_dict["membership"] not in [
+        if (event_dict["content"]["membership"] not in [
                 "invite", "join", "knock", "leave", "ban"
         ]):
             raise ValueError
 
-        if event_dict["membership"] == "join":
+        if event_dict["content"]["membership"] == "join":
             return RoomMemberJoin.from_dict(event_dict)
-        elif event_dict["membership"] == "leave":
+        elif event_dict["content"]["membership"] == "leave":
             return RoomMemberLeave.from_dict(event_dict)
 
         return None
