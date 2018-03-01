@@ -24,6 +24,7 @@ from collections import namedtuple
 from matrix.globals import W
 from matrix.utils import string_strikethrough
 
+import textwrap
 import webcolors
 
 try:
@@ -32,6 +33,9 @@ except ImportError:
     from html.parser import HTMLParser
 
 FormattedString = namedtuple('FormattedString', ['text', 'attributes'])
+
+quote_wrapper = textwrap.TextWrapper(
+    initial_indent="> ", subsequent_indent="> ")
 
 
 class Formatted():
@@ -228,8 +232,8 @@ class Formatted():
             elif name == "strikethrough" and value:
                 return string_strikethrough(string)
 
-            elif name == "quote" and value:
-                return "“{text}”".format(text=string)
+            if name == "quote" and value:
+                return quote_wrapper.fill(string.replace("\n", ""))
 
             elif name == "fgcolor" and value:
                 return "{color_on}{text}{color_off}".format(
@@ -254,7 +258,7 @@ class Formatted():
             return text
 
         weechat_strings = map(format_string, self.substrings)
-        return "".join(weechat_strings)
+        return "".join(weechat_strings).rstrip("\n")
 
 
 # TODO this should be a typed dict.
@@ -298,6 +302,14 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("quote")
         elif tag == "blockquote":
             self._toggle_attribute("quote")
+        elif tag == "br":
+            if self.text:
+                self.substrings.append(
+                    FormattedString(self.text, self.attributes.copy()))
+            self.text = "\n"
+            self.substrings.append(
+                FormattedString(self.text, DEFAULT_ATRIBUTES.copy()))
+            self.text = ""
         elif tag == "font":
             for key, value in attrs:
                 if key == "color":
