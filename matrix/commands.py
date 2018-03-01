@@ -73,10 +73,10 @@ def hook_commands():
         # Synopsis
         ('<message-number>[:"<message-part>"] [<reason>]'),
         # Description
-        ("message-number: number of the message to redact (message numbers"
-         "\n                start from the last recieved as "
-         "1 and count up)\n"
-         "  message-part: a shortened part of the message\n"
+        ("message-number: number of message to redact (starting from 1 for\n"
+         "                the last message received, counting up)\n"
+         "  message-part: an initial part of the message (ignored, only used\n"
+         "                as visual feedback when using completion)\n"
          "        reason: the redaction reason\n"),
         # Completions
         ('%(matrix_messages)'),
