@@ -300,8 +300,6 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("strikethrough")
         elif tag == "blockquote":
             self._toggle_attribute("quote")
-        elif tag == "blockquote":
-            self._toggle_attribute("quote")
         elif tag == "br":
             if self.text:
                 self.substrings.append(
