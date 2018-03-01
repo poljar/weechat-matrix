@@ -541,7 +541,7 @@ def colour_find_rgb(r, g, b):
 def color_html_to_weechat(color):
     # type: (str) -> str
     # yapf: disable
-    first_16 = {
+    weechat_basic_colors = {
         (0, 0, 0): "black",             # 0
         (128, 0, 0): "red",             # 1
         (0, 128, 0): "green",           # 2
@@ -566,8 +566,8 @@ def color_html_to_weechat(color):
     except ValueError:
         return None
 
-    if rgb_color in first_16:
-        return first_16[rgb_color]
+    if rgb_color in weechat_basic_colors:
+        return weechat_basic_colors[rgb_color]
 
     return str(colour_find_rgb(*rgb_color))
 
@@ -575,7 +575,7 @@ def color_html_to_weechat(color):
 def color_weechat_to_html(color):
     # type: (str) -> str
     # yapf: disable
-    first_16 = {
+    weechat_basic_colors = {
         "black": "black",           # 0
         "red": "maroon",            # 1
         "green": "green",           # 2
@@ -853,8 +853,8 @@ def color_weechat_to_html(color):
     }
     # yapf: enable
 
-    if color in first_16:
-        return first_16[color]
+    if color in weechat_basic_colors:
+        return weechat_basic_colors[color]
 
     hex_color = hex_colors[color]
 
