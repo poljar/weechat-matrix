@@ -232,7 +232,7 @@ class Formatted():
             elif name == "strikethrough" and value:
                 return string_strikethrough(string)
 
-            if name == "quote" and value:
+            elif name == "quote" and value:
                 return quote_wrapper.fill(string.replace("\n", ""))
 
             elif name == "fgcolor" and value:
