@@ -71,7 +71,7 @@ def hook_commands():
         'redact',
         'redact messages',
         # Synopsis
-        ('<message-number>[:<"message-part">] [<reason>]'),
+        ('<message-number>[:"<message-part>"] [<reason>]'),
         # Description
         ("message-number: number of the message to redact (message numbers"
          "\n                start from the last recieved as "
