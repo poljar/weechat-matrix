@@ -591,7 +591,7 @@ def color_weechat_to_html(color):
         "lightblue": "blue",        # 13
         "lightmagenta": "fuchsia",  # 14
         "lightcyan": "aqua",        # 15
-        "white": "white",           # 15
+        "white": "white",           # 16
     }
     hex_colors = {
         "0":   "#000000",
