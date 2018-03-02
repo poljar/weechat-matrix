@@ -576,22 +576,22 @@ def color_weechat_to_html(color):
     # type: (str) -> str
     # yapf: disable
     weechat_basic_colors = {
-        "black": "black",           # 0
-        "red": "maroon",            # 1
-        "green": "green",           # 2
-        "brown": "olive",           # 3
-        "blue": "navy",             # 4
-        "magenta": "purple",        # 5
-        "cyan": "teal",             # 6
-        "default": "silver",        # 7
-        "gray": "gray",             # 8
-        "lightred": "red",          # 9
-        "lightgreen": "lime",       # 11
-        "yellow": "yellow",         # 12
-        "lightblue": "blue",        # 13
-        "lightmagenta": "fuchsia",  # 14
-        "lightcyan": "aqua",        # 15
-        "white": "white",           # 16
+        "black": "0",
+        "red": "1",
+        "green": "2",
+        "brown": "3",
+        "blue": "4",
+        "magenta": "5",
+        "cyan": "6",
+        "default": "7",
+        "gray": "8",
+        "lightred": "9",
+        "lightgreen": "10",
+        "yellow": "11",
+        "lightblue": "12",
+        "lightmagenta": "13",
+        "lightcyan": "14",
+        "white": "15",
     }
     hex_colors = {
         "0":   "#000000",
@@ -851,14 +851,9 @@ def color_weechat_to_html(color):
         "254": "#e4e4e4",
         "255": "#eeeeee"
     }
+
     # yapf: enable
-
     if color in weechat_basic_colors:
-        return weechat_basic_colors[color]
-
-    hex_color = hex_colors[color]
-
-    try:
-        return webcolors.hex_to_name(hex_color)
-    except ValueError:
-        return hex_color
+        return hex_colors[weechat_basic_colors[color]]
+    else:
+        return hex_colors[color]
