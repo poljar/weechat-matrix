@@ -1,7 +1,8 @@
-.PHONY: install install-lib phony
+.PHONY: install install-lib phony test
 
 WEECHAT_HOME ?= $(HOME)/.weechat
 PREFIX ?= $(WEECHAT_HOME)
+PYTHON ?= python
 
 lib := $(patsubst matrix/%.py, $(DESTDIR)$(PREFIX)/python/matrix/%.py, \
 	 $(wildcard matrix/*.py))
@@ -15,3 +16,6 @@ phony:
 
 $(DESTDIR)$(PREFIX)/python/matrix/%.py: matrix/%.py phony
 	install -Dm644 $< $@
+
+test:
+	$(PYTHON) -m pytest

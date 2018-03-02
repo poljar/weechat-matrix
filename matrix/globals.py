@@ -21,9 +21,12 @@ import sys
 from matrix.utf import WeechatWrapper
 from matrix.plugin_options import PluginOptions
 
-import weechat
-
-W = weechat if sys.hexversion >= 0x3000000 else WeechatWrapper(weechat)
+try:
+    import weechat
+    W = weechat if sys.hexversion >= 0x3000000 else WeechatWrapper(weechat)
+except ImportError:
+    import matrix._weechat as weechat
+    W = weechat
 
 OPTIONS = PluginOptions()  # type: PluginOptions
 SERVERS = dict()  # type: Dict[str, MatrixServer]

@@ -542,23 +542,26 @@ def colour_find_rgb(r, g, b):
 
 def color_html_to_weechat(color):
     # type: (str) -> str
+    # yapf: disable
     first_16 = {
-        (0, 0, 0): "black",  # 0
-        (128, 0, 0): "red",  # 1
-        (0, 128, 0): "green",  # 2
-        (128, 128, 0): "brown",  # 3
-        (0, 0, 128): "blue",  # 4
-        (128, 0, 128): "magenta",  # 5
-        (0, 128, 128): "cyan",  # 6
-        (192, 192, 192): "default",  # 7
-        (128, 128, 128): "gray",  # 8
-        (255, 0, 0): "lightred",  # 9
-        (0, 255, 0): "lightgreen",  # 11
-        (255, 255, 0): "yellow",  # 12
-        (0, 0, 255): "lightblue",  # 13
-        (255, 0, 255): "lightmagenta",  # 14
-        (0, 255, 255): "lightcyan",  # 15
+        (0, 0, 0): "black",             # 0
+        (128, 0, 0): "red",             # 1
+        (0, 128, 0): "green",           # 2
+        (128, 128, 0): "brown",         # 3
+        (0, 0, 128): "blue",            # 4
+        (128, 0, 128): "magenta",       # 5
+        (0, 128, 128): "cyan",          # 6
+        (192, 192, 192): "default",     # 7
+        (128, 128, 128): "gray",        # 8
+        (255, 0, 0): "lightred",        # 9
+        (0, 255, 0): "lightgreen",      # 10
+        (255, 255, 0): "yellow",        # 11
+        (0, 0, 255): "lightblue",       # 12
+        (255, 0, 255): "lightmagenta",  # 13
+        (0, 255, 255): "lightcyan",     # 14
+        (255, 255, 255): "white",       # 15
     }
+    # yapf: enable
 
     try:
         rgb_color = webcolors.html5_parse_legacy_color(color)
@@ -573,24 +576,25 @@ def color_html_to_weechat(color):
 
 def color_weechat_to_html(color):
     # type: (str) -> str
+    # yapf: disable
     first_16 = {
-        "black": "black",  # 0
-        "red": "maroon",  # 1
-        "green": "green",  # 2
-        "brown": "olive",  # 3
-        "blue": "navy",  # 4
-        "magenta": "purple",  # 5
-        "cyan": "teal",  # 6
-        "default": "silver",  # 7
-        "gray": "grey",  # 8
-        "lightred": "red",  # 9
-        "lightgreen": "lime",  # 11
-        "yellow": "yellow",  # 12
-        "lightblue": "fuchsia",  # 13
-        "lightmagenta": "aqua",  # 14
-        "lightcyan": "white",  # 15
+        "black": "black",           # 0
+        "red": "maroon",            # 1
+        "green": "green",           # 2
+        "brown": "olive",           # 3
+        "blue": "navy",             # 4
+        "magenta": "purple",        # 5
+        "cyan": "teal",             # 6
+        "default": "silver",        # 7
+        "gray": "gray",             # 8
+        "lightred": "red",          # 9
+        "lightgreen": "lime",       # 11
+        "yellow": "yellow",         # 12
+        "lightblue": "blue",        # 13
+        "lightmagenta": "fuchsia",  # 14
+        "lightcyan": "aqua",        # 15
+        "white": "white",           # 15
     }
-    #yapf: disable
     hex_colors = {
         "0":   "#000000",
         "1":   "#800000",
