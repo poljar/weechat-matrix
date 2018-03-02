@@ -22,5 +22,6 @@ def test_prism():
 
 @given(sampled_from(first_16_html_colors))
 def test_color_conversion(color_name):
-    assert color_weechat_to_html(
-        color_html_to_weechat(color_name)) == color_name
+    hex_color = color_weechat_to_html(color_html_to_weechat(color_name))
+    new_color_name = webcolors.hex_to_name(hex_color, spec='html4')
+    assert new_color_name == color_name
