@@ -63,6 +63,7 @@ class MatrixServer:
         self.autoconnect = False                         # type: bool
         self.connected = False                           # type: bool
         self.connecting = False                          # type: bool
+        self.proxy = None                                # type: str
         self.reconnect_delay = 0                         # type: int
         self.reconnect_time = None                       # type: float
         self.socket = None                               # type: ssl.SSLSocket
@@ -134,6 +135,8 @@ class MatrixServer:
                    "Hostname or IP address for the server"),
             Option('port', 'integer', '', 0, 65535, '8448',
                    "Port for the server"),
+            Option('proxy', 'string', '', 0, 0, '',
+                   ("Name of weechat proxy to use (see /help proxy)")),
             Option('ssl_verify', 'boolean', '', 0, 0, 'on',
                    ("Check that the SSL connection is fully trusted")),
             Option('username', 'string', '', 0, 0, '',
@@ -179,6 +182,9 @@ class MatrixServer:
             value = W.config_integer(option)
             self.port = value
             self._change_client()
+        elif option_name == "proxy":
+            value = W.config_string(option)
+            self.proxy = value
         elif option_name == "ssl_verify":
             value = W.config_boolean(option)
             if value:
@@ -395,7 +401,9 @@ class MatrixServer:
 
         W.prnt(self.server_buffer, message)
 
-        W.hook_connect("", self.address, self.port, 1, 0, "", "connect_cb",
+        W.hook_connect(self.proxy if self.proxy else "",
+                       self.address, self.port,
+                       1, 0, "", "connect_cb",
                        self.name)
 
         return True
