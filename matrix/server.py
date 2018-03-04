@@ -94,7 +94,6 @@ class MatrixServer:
 
         self._create_options(config_file)
         self._create_session_dir()
-        self._load_devide_id()
         # yapf: enable
 
     def _create_session_dir(self):
@@ -104,13 +103,13 @@ class MatrixServer:
                        "directory").format(prefix=W.prefix("error"))
             W.prnt("", message)
 
-    def _get_session_path(self):
+    def get_session_path(self):
         home_dir = W.info_get('weechat_dir', '')
         return os.path.join(home_dir, "matrix", self.name)
 
-    def _load_devide_id(self):
-        file_name = "{}{}".format(self.name, ".device_id")
-        path = os.path.join(self._get_session_path(), file_name)
+    def _load_device_id(self):
+        file_name = "{}{}".format(self.user, ".device_id")
+        path = os.path.join(self.get_session_path(), file_name)
 
         if not os.path.isfile(path):
             return
@@ -121,8 +120,8 @@ class MatrixServer:
                 self.device_id = device_id
 
     def save_device_id(self):
-        file_name = "{}{}".format(self.name, ".device_id")
-        path = os.path.join(self._get_session_path(), file_name)
+        file_name = "{}{}".format(self.user, ".device_id")
+        path = os.path.join(self.get_session_path(), file_name)
 
         with open(path, 'w') as f:
             f.write(self.device_id)
@@ -198,6 +197,9 @@ class MatrixServer:
             value = W.config_string(option)
             self.user = value
             self.access_token = ""
+
+            self._load_device_id()
+
         elif option_name == "password":
             value = W.config_string(option)
             self.password = W.string_eval_expression(value, {}, {}, {})
