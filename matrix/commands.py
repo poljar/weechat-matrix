@@ -32,6 +32,7 @@ from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
 from matrix.server import MatrixServer
 from matrix.colors import Formatted
+from matrix.encryption import matrix_hook_olm_command
 
 
 def hook_commands():
@@ -97,6 +98,8 @@ def hook_commands():
         # Function name
         "matrix_me_command_cb",
         "")
+
+    matrix_hook_olm_command()
 
     W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')

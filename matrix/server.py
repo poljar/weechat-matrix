@@ -35,6 +35,13 @@ from matrix.globals import W, SERVERS, OPTIONS
 import matrix.api as API
 from matrix.api import MatrixClient, MatrixSyncMessage, MatrixLoginMessage
 
+from matrix.encryption import Olm, EncryptionError
+
+try:
+    FileNotFoundError
+except NameError:
+    FileNotFoundError = IOError
+
 
 class MatrixServer:
     # pylint: disable=too-many-instance-attributes
@@ -48,6 +55,7 @@ class MatrixServer:
         self.options = dict()                # type: Dict[str, weechat.config]
         self.device_name = "Weechat Matrix"  # type: str
         self.device_id = ""                  # type: str
+        self.olm = None                      # type: Olm
 
         self.user = ""                       # type: str
         self.password = ""                   # type: str
@@ -126,6 +134,24 @@ class MatrixServer:
         with open(path, 'w') as f:
             f.write(self.device_id)
 
+    def _load_olm(self):
+        try:
+            self.olm = Olm.from_session_dir(self)
+        except FileNotFoundError:
+            message = ("{prefix}matrix: Creating new Olm identity for {user}"
+                       " on {server} for device {device}.").format(
+                           prefix=W.prefix("network"),
+                           user=self.user,
+                           server=self.name,
+                           device=self.device_id)
+            W.prnt("", message)
+            self.olm = Olm(self)
+        except EncryptionError as error:
+            message = ("{prefix}matrix: Error loading Olm"
+                       "account: {error}.").format(
+                           prefix=W.prefix("error"), error=error)
+            W.prnt("", message)
+
     def _create_options(self, config_file):
         options = [
             Option('autoconnect', 'boolean', '', 0, 0, 'off',
@@ -199,6 +225,9 @@ class MatrixServer:
             self.access_token = ""
 
             self._load_device_id()
+
+            if self.device_id:
+                self._load_olm()
 
         elif option_name == "password":
             value = W.config_string(option)

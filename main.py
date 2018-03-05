@@ -36,6 +36,7 @@ from matrix.colors import Formatted
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
 from matrix.api import MatrixSendMessage
+from matrix.encryption import matrix_olm_command_cb
 
 # Weechat searches for the registered callbacks in the scope of the main script
 # file, import the callbacks here so weechat can find them.
