@@ -246,6 +246,26 @@ class MatrixInviteEvent(MatrixEvent):
                                               False, parsed_dict)
 
 
+class MatrixKickEvent(MatrixEvent):
+
+    def __init__(self, server, room_id, user_id, reason):
+        self.room_id = room_id
+        self.user_id = user_id
+        self.reason = reason
+        MatrixEvent.__init__(self, server)
+
+    @classmethod
+    def from_dict(cls, server, room_id, user_id, reason, parsed_dict):
+        try:
+            if parsed_dict == {}:
+                return cls(server, room_id, user_id, reason)
+
+            raise KeyError
+        except KeyError:
+            return MatrixErrorEvent.from_dict(server, "Error kicking user",
+                                              False, parsed_dict)
+
+
 class MatrixBacklogEvent(MatrixEvent):
 
     def __init__(self, server, room_id, end_token, events):

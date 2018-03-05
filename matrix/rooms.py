@@ -465,25 +465,27 @@ class RoomMemberJoin(RoomEvent):
 
 class RoomMemberLeave(RoomEvent):
 
-    def __init__(self, event_id, sender, age):
+    def __init__(self, event_id, sender, leaving_user, age):
+        self.leaving_user = leaving_user
         RoomEvent.__init__(self, event_id, sender, age)
 
     @classmethod
     def from_dict(cls, event_dict):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
+        leaving_user = sanitize_id(event_dict["state_key"])
         age = sanitize_age(event_dict["unsigned"]["age"])
 
-        return cls(event_id, sender, age)
+        return cls(event_id, sender, leaving_user, age)
 
     def execute(self, server, room, buff, tags):
-        if self.sender in room.users:
-            nick_pointer = W.nicklist_search_nick(buff, "", self.sender)
+        if self.leaving_user in room.users:
+            nick_pointer = W.nicklist_search_nick(buff, "", self.leaving_user)
 
             if nick_pointer:
                 W.nicklist_remove_nick(buff, nick_pointer)
 
-            del room.users[self.sender]
+            del room.users[self.leaving_user]
 
 
 class RoomPowerLevels(RoomEvent):
