@@ -27,7 +27,7 @@ from matrix.utf import utf8_decode
 from matrix.api import (MatrixTopicMessage, MatrixRedactMessage,
                         MatrixBacklogMessage, MatrixJoinMessage,
                         MatrixPartMessage, MatrixInviteMessage,
-                        MatrixEmoteMessage)
+                        MatrixEmoteMessage, MatrixKickMessage)
 from matrix.utils import key_from_value, tags_from_line_data
 from matrix.plugin_options import DebugType
 from matrix.server import MatrixServer
@@ -103,6 +103,7 @@ def hook_commands():
     W.hook_command_run('/join', 'matrix_command_join_cb', '')
     W.hook_command_run('/part', 'matrix_command_part_cb', '')
     W.hook_command_run('/invite', 'matrix_command_invite_cb', '')
+    W.hook_command_run('/kick', 'matrix_command_kick_cb', '')
 
     if OPTIONS.enable_backlog:
         hook_page_up()
@@ -304,6 +305,42 @@ def matrix_command_invite_cb(data, buffer, command):
     for server in SERVERS.values():
         if buffer in server.buffers.values():
             invite(server, buffer, command)
+            return W.WEECHAT_RC_OK_EAT
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_command_kick_cb(data, buffer, command):
+
+    def kick(server, buf, args):
+        split_args = args.split(" ", 1)[1:]
+
+        if (len(split_args) < 1 or
+                split_args[0].startswith("#") and len(split_args) < 2):
+            error_msg = (
+                '{prefix}Error with command "/kick" (help on '
+                'command: /help kick)').format(prefix=W.prefix("error"))
+            W.prnt("", error_msg)
+            return
+
+        if split_args[0].startswith("#"):
+            assert len(split_args) >= 2
+            room_id = split_args[0]
+            kicked_user = split_args[1]
+            reason = split_args[2:] or None
+        else:
+            room_id = key_from_value(server.buffers, buf)
+            kicked_user = split_args[0]
+            reason = split_args[1:] or None
+
+        message = MatrixKickMessage(
+            server.client, room_id=room_id, user_id=kicked_user, reason=reason)
+        server.send_or_queue(message)
+
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            kick(server, buffer, command)
             return W.WEECHAT_RC_OK_EAT
 
     return W.WEECHAT_RC_OK
@@ -918,7 +955,7 @@ def matrix_command_topic_cb(data, buffer, command):
         elif buffer == server.server_buffer:
             message = ("{prefix}matrix: command \"topic\" must be "
                        "executed on a Matrix channel buffer"
-                      ).format(prefix=W.prefix("error"))
+                       ).format(prefix=W.prefix("error"))
             W.prnt(buffer, message)
             return W.WEECHAT_RC_OK_EAT
 

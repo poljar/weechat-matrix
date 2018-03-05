@@ -207,6 +207,23 @@ class MatrixClient:
 
         return HttpRequest(RequestType.POST, self.host, path, content)
 
+    def room_kick(self, room_id, user_id, reason=None):
+        query_parameters = {"access_token": self.access_token}
+
+        content = {"user_id": user_id}
+
+        if reason:
+            content["reason"] = reason
+
+        path = ("{api}/rooms/{room_id}/kick?"
+                "{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    room_id=quote(room_id),
+                    query_parameters=urlencode(query_parameters))
+
+        h = HttpRequest(RequestType.POST, self.host, path, content)
+        return h
+
     def mxc_to_http(self, mxc):
         # type: (str) -> str
         url = urlparse(mxc)
@@ -467,5 +484,29 @@ class MatrixInviteMessage(MatrixMessage):
     def decode_body(self, server):
         object_hook = partial(MatrixEvents.MatrixInviteEvent.from_dict, server,
                               self.room_id, self.user_id)
+
+        return self._decode(server, object_hook)
+
+
+class MatrixKickMessage(MatrixMessage):
+
+    def __init__(self, client, room_id, user_id, reason=None):
+        self.room_id = room_id
+        self.user_id = user_id
+        self.reason = reason
+
+        data = {"room_id": self.room_id,
+                "user_id": self.user_id,
+                "reason": reason}
+
+        MatrixMessage.__init__(self, client.room_kick, data)
+
+    def decode_body(self, server):
+        object_hook = partial(
+            MatrixEvents.MatrixKickEvent.from_dict,
+            server,
+            self.room_id,
+            self.user_id,
+            self.reason)
 
         return self._decode(server, object_hook)
