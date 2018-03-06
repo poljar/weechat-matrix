@@ -127,11 +127,29 @@ class RoomInfo():
             raise ValueError
 
         if event_dict["content"]["membership"] == "join":
-            return RoomMemberJoin.from_dict(event_dict)
-        elif event_dict["content"]["membership"] == "leave":
-            return RoomMemberLeave.from_dict(event_dict)
+            event = RoomMemberJoin.from_dict(event_dict)
 
-        return None
+            try:
+                message = RoomMembershipMessage(
+                    event.event_id, event.sender, event.age,
+                    "has joined", "join")
+                return event, message
+            except AttributeError:
+                return event, None
+
+        elif event_dict["content"]["membership"] == "leave":
+            event = RoomMemberLeave.from_dict(event_dict)
+
+            try:
+                msg = ("has left" if event.sender == event.leaving_user else
+                       "has been kicked")
+                message = RoomMembershipMessage(
+                    event.event_id, event.sender, event.age, msg, "quit")
+                return event, message
+            except AttributeError:
+                return event, None
+
+        return None, None
 
     @staticmethod
     def _parse_events(parsed_dict):
@@ -143,8 +161,10 @@ class RoomInfo():
                 if event["type"] == "m.room.message":
                     other_events.append(RoomInfo._message_from_event(event))
                 elif event["type"] == "m.room.member":
-                    membership_events.append(
-                        RoomInfo._membership_from_dict(event))
+                    m_event, msg = RoomInfo._membership_from_dict(event)
+                    membership_events.append(m_event)
+                    if msg:
+                        other_events.append(msg)
                 elif event["type"] == "m.room.power_levels":
                     other_events.append(RoomPowerLevels.from_dict(event))
                 elif event["type"] == "m.room.topic":
@@ -411,6 +431,31 @@ class RoomMessageMedia(RoomMessageEvent):
         msg = "{url}{desc}".format(url=url, desc=description)
 
         self._print_message(msg, room, buff, tags)
+
+
+class RoomMembershipMessage(RoomEvent):
+    def __init__(self, event_id, sender, age, message, prefix):
+        self.message = message
+        self.prefix = prefix
+        RoomEvent.__init__(self, event_id, sender, age)
+
+    def execute(self, server, room, buff, tags):
+        nick, color_name = sender_to_nick_and_color(room, self.sender)
+        event_tags = add_event_tags(self.event_id, nick, None, [])
+
+        data = ("{prefix}{color}{author}{ncolor} "
+                "({user_id}) {message} {room}").format(
+            prefix=W.prefix(self.prefix),
+            color=W.color(color_name),
+            author=nick,
+            ncolor=W.color("reset"),
+            user_id=self.sender,
+            message=self.message,
+            room=room.alias)
+        date = date_from_age(self.age)
+        tags_string = ",".join(event_tags)
+
+        W.prnt_date_tags(buff, date, tags_string, data)
 
 
 class RoomMemberJoin(RoomEvent):
