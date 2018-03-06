@@ -170,7 +170,7 @@ def add_event_tags(event_id, nick, color, tags):
         tags = tags_for_message("message")
 
     tags.append("nick_{nick}".format(nick=nick))
-    tags.append("perfix_nick_{color}".format(color=color_for_tags(color)))
+    tags.append("prefix_nick_{color}".format(color=color_for_tags(color)))
     tags.append("matrix_id_{event_id}".format(event_id=event_id))
 
     return tags
