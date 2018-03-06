@@ -113,10 +113,9 @@ def color_for_tags(color):
     return color
 
 
-def date_from_age(age):
+def server_ts_to_weechat(age):
     # type: (float) -> int
-    now = time.time()
-    date = int(now - (age / 1000))
+    date = int(age / 1000)
     return date
 
 
@@ -241,9 +240,9 @@ def sanitize_int(number, minimum=None, maximum=None):
     return number
 
 
-def sanitize_age(age):
+def sanitize_ts(timestamp):
     # type: (int) -> int
-    return sanitize_int(age, 0)
+    return sanitize_int(timestamp, 0)
 
 
 def sanitize_power_level(level):

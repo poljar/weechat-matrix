@@ -17,6 +17,8 @@
 from __future__ import unicode_literals
 from builtins import str
 
+from pprint import pformat
+
 from collections import namedtuple
 from datetime import datetime
 
@@ -25,8 +27,8 @@ from matrix.plugin_options import RedactType
 
 from matrix.colors import Formatted
 from matrix.utils import (
-    strip_matrix_server, color_for_tags, date_from_age,
-    sender_to_nick_and_color, add_event_tags, sanitize_id, sanitize_age,
+    strip_matrix_server, color_for_tags, server_ts_to_weechat,
+    sender_to_nick_and_color, add_event_tags, sanitize_id, sanitize_ts,
     sanitize_text, shorten_sender, add_user_to_nicklist, get_prefix_for_level,
     sanitize_power_level, string_strikethrough,
     line_pointer_and_tags_from_event, sender_to_prefix_and_color)
@@ -144,7 +146,7 @@ class RoomInfo():
                 msg = ("has left" if event.sender == event.leaving_user else
                        "has been kicked")
                 message = RoomMembershipMessage(
-                    event.event_id, event.leaving_user, event.age, msg, "quit")
+                    event.event_id, event.leaving_user, event.timestamp, msg, "quit")
                 return event, message
             except AttributeError:
                 return event, None
@@ -182,7 +184,7 @@ class RoomInfo():
                        "room event of type {type}: {error}").format(
                            prefix=W.prefix("error"),
                            type=event["type"],
-                           error=str(error))
+                           error=pformat(error))
             W.prnt("", message)
             raise
 
@@ -208,24 +210,24 @@ class RoomInfo():
 
 class RoomEvent():
 
-    def __init__(self, event_id, sender, age):
+    def __init__(self, event_id, sender, timestamp):
         self.event_id = event_id
         self.sender = sender
-        self.age = age
+        self.timestamp = timestamp
 
 
 class RoomRedactedMessageEvent(RoomEvent):
 
-    def __init__(self, event_id, sender, age, censor, reason=None):
+    def __init__(self, event_id, sender, timestamp, censor, reason=None):
         self.censor = censor
         self.reason = reason
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event):
         event_id = sanitize_id(event["event_id"])
         sender = sanitize_id(event["sender"])
-        age = sanitize_age(event["unsigned"]["age"])
+        timestamp = sanitize_ts(event["origin_server_ts"])
 
         censor = sanitize_id(event['unsigned']['redacted_because']['sender'])
         reason = None
@@ -234,12 +236,12 @@ class RoomRedactedMessageEvent(RoomEvent):
             reason = sanitize_text(
                 event['unsigned']['redacted_because']['content']['reason'])
 
-        return cls(event_id, sender, age, censor, reason)
+        return cls(event_id, sender, timestamp, censor, reason)
 
     def execute(self, server, room, buff, tags):
         nick, color_name = sender_to_nick_and_color(room, self.sender)
         color = color_for_tags(color_name)
-        date = date_from_age(self.age)
+        date = server_ts_to_weechat(self.timestamp)
 
         event_tags = add_event_tags(self.event_id, nick, color, tags)
 
@@ -305,27 +307,27 @@ class RoomMessageEvent(RoomEvent):
             ncolor=W.color("reset"),
             msg=message)
 
-        date = date_from_age(self.age)
+        date = server_ts_to_weechat(self.timestamp)
         W.prnt_date_tags(buff, date, tags_string, data)
 
 
 class RoomMessageSimple(RoomMessageEvent):
 
-    def __init__(self, event_id, sender, age, message, message_type):
+    def __init__(self, event_id, sender, timestamp, message, message_type):
         self.message = message
         self.message_type = message_type
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event):
         event_id = sanitize_id(event["event_id"])
         sender = sanitize_id(event["sender"])
-        age = sanitize_age(event["unsigned"]["age"])
+        timestamp = sanitize_ts(event["origin_server_ts"])
 
         message = sanitize_text(event["content"]["body"])
         message_type = sanitize_text(event["content"]["msgtype"])
 
-        return cls(event_id, sender, age, message, message_type)
+        return cls(event_id, sender, timestamp, message, message_type)
 
 
 class RoomMessageUnknown(RoomMessageSimple):
@@ -339,16 +341,16 @@ class RoomMessageUnknown(RoomMessageSimple):
 
 class RoomMessageText(RoomMessageEvent):
 
-    def __init__(self, event_id, sender, age, message, formatted_message=None):
+    def __init__(self, event_id, sender, timestamp, message, formatted_message=None):
         self.message = message
         self.formatted_message = formatted_message
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event):
         event_id = sanitize_id(event["event_id"])
         sender = sanitize_id(event["sender"])
-        age = sanitize_age(event["unsigned"]["age"])
+        timestamp = sanitize_ts(event["origin_server_ts"])
 
         msg = ""
         formatted_msg = None
@@ -361,7 +363,7 @@ class RoomMessageText(RoomMessageEvent):
                 formatted_msg = Formatted.from_html(
                     sanitize_text(event['content']['formatted_body']))
 
-        return cls(event_id, sender, age, msg, formatted_msg)
+        return cls(event_id, sender, timestamp, msg, formatted_msg)
 
     def execute(self, server, room, buff, tags):
         msg = (self.formatted_message.to_weechat()
@@ -388,7 +390,7 @@ class RoomMessageEmote(RoomMessageSimple):
             ncolor=W.color("reset"),
             msg=self.message)
 
-        date = date_from_age(self.age)
+        date = server_ts_to_weechat(self.timestamp)
         W.prnt_date_tags(buff, date, tags_string, data)
 
 
@@ -405,21 +407,21 @@ class RoomMessageNotice(RoomMessageText):
 
 class RoomMessageMedia(RoomMessageEvent):
 
-    def __init__(self, event_id, sender, age, url, description):
+    def __init__(self, event_id, sender, timestamp, url, description):
         self.url = url
         self.description = description
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event):
         event_id = sanitize_id(event["event_id"])
         sender = sanitize_id(event["sender"])
-        age = sanitize_age(event["unsigned"]["age"])
+        timestamp = sanitize_ts(event["origin_server_ts"])
 
         mxc_url = sanitize_text(event['content']['url'])
         description = sanitize_text(event["content"]["body"])
 
-        return cls(event_id, sender, age, mxc_url, description)
+        return cls(event_id, sender, timestamp, mxc_url, description)
 
     def execute(self, server, room, buff, tags):
         http_url = server.client.mxc_to_http(self.url)
@@ -434,10 +436,10 @@ class RoomMessageMedia(RoomMessageEvent):
 
 
 class RoomMembershipMessage(RoomEvent):
-    def __init__(self, event_id, sender, age, message, prefix):
+    def __init__(self, event_id, sender, timestamp, message, prefix):
         self.message = message
         self.prefix = prefix
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     def execute(self, server, room, buff, tags):
         nick, color_name = sender_to_nick_and_color(room, self.sender)
@@ -460,7 +462,7 @@ class RoomMembershipMessage(RoomEvent):
             message=self.message,
             channel_color=W.color("chat_channel"),
             room=room.alias)
-        date = date_from_age(self.age)
+        date = server_ts_to_weechat(self.timestamp)
         tags_string = ",".join(event_tags)
 
         W.prnt_date_tags(buff, date, tags_string, data)
@@ -468,15 +470,15 @@ class RoomMembershipMessage(RoomEvent):
 
 class RoomMemberJoin(RoomEvent):
 
-    def __init__(self, event_id, sender, age, display_name):
+    def __init__(self, event_id, sender, timestamp, display_name):
         self.display_name = display_name
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event_dict):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
-        age = sanitize_age(event_dict["unsigned"]["age"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
         display_name = None
 
         if event_dict["content"]:
@@ -484,7 +486,7 @@ class RoomMemberJoin(RoomEvent):
                 display_name = sanitize_text(
                     event_dict["content"]["displayname"])
 
-        return cls(event_id, sender, age, display_name)
+        return cls(event_id, sender, timestamp, display_name)
 
     def execute(self, server, room, buff, tags):
         short_name = shorten_sender(self.sender)
@@ -518,18 +520,18 @@ class RoomMemberJoin(RoomEvent):
 
 class RoomMemberLeave(RoomEvent):
 
-    def __init__(self, event_id, sender, leaving_user, age):
+    def __init__(self, event_id, sender, leaving_user, timestamp):
         self.leaving_user = leaving_user
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event_dict):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
         leaving_user = sanitize_id(event_dict["state_key"])
-        age = sanitize_age(event_dict["unsigned"]["age"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
-        return cls(event_id, sender, leaving_user, age)
+        return cls(event_id, sender, leaving_user, timestamp)
 
     def execute(self, server, room, buff, tags):
         if self.leaving_user in room.users:
@@ -543,22 +545,22 @@ class RoomMemberLeave(RoomEvent):
 
 class RoomPowerLevels(RoomEvent):
 
-    def __init__(self, event_id, sender, age, power_levels):
+    def __init__(self, event_id, sender, timestamp, power_levels):
         self.power_levels = power_levels
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event_dict):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
-        age = sanitize_age(event_dict["unsigned"]["age"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
         power_levels = []
 
         for user, level in event_dict["content"]["users"].items():
             power_levels.append(
                 PowerLevel(sanitize_id(user), sanitize_power_level(level)))
 
-        return cls(event_id, sender, age, power_levels)
+        return cls(event_id, sender, timestamp, power_levels)
 
     def _set_power_level(self, room, buff, power_level):
         user_id = power_level.user
@@ -584,19 +586,19 @@ class RoomPowerLevels(RoomEvent):
 
 class RoomTopicEvent(RoomEvent):
 
-    def __init__(self, event_id, sender, age, topic):
+    def __init__(self, event_id, sender, timestamp, topic):
         self.topic = topic
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event_dict):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
-        age = sanitize_age(event_dict["unsigned"]["age"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
         topic = sanitize_text(event_dict["content"]["topic"])
 
-        return cls(event_id, sender, age, topic)
+        return cls(event_id, sender, timestamp, topic)
 
     def execute(self, server, room, buff, tags):
         topic = self.topic
@@ -619,35 +621,36 @@ class RoomTopicEvent(RoomEvent):
 
         tags = ["matrix_topic", "log3", "matrix_id_{}".format(self.event_id)]
 
-        date = date_from_age(self.age)
+        date = server_ts_to_weechat(self.timestamp)
 
         W.buffer_set(buff, "title", topic)
         W.prnt_date_tags(buff, date, ",".join(tags), message)
 
         room.topic = topic
         room.topic_author = self.sender
-        room.topic_date = datetime.fromtimestamp(date_from_age(self.age))
+        room.topic_date = datetime.fromtimestamp(
+            server_ts_to_weechat(self.timestamp))
 
 
 class RoomRedactionEvent(RoomEvent):
 
-    def __init__(self, event_id, sender, age, redaction_id, reason=None):
+    def __init__(self, event_id, sender, timestamp, redaction_id, reason=None):
         self.redaction_id = redaction_id
         self.reason = reason
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event_dict):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
-        age = sanitize_age(event_dict["unsigned"]["age"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
         redaction_id = sanitize_id(event_dict["redacts"])
 
         reason = (sanitize_text(event_dict["content"]["reason"])
                   if "reason" in event_dict["content"] else None)
 
-        return cls(event_id, sender, age, redaction_id, reason)
+        return cls(event_id, sender, timestamp, redaction_id, reason)
 
     @staticmethod
     def already_redacted(tags):
@@ -705,19 +708,19 @@ class RoomRedactionEvent(RoomEvent):
 
 class RoomNameEvent(RoomEvent):
 
-    def __init__(self, event_id, sender, age, name):
+    def __init__(self, event_id, sender, timestamp, name):
         self.name = name
-        RoomEvent.__init__(self, event_id, sender, age)
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event_dict):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
-        age = sanitize_age(event_dict["unsigned"]["age"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
         name = sanitize_id(event_dict['content']['name'])
 
-        return cls(event_id, sender, age, name)
+        return cls(event_id, sender, timestamp, name)
 
     def execute(self, server, room, buff, tags):
         if not self.name:
@@ -731,18 +734,18 @@ class RoomNameEvent(RoomEvent):
 
 class RoomAliasEvent(RoomNameEvent):
 
-    def __init__(self, event_id, sender, age, name):
-        RoomNameEvent.__init__(self, event_id, sender, age, name)
+    def __init__(self, event_id, sender, timestamp, name):
+        RoomNameEvent.__init__(self, event_id, sender, timestamp, name)
 
     @classmethod
     def from_dict(cls, event_dict):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
-        age = sanitize_age(event_dict["unsigned"]["age"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
         name = sanitize_id(event_dict['content']['aliases'][-1])
 
-        return cls(event_id, sender, age, name)
+        return cls(event_id, sender, timestamp, name)
 
 
 class RoomEncryptionEvent(RoomEvent):
@@ -751,9 +754,9 @@ class RoomEncryptionEvent(RoomEvent):
     def from_dict(cls, event_dict):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
-        age = sanitize_age(event_dict["unsigned"]["age"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
-        return cls(event_id, sender, age)
+        return cls(event_id, sender, timestamp)
 
     def execute(self, server, room, buff, tags):
         room.encrypted = True
