@@ -144,7 +144,7 @@ class RoomInfo():
                 msg = ("has left" if event.sender == event.leaving_user else
                        "has been kicked")
                 message = RoomMembershipMessage(
-                    event.event_id, event.sender, event.age, msg, "quit")
+                    event.event_id, event.leaving_user, event.age, msg, "quit")
                 return event, message
             except AttributeError:
                 return event, None
