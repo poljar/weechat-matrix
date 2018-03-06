@@ -113,9 +113,9 @@ def color_for_tags(color):
     return color
 
 
-def server_ts_to_weechat(age):
+def server_ts_to_weechat(timestamp):
     # type: (float) -> int
-    date = int(age / 1000)
+    date = int(timestamp / 1000)
     return date
 
 
