@@ -175,8 +175,6 @@ class RoomInfo():
                     other_events.append(RoomRedactionEvent.from_dict(event))
                 elif event["type"] == "m.room.name":
                     other_events.append(RoomNameEvent.from_dict(event))
-                elif event["type"] == "m.room.aliases":
-                    other_events.append(RoomAliasEvent.from_dict(event))
                 elif event["type"] == "m.room.encryption":
                     other_events.append(RoomEncryptionEvent.from_dict(event))
         except (ValueError, TypeError, KeyError) as error:
@@ -730,22 +728,6 @@ class RoomNameEvent(RoomEvent):
         W.buffer_set(buff, "name", self.name)
         W.buffer_set(buff, "short_name", self.name)
         W.buffer_set(buff, "localvar_set_channel", self.name)
-
-
-class RoomAliasEvent(RoomNameEvent):
-
-    def __init__(self, event_id, sender, timestamp, name):
-        RoomNameEvent.__init__(self, event_id, sender, timestamp, name)
-
-    @classmethod
-    def from_dict(cls, event_dict):
-        event_id = sanitize_id(event_dict["event_id"])
-        sender = sanitize_id(event_dict["sender"])
-        timestamp = sanitize_ts(event_dict["origin_server_ts"])
-
-        name = sanitize_id(event_dict['content']['aliases'][-1])
-
-        return cls(event_id, sender, timestamp, name)
 
 
 class RoomEncryptionEvent(RoomEvent):
