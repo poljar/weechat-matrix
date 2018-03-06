@@ -73,6 +73,33 @@ class Formatted():
                 attributes["bold"] = not attributes["bold"]
                 i = i + 1
 
+            # Markdown bold
+            elif line[i] == "*":
+                if attributes["italic"] and not line[i-1].isspace():
+                    if text:
+                        substrings.append(FormattedString(
+                            text, attributes.copy()))
+                    text = ""
+                    attributes["italic"] = not attributes["italic"]
+                    i = i + 1
+                    continue
+
+                elif attributes["italic"] and line[i-1].isspace():
+                    text = text + line[i]
+                    i = i + 1
+                    continue
+
+                elif i+1 > len(line) or line[i+1].isspace():
+                    text = text + line[i]
+                    i = i + 1
+                    continue
+
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                attributes["italic"] = not attributes["italic"]
+                i = i + 1
+
             # Color
             elif line[i] == "\x03":
                 if text:
