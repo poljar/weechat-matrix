@@ -442,15 +442,23 @@ class RoomMembershipMessage(RoomEvent):
     def execute(self, server, room, buff, tags):
         nick, color_name = sender_to_nick_and_color(room, self.sender)
         event_tags = add_event_tags(self.event_id, nick, None, [])
+        # TODO this should be configurable
+        action_color = "red" if self.prefix == "quit" else "green"
 
         data = ("{prefix}{color}{author}{ncolor} "
-                "({user_id}) {message} {room}").format(
+                "{del_color}({host_color}{user_id}{del_color})"
+                "{action_color} {message} "
+                "{channel_color}{room}{ncolor}").format(
             prefix=W.prefix(self.prefix),
             color=W.color(color_name),
             author=nick,
             ncolor=W.color("reset"),
+            del_color=W.color("chat_delimiters"),
+            host_color=W.color("chat_host"),
             user_id=self.sender,
+            action_color=W.color(action_color),
             message=self.message,
+            channel_color=W.color("chat_channel"),
             room=room.alias)
         date = date_from_age(self.age)
         tags_string = ",".join(event_tags)
