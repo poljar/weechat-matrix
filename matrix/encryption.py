@@ -150,9 +150,8 @@ class EncryptionError(Exception):
 class Olm():
 
     @encrypt_enabled
-    def __init__(self, server, account=None):
+    def __init__(self, account=None):
         # type: (Server, Account) -> None
-        self.server = server
         if account:
             self.account = account
         else:
