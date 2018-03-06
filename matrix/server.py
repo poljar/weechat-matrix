@@ -409,8 +409,8 @@ class MatrixServer:
         return True
 
     def sync(self):
-        message = MatrixSyncMessage(self.client, self.next_batch,
-                                    OPTIONS.sync_limit)
+        limit = None if self.next_batch else OPTIONS.sync_limit
+        message = MatrixSyncMessage(self.client, self.next_batch, limit)
         self.send_queue.append(message)
 
     def login(self):
