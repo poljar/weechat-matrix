@@ -29,8 +29,8 @@ from matrix.colors import Formatted
 from matrix.utils import (
     strip_matrix_server, color_for_tags, server_ts_to_weechat,
     sender_to_nick_and_color, add_event_tags, sanitize_id, sanitize_ts,
-    sanitize_text, shorten_sender, add_user_to_nicklist, get_prefix_for_level,
-    sanitize_power_level, string_strikethrough,
+    sanitize_string, sanitize_text, shorten_sender, add_user_to_nicklist,
+    get_prefix_for_level, sanitize_power_level, string_strikethrough,
     line_pointer_and_tags_from_event, sender_to_prefix_and_color)
 
 PowerLevel = namedtuple('PowerLevel', ['user', 'level'])
@@ -718,7 +718,7 @@ class RoomNameEvent(RoomEvent):
         sender = sanitize_id(event_dict["sender"])
         timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
-        name = sanitize_id(event_dict['content']['name'])
+        name = sanitize_string(event_dict['content']['name'])
 
         return cls(event_id, sender, timestamp, name)
 
