@@ -193,6 +193,11 @@ def sanitize_string(string):
     if not isinstance(string, str):
         raise TypeError
 
+    # string keys can have empty string values sometimes (e.g. room names that
+    # got deleted)
+    if string == "":
+        return None
+
     remap = {
         ord('\b'): None,
         ord('\f'): None,
