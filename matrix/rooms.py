@@ -42,7 +42,8 @@ class MatrixRoom:
         # type: (str) -> None
         # yapf: disable
         self.room_id = room_id        # type: str
-        self.alias = room_id          # type: str
+        self.canonical_alias = None   # type: str
+        self.name = None              # type: str
         self.topic = ""               # type: str
         self.topic_author = ""        # type: str
         self.topic_date = None        # type: datetime.datetime
@@ -51,6 +52,94 @@ class MatrixRoom:
         self.encrypted = False        # type: bool
         self.backlog_pending = False  # type: bool
         # yapf: enable
+
+    def display_name(self, own_user_id):
+        """
+        Calculate display name for a room.
+
+        Prefer returning the room name if it exists, falling back to
+        a group-style name if not.
+
+        Mostly follows:
+        https://matrix.org/docs/spec/client_server/r0.3.0.html#id268
+
+        An exception is that we prepend '#' before the room name to make it
+        visually distinct from private messages and unnamed groups of users
+        ("direct chats") in weechat's buffer list.
+        """
+        if self.is_named():
+            return self.named_room_name()
+        else:
+            return self.group_name(own_user_id)
+
+    def named_room_name(self):
+        """
+        Returns the name of the room, if it's a named room. Otherwise return
+        None.
+        """
+        if self.name:
+            return "#" + self.name
+        elif self.canonical_alias:
+            return self.canonical_alias
+        else:
+            return None
+
+    def group_name(self, own_user_id):
+        """
+        Returns the group-style name of the room, i.e. a name based on the room
+        members.
+        """
+        # Sort user display names, excluding our own user and using the
+        # mxid as the sorting key.
+        #
+        # TODO: Hook the user display name disambiguation algorithm here.
+        # Currently, we use the user display names as is, which may not be
+        # unique.
+        users = [user.name for mxid, user
+                 in sorted(self.users.items(), key=lambda t: t[0])
+                 if mxid != own_user_id]
+
+        num_users = len(users)
+
+        if num_users == 1:
+            return users[0]
+        elif num_users == 2:
+            return " and ".join(users)
+        elif num_users >= 3:
+            return "{first_user} and {num} others".format(
+                first_user=users[0],
+                num=num_users-1)
+        else:
+            return "Empty room?"
+
+
+    def machine_name(self):
+        """
+        Calculate an unambiguous, unique machine name for a room.
+
+        Either use the more human-friendly canonical alias, if it exists, or
+        the internal room ID if not.
+        """
+        if self.canonical_alias:
+            return self.canonical_alias
+        else:
+            return self.room_id
+
+    def is_named(self):
+        """
+        Is this a named room?
+
+        A named room is a room with either the name or a canonical alias set.
+        """
+        return self.canonical_alias or self.name
+
+    def is_group(self):
+        """
+        Is this an ad hoc group of users?
+
+        A group is an unnamed room with no canonical alias.
+        """
+        return not self.is_named()
 
 
 class MatrixUser:
@@ -461,7 +550,7 @@ class RoomMembershipMessage(RoomEvent):
             action_color=W.color(action_color),
             message=self.message,
             channel_color=W.color("chat_channel"),
-            room=room.alias)
+            room="" if room.is_group() else room.named_room_name())
         date = server_ts_to_weechat(self.timestamp)
         tags_string = ",".join(event_tags)
 
@@ -517,6 +606,10 @@ class RoomMemberJoin(RoomEvent):
         if not nick_pointer:
             add_user_to_nicklist(buff, self.sender, user)
 
+        # calculate room display name and set it as the buffer list name
+        room_name = room.display_name(server.user_id)
+        W.buffer_set(buff, "short_name", room_name)
+
 
 class RoomMemberLeave(RoomEvent):
 
@@ -541,6 +634,10 @@ class RoomMemberLeave(RoomEvent):
                 W.nicklist_remove_nick(buff, nick_pointer)
 
             del room.users[self.leaving_user]
+
+            # calculate room display name and set it as the buffer list name
+            room_name = room.display_name(server.user_id)
+            W.buffer_set(buff, "short_name", room_name)
 
 
 class RoomPowerLevels(RoomEvent):
@@ -616,7 +713,7 @@ class RoomTopicEvent(RoomEvent):
                        nick=author,
                        chan_color=W.color("chat_channel"),
                        ncolor=W.color("reset"),
-                       room=strip_matrix_server(room.alias),
+                       room=room.display_name(server.user_id),
                        topic=topic)
 
         tags = ["matrix_topic", "log3", "matrix_id_{}".format(self.event_id)]
@@ -726,16 +823,20 @@ class RoomNameEvent(RoomEvent):
         if not self.name:
             return
 
-        room.alias = self.name
+        room.name = self.name
         W.buffer_set(buff, "name", self.name)
-        W.buffer_set(buff, "short_name", self.name)
         W.buffer_set(buff, "localvar_set_channel", self.name)
 
+        # calculate room display name and set it as the buffer list name
+        room_name = room.display_name(server.user_id)
+        W.buffer_set(buff, "short_name", room_name)
 
-class RoomAliasEvent(RoomNameEvent):
 
-    def __init__(self, event_id, sender, timestamp, name):
-        RoomNameEvent.__init__(self, event_id, sender, timestamp, name)
+class RoomAliasEvent(RoomEvent):
+
+    def __init__(self, event_id, sender, timestamp, canonical_alias):
+        self.canonical_alias = canonical_alias
+        RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
     def from_dict(cls, event_dict):
@@ -743,9 +844,22 @@ class RoomAliasEvent(RoomNameEvent):
         sender = sanitize_id(event_dict["sender"])
         timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
-        name = sanitize_id(event_dict["content"]["alias"])
+        canonical_alias = sanitize_id(event_dict["content"]["alias"])
 
-        return cls(event_id, sender, timestamp, name)
+        return cls(event_id, sender, timestamp, canonical_alias)
+
+    def execute(self, server, room, buff, tags):
+        if not self.canonical_alias:
+            return
+
+        # TODO: What should we do with this?
+        # W.buffer_set(buff, "name", self.name)
+        # W.buffer_set(buff, "localvar_set_channel", self.name)
+
+        # calculate room display name and set it as the buffer list name
+        room.canonical_alias = self.canonical_alias
+        room_name = room.display_name(server.user_id)
+        W.buffer_set(buff, "short_name", room_name)
 
 
 class RoomEncryptionEvent(RoomEvent):
