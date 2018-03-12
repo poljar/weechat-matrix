@@ -89,7 +89,12 @@ class Formatted():
                     i = i + 1
                     continue
 
-                elif i+1 > len(line) or line[i+1].isspace():
+                elif i+1 < len(line) and line[i+1].isspace():
+                    text = text + line[i]
+                    i = i + 1
+                    continue
+
+                elif i == len(line) - 1:
                     text = text + line[i]
                     i = i + 1
                     continue
