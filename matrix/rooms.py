@@ -706,15 +706,22 @@ class RoomTopicEvent(RoomEvent):
             nick_color=W.color(color_name), user=nick, ncolor=W.color("reset"))
 
         # TODO print old topic if configured so
-        message = ("{prefix}{nick} has changed "
-                   "the topic for {chan_color}{room}{ncolor} "
-                   "to \"{topic}\"").format(
-                       prefix=W.prefix("network"),
-                       nick=author,
-                       chan_color=W.color("chat_channel"),
-                       ncolor=W.color("reset"),
-                       room=room.display_name(server.user_id),
-                       topic=topic)
+        if room.is_named():
+            message = ("{prefix}{nick} has changed "
+                       "the topic for {chan_color}{room}{ncolor} "
+                       "to \"{topic}\"").format(
+                           prefix=W.prefix("network"),
+                           nick=author,
+                           chan_color=W.color("chat_channel"),
+                           ncolor=W.color("reset"),
+                           room=room.named_room_name(),
+                           topic=topic)
+        else:
+            message = ('{prefix}{nick} has changed the topic to '
+                       '"{topic}"').format(
+                           prefix=W.prefix("network"),
+                           nick=author,
+                           topic=topic)
 
         tags = ["matrix_topic", "log3", "matrix_id_{}".format(self.event_id)]
 

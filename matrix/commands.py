@@ -918,13 +918,18 @@ def matrix_command_topic_cb(data, buffer, command):
                 if not room.topic:
                     return W.WEECHAT_RC_OK
 
-                message = ("{prefix}Topic for {color}{room}{ncolor} is "
-                           "\"{topic}\"").format(
-                               prefix=W.prefix("network"),
-                               color=W.color("chat_buffer"),
-                               ncolor=W.color("reset"),
-                               room=room.alias,
-                               topic=room.topic)
+                if room.is_named():
+                    message = ('{prefix}Topic for {color}{room}{ncolor} is '
+                               '"{topic}"').format(
+                                   prefix=W.prefix("network"),
+                                   color=W.color("chat_buffer"),
+                                   ncolor=W.color("reset"),
+                                   room=room.named_room_name(),
+                                   topic=room.topic)
+                else:
+                    message = ('{prefix}Topic is "{topic}"').format(
+                        prefix=W.prefix("network"),
+                        topic=room.topic)
 
                 date = int(time.time())
                 topic_date = room.topic_date.strftime("%a, %d %b %Y "

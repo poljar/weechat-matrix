@@ -49,7 +49,9 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
 
             room = server.rooms[room_id]
 
-            return "{color}{name}".format(color=W.color(color), name=room.alias)
+            return "{color}{name}".format(
+                color=W.color(color),
+                name=room.display_name())
 
         elif buffer == server.server_buffer:
             color = ("status_name_ssl"
