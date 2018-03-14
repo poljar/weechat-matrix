@@ -243,31 +243,41 @@ class RoomInfo():
         return None, None
 
     @staticmethod
+    def parse_event(event_dict):
+        # type: (Dict[Any, Any]) -> (RoomEvent, RoomEvent)
+        message_event = None
+        state_event = None
+
+        if event_dict["type"] == "m.room.message":
+            message_event = RoomInfo._message_from_event(event_dict)
+        elif event_dict["type"] == "m.room.member":
+            state_event, message_event = (
+                RoomInfo._membership_from_dict(event_dict))
+        elif event_dict["type"] == "m.room.power_levels":
+            message_event = RoomPowerLevels.from_dict(event_dict)
+        elif event_dict["type"] == "m.room.topic":
+            message_event = RoomTopicEvent.from_dict(event_dict)
+        elif event_dict["type"] == "m.room.redaction":
+            message_event = RoomRedactionEvent.from_dict(event_dict)
+        elif event_dict["type"] == "m.room.name":
+            message_event = RoomNameEvent.from_dict(event_dict)
+        elif event_dict["type"] == "m.room.canonical_alias":
+            message_event = RoomAliasEvent.from_dict(event_dict)
+        elif event_dict["type"] == "m.room.encryption":
+            message_event = RoomEncryptionEvent.from_dict(event_dict)
+
+        return message_event, state_event
+
+    @staticmethod
     def _parse_events(parsed_dict):
         membership_events = []
         other_events = []
 
         try:
             for event in parsed_dict:
-                if event["type"] == "m.room.message":
-                    other_events.append(RoomInfo._message_from_event(event))
-                elif event["type"] == "m.room.member":
-                    m_event, msg = RoomInfo._membership_from_dict(event)
-                    membership_events.append(m_event)
-                    if msg:
-                        other_events.append(msg)
-                elif event["type"] == "m.room.power_levels":
-                    other_events.append(RoomPowerLevels.from_dict(event))
-                elif event["type"] == "m.room.topic":
-                    other_events.append(RoomTopicEvent.from_dict(event))
-                elif event["type"] == "m.room.redaction":
-                    other_events.append(RoomRedactionEvent.from_dict(event))
-                elif event["type"] == "m.room.name":
-                    other_events.append(RoomNameEvent.from_dict(event))
-                elif event["type"] == "m.room.canonical_alias":
-                    other_events.append(RoomAliasEvent.from_dict(event))
-                elif event["type"] == "m.room.encryption":
-                    other_events.append(RoomEncryptionEvent.from_dict(event))
+                m_event, s_event = RoomInfo.parse_event(event)
+                membership_events.append(m_event)
+                other_events.append(s_event)
         except (ValueError, TypeError, KeyError) as error:
             message = ("{prefix}matrix: Error parsing "
                        "room event of type {type}: {error}").format(
