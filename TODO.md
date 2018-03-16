@@ -27,6 +27,8 @@
         - [X] Send messages
         - [X] Sync
         - [X] Redact
+        - [X] Kick
+        - [X] Redact
         - [X] Topic
         - [X] Join
         - [X] Part
@@ -47,6 +49,11 @@
     - [X] Topic
     - [X] Print sent messages without waiting for a sync
     - [X] Old message sync (rooms/{roomid}/messages)
+    - [X] Handle calculation of room display names
+    - [ ] Handle invited users that haven't yet joined
+        - treat them as semi-joined
+        - keep them in the nicklist (but appropriately stylized)
+        - take them into account when calculating room display names
     - [X] Redactions
     - [X] Power levels
     - [X] Invite
@@ -100,6 +107,7 @@
     - [X] Fix Reconnect handling
     - [X] Fetch messages if we scroll to the top (hook_signal window_scroll)
     - [X] Status bar element if we're fetching old messages
+    - [ ] Prevent self-highlighting when mentioning yourself from another client.
     - [O] Color and attributes.
         - [X] Parsing the input line
         - [X] Converting the input to weechat output
@@ -113,6 +121,10 @@
         - [X] Join public rooms
         - [X] Join private rooms
         - [ ] Create rooms if they don't exist
+        - [ ] Completion
+    - [X] Kick
+        - [X] Completion
+    - [ ] Query
         - [ ] Completion
     - [ ] Part
         - [ ] Completion
