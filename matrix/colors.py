@@ -32,6 +32,8 @@ try:
 except ImportError:
     from html.parser import HTMLParser
 
+from html.entities import name2codepoint
+
 FormattedString = namedtuple('FormattedString', ['text', 'attributes'])
 
 quote_wrapper = textwrap.TextWrapper(
@@ -313,6 +315,10 @@ class MatrixHtmlParser(HTMLParser):
         self.text = ""  # type: str
         self.substrings = []  # type: List[FormattedString]
         self.attributes = DEFAULT_ATRIBUTES.copy()
+
+    def feed(self, text):
+        text = self.unescape(text)
+        return HTMLParser.feed(self, text)
 
     def _toggle_attribute(self, attribute):
         if self.text:
