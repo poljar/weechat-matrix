@@ -91,3 +91,38 @@ def color(color_name):
     escape_string = "\033[{}{}m".format(reset_code, ";".join(escape_codes))
 
     return escape_string
+
+
+def prefix(prefix):
+    prefix_to_symbol = {
+        "error":   "=!=",
+        "network": "--",
+        "action":  "*",
+        "join":    "-->",
+        "quit":    "<--"
+    }
+
+    if prefix in prefix_to_symbol:
+        return prefix_to_symbol[prefix]
+
+    return ""
+
+
+def prnt(_, string):
+    print(string)
+
+
+def config_search_section(*args, **kwargs):
+    pass
+
+
+def config_new_option(*args, **kwargs):
+    pass
+
+
+def mkdir_home(*args, **kwargs):
+    return True
+
+
+def info_get(info, *args):
+    return ""
