@@ -74,16 +74,15 @@ def color(color_name):
             escape_codes.append(
                 make_fg_color(weechat_base_colors[stripped_color]))
 
-        elif stripped_color.isdecimal():
+        elif stripped_color.isdigit():
             num_color = int(stripped_color)
             if num_color >= 0 and num_color < 256:
                 escape_codes.append(make_fg_color(stripped_color))
 
-
     if bg_color in weechat_base_colors:
         escape_codes.append(make_bg_color(weechat_base_colors[bg_color]))
     else:
-        if bg_color.isdecimal():
+        if bg_color.isdigit():
             num_color = int(bg_color)
             if num_color >= 0 and num_color < 256:
                 escape_codes.append(make_bg_color(bg_color))

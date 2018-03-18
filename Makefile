@@ -18,4 +18,5 @@ $(DESTDIR)$(PREFIX)/python/matrix/%.py: matrix/%.py phony
 	install -Dm644 $< $@
 
 test:
-	$(PYTHON) -m pytest
+	python3 -m pytest
+	python2 -m pytest

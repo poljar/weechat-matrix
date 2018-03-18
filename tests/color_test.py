@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import webcolors
 from hypothesis import given
 from hypothesis.strategies import sampled_from
