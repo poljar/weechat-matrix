@@ -221,8 +221,9 @@ class RoomInfo():
 
             try:
                 message = RoomMembershipMessage(
-                    event.event_id, event.sender, event.age,
+                    event.event_id, event.sender, event.timestamp,
                     "has joined", "join")
+
                 return event, message
             except AttributeError:
                 return event, None
