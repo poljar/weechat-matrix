@@ -143,6 +143,13 @@ def print_certificate_info(buff, sock, cert):
     W.prnt(buff, message)
 
 
+@utf8_decode
+def matrix_event_timer_cb(server_name, remaining_calls):
+    server = SERVERS[server_name]
+    server.handle_events()
+    return W.WEECHAT_RC_OK
+
+
 def wrap_socket(server, file_descriptor):
     # type: (MatrixServer, int) -> None
     sock = None  # type: socket.socket

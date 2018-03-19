@@ -17,6 +17,7 @@
 from __future__ import unicode_literals
 from builtins import str
 
+from collections import deque
 from functools import partial
 from operator import itemgetter
 
@@ -422,7 +423,7 @@ class MatrixSyncEvent(MatrixEvent):
             return MatrixErrorEvent.from_dict(server, "Error syncing", False,
                                               parsed_dict)
 
-    def _execute_joined_info(self):
+    def _queue_joined_info(self):
         server = self.server
 
         while self.joined_room_infos:
@@ -436,17 +437,7 @@ class MatrixSyncEvent(MatrixEvent):
             if not room.prev_batch:
                 room.prev_batch = info.prev_batch
 
-            for event in info.events:
-                self._execute_room_event(event, info.room_id)
-
-    def _execute_room_event(self, event, room_id):
-        server = self.server
-
-        room = server.rooms[room_id]
-        buf = server.buffers[room_id]
-
-        tags = tags_for_message("message")
-        event.execute(server, room, buf, list(tags))
+            server.event_queue.append(info)
 
     def execute(self):
         server = self.server
@@ -456,7 +447,7 @@ class MatrixSyncEvent(MatrixEvent):
             server.sync()
             return
 
-        self._execute_joined_info()
-
+        self._queue_joined_info()
         server.next_batch = self.next_batch
-        server.sync()
+
+        server.handle_events()

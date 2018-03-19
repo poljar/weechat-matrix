@@ -19,7 +19,7 @@ from builtins import str
 
 from pprint import pformat
 
-from collections import namedtuple
+from collections import namedtuple, deque
 from datetime import datetime
 
 from matrix.globals import W, OPTIONS
@@ -192,7 +192,7 @@ class RoomInfo():
         # type: (str, str, List[Any], List[Any]) -> None
         self.room_id = room_id
         self.prev_batch = prev_batch
-        self.events = events
+        self.events = deque(events)
 
     @staticmethod
     def _message_from_event(event):

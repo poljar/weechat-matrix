@@ -29,7 +29,7 @@ from http_parser.pyparser import HttpParser
 
 from matrix.plugin_options import Option, DebugType
 from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
-                          create_server_buffer)
+                          create_server_buffer, tags_for_message)
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS, OPTIONS
 import matrix.api as API
@@ -89,7 +89,8 @@ class MatrixServer:
         # Queue of messages we send off and are waiting a response for
         self.receive_queue = deque()  # type: Deque[MatrixMessage]
 
-        self.message_queue = deque()  # type: Deque[MatrixMessage]
+        self.event_queue_timer = None
+        self.event_queue = deque()  # type: Deque[RoomInfo]
 
         self._create_options(config_file)
         self._create_session_dir()
@@ -433,6 +434,51 @@ class MatrixServer:
         server_buffer_prnt(self, pprint.pformat(message.__class__.__name__))
         server_buffer_prnt(self, pprint.pformat(message.request.payload))
         server_buffer_prnt(self, pprint.pformat(message.response.body))
+
+    def _loop_events(self, info, n):
+
+        for i in range(n+1):
+            try:
+                event = info.events.popleft()
+            except IndexError:
+                return i
+
+            room = self.rooms[info.room_id]
+            buf = self.buffers[info.room_id]
+
+            tags = tags_for_message("message")
+            event.execute(self, room, buf, tags)
+
+        self.event_queue.appendleft(info)
+        return i
+
+    def handle_events(self):
+        n = 25
+
+        while True:
+            try:
+                info = self.event_queue.popleft()
+            except IndexError:
+                if self.event_queue_timer:
+                    W.unhook(self.event_queue_timer)
+                    self.event_queue_timer = None
+
+                self.sync()
+                return
+
+            ret = self._loop_events(info, n)
+
+            if ret < n:
+                n = n - ret
+            else:
+                self.event_queue.appendleft(info)
+
+                if not self.event_queue_timer:
+                    hook = W.hook_timer(1 * 100, 0, 0, "matrix_event_timer_cb",
+                                        self.name)
+                    self.event_queue_timer = hook
+
+                return
 
     def handle_response(self, message):
         # type: (MatrixMessage) -> None
