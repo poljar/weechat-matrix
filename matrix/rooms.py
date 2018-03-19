@@ -188,11 +188,10 @@ def matrix_create_room_buffer(server, room_id):
 
 class RoomInfo():
 
-    def __init__(self, room_id, prev_batch, membership_events, events):
+    def __init__(self, room_id, prev_batch, events):
         # type: (str, str, List[Any], List[Any]) -> None
         self.room_id = room_id
         self.prev_batch = prev_batch
-        self.membership_events = membership_events
         self.events = events
 
     @staticmethod
@@ -245,8 +244,8 @@ class RoomInfo():
     @staticmethod
     def parse_event(event_dict):
         # type: (Dict[Any, Any]) -> (RoomEvent, RoomEvent)
-        message_event = None
         state_event = None
+        message_event = None
 
         if event_dict["type"] == "m.room.message":
             message_event = RoomInfo._message_from_event(event_dict)
@@ -266,18 +265,18 @@ class RoomInfo():
         elif event_dict["type"] == "m.room.encryption":
             message_event = RoomEncryptionEvent.from_dict(event_dict)
 
-        return message_event, state_event
+        return state_event, message_event
 
     @staticmethod
     def _parse_events(parsed_dict):
-        membership_events = []
-        other_events = []
+        state_events = []
+        message_events = []
 
         try:
             for event in parsed_dict:
                 m_event, s_event = RoomInfo.parse_event(event)
-                membership_events.append(m_event)
-                other_events.append(s_event)
+                state_events.append(m_event)
+                message_events.append(s_event)
         except (ValueError, TypeError, KeyError) as error:
             message = ("{prefix}matrix: Error parsing "
                        "room event of type {type}: {error}").format(
@@ -287,7 +286,9 @@ class RoomInfo():
             W.prnt("", message)
             raise
 
-        return (membership_events, other_events)
+        events = state_events + message_events
+
+        return events
 
     @classmethod
     def from_dict(cls, room_id, parsed_dict):
@@ -296,15 +297,12 @@ class RoomInfo():
         state_dict = parsed_dict['state']['events']
         timeline_dict = parsed_dict['timeline']['events']
 
-        membership_events, other_events = RoomInfo._parse_events(state_dict)
-        timeline_member_events, timeline_events = RoomInfo._parse_events(
-            timeline_dict)
+        state_events = RoomInfo._parse_events(state_dict)
+        timeline_events = RoomInfo._parse_events(timeline_dict)
 
-        membership_events.extend(timeline_member_events)
-        other_events.extend(timeline_events)
+        events = state_events + timeline_events
 
-        return cls(room_id, prev_batch, list(filter(None, membership_events)),
-                   list(filter(None, other_events)))
+        return cls(room_id, prev_batch, list(filter(None, events)))
 
 
 class RoomEvent():

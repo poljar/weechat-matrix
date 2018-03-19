@@ -422,25 +422,31 @@ class MatrixSyncEvent(MatrixEvent):
             return MatrixErrorEvent.from_dict(server, "Error syncing", False,
                                               parsed_dict)
 
-    def _execute_joined_info(self, info):
+    def _execute_joined_info(self):
         server = self.server
 
-        if info.room_id not in server.buffers:
-            matrix_create_room_buffer(server, info.room_id)
+        while self.joined_room_infos:
+            info = self.joined_room_infos.pop()
 
-        room = server.rooms[info.room_id]
-        buf = server.buffers[info.room_id]
+            if info.room_id not in server.buffers:
+                matrix_create_room_buffer(server, info.room_id)
 
-        if not room.prev_batch:
-            room.prev_batch = info.prev_batch
+            room = server.rooms[info.room_id]
+
+            if not room.prev_batch:
+                room.prev_batch = info.prev_batch
+
+            for event in info.events:
+                self._execute_room_event(event, info.room_id)
+
+    def _execute_room_event(self, event, room_id):
+        server = self.server
+
+        room = server.rooms[room_id]
+        buf = server.buffers[room_id]
 
         tags = tags_for_message("message")
-
-        for event in info.membership_events:
-            event.execute(server, room, buf, list(tags))
-
-        for event in info.events:
-            event.execute(server, room, buf, list(tags))
+        event.execute(server, room, buf, list(tags))
 
     def execute(self):
         server = self.server
@@ -450,8 +456,7 @@ class MatrixSyncEvent(MatrixEvent):
             server.sync()
             return
 
-        for room_info in self.joined_room_infos:
-            self._execute_joined_info(room_info)
+        self._execute_joined_info()
 
         server.next_batch = self.next_batch
         server.sync()
