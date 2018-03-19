@@ -32,6 +32,7 @@ try:
 except ImportError:
     from html.parser import HTMLParser
 
+import html
 from html.entities import name2codepoint
 
 FormattedString = namedtuple('FormattedString', ['text', 'attributes'])
@@ -315,6 +316,17 @@ class MatrixHtmlParser(HTMLParser):
         self.text = ""  # type: str
         self.substrings = []  # type: List[FormattedString]
         self.attributes = DEFAULT_ATRIBUTES.copy()
+
+    def unescape(self, text):
+        """Shim to unescape HTML in both Python 2 and 3.
+
+        The instance method was deprecated in Python 3 and html.unescape
+        doesn't exist in Python 2 so this is needed.
+        """
+        try:
+            return html.unescape(text)
+        except AttributeError:
+            return HTMLParser.unescape(self, text)
 
     def feed(self, text):
         text = self.unescape(text)
