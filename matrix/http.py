@@ -50,6 +50,7 @@ class HttpRequest:
         # type: (...) -> None
         user_agent = 'User-Agent: {agent}'.format(agent=user_agent)
         host_header = 'Host: {host}'.format(host=host)
+        keepalive = "Connection: keep-alive"
         request_list = []              # type: List[str]
         accept_header = 'Accept: */*'  # type: str
         end_separator = '\r\n'         # type: str
@@ -59,7 +60,8 @@ class HttpRequest:
         if request_type == RequestType.GET:
             get = 'GET {location} HTTP/1.1'.format(location=location)
             request_list = [
-                get, host_header, user_agent, accept_header, end_separator
+                get, host_header, user_agent, keepalive, accept_header,
+                end_separator
             ]
 
         elif (request_type == RequestType.POST or
@@ -80,8 +82,8 @@ class HttpRequest:
                 length=len(json_data))
 
             request_list = [
-                request_line, host_header, user_agent, accept_header,
-                length_header, type_header, end_separator
+                request_line, host_header, user_agent, keepalive,
+                accept_header, length_header, type_header, end_separator
             ]
             payload = json_data
 
