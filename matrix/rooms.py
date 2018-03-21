@@ -254,24 +254,32 @@ class RoomInfo():
             state_event, message_event = (
                 RoomInfo._membership_from_dict(event_dict))
         elif event_dict["type"] == "m.room.power_levels":
-            message_event = RoomPowerLevels.from_dict(event_dict)
+            state_event = RoomPowerLevels.from_dict(event_dict)
         elif event_dict["type"] == "m.room.topic":
-            message_event = RoomTopicEvent.from_dict(event_dict)
+            state_event = RoomTopicEvent.from_dict(event_dict)
+            message_event = RoomTopiceMessage(
+                state_event.event_id,
+                state_event.sender,
+                state_event.timestamp,
+                state_event.topic)
         elif event_dict["type"] == "m.room.redaction":
             message_event = RoomRedactionEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.name":
-            message_event = RoomNameEvent.from_dict(event_dict)
+            state_event = RoomNameEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.canonical_alias":
-            message_event = RoomAliasEvent.from_dict(event_dict)
+            state_event = RoomAliasEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.encryption":
-            message_event = RoomEncryptionEvent.from_dict(event_dict)
+            state_event = RoomEncryptionEvent.from_dict(event_dict)
 
         return state_event, message_event
 
     @staticmethod
-    def _parse_events(parsed_dict):
+    def _parse_events(parsed_dict, messages=True, state=True):
         state_events = []
         message_events = []
+
+        if not messages and not state:
+            return []
 
         try:
             for event in parsed_dict:
@@ -287,7 +295,13 @@ class RoomInfo():
             W.prnt("", message)
             raise
 
-        events = state_events + message_events
+        events = []
+
+        if state:
+            events = events + state_events
+
+        if messages:
+            events = events + message_events
 
         return events
 
@@ -298,7 +312,7 @@ class RoomInfo():
         state_dict = parsed_dict['state']['events']
         timeline_dict = parsed_dict['timeline']['events']
 
-        state_events = RoomInfo._parse_events(state_dict)
+        state_events = RoomInfo._parse_events(state_dict, messages=False)
         timeline_events = RoomInfo._parse_events(timeline_dict)
 
         events = state_events + timeline_events
@@ -690,21 +704,11 @@ class RoomPowerLevels(RoomEvent):
             self._set_power_level(room, buff, level)
 
 
-class RoomTopicEvent(RoomEvent):
+class RoomTopiceMessage(RoomEvent):
 
     def __init__(self, event_id, sender, timestamp, topic):
         self.topic = topic
         RoomEvent.__init__(self, event_id, sender, timestamp)
-
-    @classmethod
-    def from_dict(cls, event_dict):
-        event_id = sanitize_id(event_dict["event_id"])
-        sender = sanitize_id(event_dict["sender"])
-        timestamp = sanitize_ts(event_dict["origin_server_ts"])
-
-        topic = sanitize_text(event_dict["content"]["topic"])
-
-        return cls(event_id, sender, timestamp, topic)
 
     def execute(self, server, room, buff, tags):
         topic = self.topic
@@ -733,11 +737,30 @@ class RoomTopicEvent(RoomEvent):
                            topic=topic)
 
         tags = ["matrix_topic", "log3", "matrix_id_{}".format(self.event_id)]
-
         date = server_ts_to_weechat(self.timestamp)
+        W.prnt_date_tags(buff, date, ",".join(tags), message)
+
+
+class RoomTopicEvent(RoomEvent):
+
+    def __init__(self, event_id, sender, timestamp, topic):
+        self.topic = topic
+        RoomEvent.__init__(self, event_id, sender, timestamp)
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
+
+        topic = sanitize_text(event_dict["content"]["topic"])
+
+        return cls(event_id, sender, timestamp, topic)
+
+    def execute(self, server, room, buff, tags):
+        topic = self.topic
 
         W.buffer_set(buff, "title", topic)
-        W.prnt_date_tags(buff, date, ",".join(tags), message)
 
         room.topic = topic
         room.topic_author = self.sender
