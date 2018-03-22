@@ -328,14 +328,13 @@ class MatrixHtmlParser(HTMLParser):
         except AttributeError:
             return HTMLParser.unescape(self, text)
 
-    def feed(self, text):
-        text = self.unescape(text)
-        return HTMLParser.feed(self, text)
+    def add_substring(self, text, attrs):
+        fmt_string = FormattedString(text, attrs)
+        self.substrings.append(fmt_string)
 
     def _toggle_attribute(self, attribute):
         if self.text:
-            self.substrings.append(
-                FormattedString(self.text, self.attributes.copy()))
+            self.add_substring(self.text, self.attributes.copy())
         self.text = ""
         self.attributes[attribute] = not self.attributes[attribute]
 
@@ -352,11 +351,9 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("quote")
         elif tag == "br":
             if self.text:
-                self.substrings.append(
-                    FormattedString(self.text, self.attributes.copy()))
+                self.add_substring(self.text, self.attributes.copy())
             self.text = "\n"
-            self.substrings.append(
-                FormattedString(self.text, DEFAULT_ATRIBUTES.copy()))
+            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
             self.text = ""
         elif tag == "font":
             for key, value in attrs:
@@ -367,8 +364,7 @@ class MatrixHtmlParser(HTMLParser):
                         continue
 
                     if self.text:
-                        self.substrings.append(
-                            FormattedString(self.text, self.attributes.copy()))
+                        self.add_substring(self.text, self.attributes.copy())
                     self.text = ""
                     self.attributes["fgcolor"] = color
         else:
@@ -387,20 +383,24 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("quote")
         elif tag == "font":
             if self.text:
-                self.substrings.append(
-                    FormattedString(self.text, self.attributes.copy()))
+                self.add_substring(self.text, self.attributes.copy())
             self.text = ""
             self.attributes["fgcolor"] = None
         else:
             pass
 
     def handle_data(self, data):
-        self.text = self.text + data
+        self.text += data
+
+    def handle_entityref(self, name):
+        self.text += self.unescape("&{};".format(name))
+
+    def handle_charref(self, name):
+        self.text += self.unescape("&{};".format(name))
 
     def get_substrings(self):
         if self.text:
-            self.substrings.append(
-                FormattedString(self.text, self.attributes.copy()))
+            self.add_substring(self.text, self.attributes.copy())
 
         return self.substrings
 
