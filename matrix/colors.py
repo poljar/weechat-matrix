@@ -328,10 +328,6 @@ class MatrixHtmlParser(HTMLParser):
         except AttributeError:
             return HTMLParser.unescape(self, text)
 
-    def feed(self, text):
-        text = self.unescape(text)
-        return HTMLParser.feed(self, text)
-
     def _toggle_attribute(self, attribute):
         if self.text:
             self.substrings.append(
@@ -395,7 +391,13 @@ class MatrixHtmlParser(HTMLParser):
             pass
 
     def handle_data(self, data):
-        self.text = self.text + data
+        self.text += data
+
+    def handle_entityref(self, name):
+        self.text += self.unescape("&{};".format(name))
+
+    def handle_charref(self, name):
+        self.text += self.unescape("&{};".format(name))
 
     def get_substrings(self):
         if self.text:
