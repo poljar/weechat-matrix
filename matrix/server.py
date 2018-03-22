@@ -158,7 +158,10 @@ class MatrixServer:
                        server=self.name,
                        device=self.device_id)
         W.prnt(self.server_buffer, message)
-        self.olm = Olm(self)
+        self.olm = Olm()
+
+    def store_olm(self):
+        self.olm.to_session_dir(self)
 
     def _create_options(self, config_file):
         options = [

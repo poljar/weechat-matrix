@@ -170,6 +170,21 @@ class Olm():
             with open(path, "rb") as f:
                 pickle = f.read()
                 account = Account.from_pickle(pickle)
-                return cls(server, account)
+                return cls(account)
+        except OlmAccountError as error:
+            raise EncryptionError(error)
+
+    @encrypt_enabled
+    def to_session_dir(self, server):
+        # type: (Server) -> None
+        account_file_name = "{}_{}.account".format(server.user,
+                                                   server.device_id)
+        session_path = server.get_session_path()
+        path = os.path.join(session_path, account_file_name)
+
+        try:
+            with open(path, "wb") as f:
+                pickle = self.account.pickle()
+                f.write(pickle)
         except OlmAccountError as error:
             raise EncryptionError(error)

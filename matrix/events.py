@@ -89,6 +89,7 @@ class MatrixLoginEvent(MatrixEvent):
 
         if not self.server.olm:
             self.server.create_olm()
+            self.server.store_olm()
 
         self.server.sync()
 
