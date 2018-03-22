@@ -86,6 +86,10 @@ class MatrixLoginEvent(MatrixEvent):
             prefix=W.prefix("network"), user=self.user_id)
 
         W.prnt(self.server.server_buffer, message)
+
+        if not self.server.olm:
+            self.server.create_olm()
+
         self.server.sync()
 
     @classmethod

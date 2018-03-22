@@ -138,19 +138,27 @@ class MatrixServer:
         try:
             self.olm = Olm.from_session_dir(self)
         except FileNotFoundError:
-            message = ("{prefix}matrix: Creating new Olm identity for {user}"
-                       " on {server} for device {device}.").format(
-                           prefix=W.prefix("network"),
-                           user=self.user,
-                           server=self.name,
-                           device=self.device_id)
-            W.prnt("", message)
-            self.olm = Olm(self)
+            pass
         except EncryptionError as error:
             message = ("{prefix}matrix: Error loading Olm"
                        "account: {error}.").format(
                            prefix=W.prefix("error"), error=error)
             W.prnt("", message)
+
+    def create_olm(self):
+        message = ("{prefix}matrix: Creating new Olm identity for "
+                   "{self_color}{user}{ncolor}"
+                   " on {server_color}{server}{ncolor} for device "
+                   "{device}.").format(
+                       prefix=W.prefix("network"),
+                       self_color=W.color("chat_nick_self"),
+                       ncolor=W.color("reset"),
+                       user=self.user_id,
+                       server_color=W.color("chat_server"),
+                       server=self.name,
+                       device=self.device_id)
+        W.prnt(self.server_buffer, message)
+        self.olm = Olm(self)
 
     def _create_options(self, config_file):
         options = [
