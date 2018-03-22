@@ -224,6 +224,49 @@ class MatrixClient:
         h = HttpRequest(RequestType.POST, self.host, path, content)
         return h
 
+    def keys_upload(self, user_id, device_id, account, keys=None,
+                    one_time_keys=None):
+        query_parameters = {"access_token": self.access_token}
+
+        path = ("{api}/keys/upload?"
+                "{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    query_parameters=urlencode(query_parameters))
+
+        content = {}
+
+        # TODO one time keys
+        if keys:
+            device_keys = {
+                "algorithms": [
+                    "m.olm.v1.curve25519-aes-sha2",
+                    "m.megolm.v1.aes-sha2"
+                ],
+                "device_id": device_id,
+                "user_id": user_id,
+                "keys": {
+                    "curve25519:" + device_id: keys["curve25519"],
+                    "ed25519:" + device_id: keys["ed25519"]
+                }
+            }
+
+            signature = account.sign(json.dumps(
+                device_keys,
+                ensure_ascii=False,
+                separators=(',', ':'),
+                sort_keys=True,
+            ))
+
+            device_keys["signatures"] = {
+                user_id: {
+                    "ed25519:" + device_id: signature
+                }
+            }
+
+            content["device_keys"] = device_keys
+
+        return HttpRequest(RequestType.POST, self.host, path, content)
+
     def mxc_to_http(self, mxc):
         # type: (str) -> str
         url = urlparse(mxc)
@@ -508,5 +551,26 @@ class MatrixKickMessage(MatrixMessage):
             self.room_id,
             self.user_id,
             self.reason)
+
+        return self._decode(server, object_hook)
+
+
+class MatrixKeyUploadMessage(MatrixMessage):
+
+    def __init__(self, client, user_id, device_id, account, keys=None,
+                 one_time_keys=None):
+        data = {
+            "device_id": device_id,
+            "user_id": user_id,
+            "account": account,
+            "keys": keys,
+            "one_time_keys": one_time_keys
+        }
+
+        MatrixMessage.__init__(self, client.keys_upload, data)
+
+    def decode_body(self, server):
+        object_hook = partial(MatrixEvents.MatrixKeyUploadEvent.from_dict,
+                              server)
 
         return self._decode(server, object_hook)

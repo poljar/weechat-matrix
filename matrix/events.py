@@ -67,6 +67,26 @@ class MatrixErrorEvent(MatrixEvent):
                 fatal=fatal)
 
 
+class MatrixKeyUploadEvent(MatrixEvent):
+
+    def __init__(self, server):
+        MatrixEvent.__init__(self, server)
+
+    def execute(self):
+        message = "{prefix}matrix: Uploaded olm device keys.".format(
+            prefix=W.prefix("network"))
+
+        W.prnt(self.server.server_buffer, message)
+
+    @classmethod
+    def from_dict(cls, server, parsed_dict):
+        try:
+            return cls(server)
+        except (KeyError, TypeError, ValueError):
+            return MatrixErrorEvent.from_dict(server, "Error uploading device"
+                                              "keys", False, parsed_dict)
+
+
 class MatrixLoginEvent(MatrixEvent):
 
     def __init__(self, server, user_id, device_id, access_token):
@@ -90,6 +110,7 @@ class MatrixLoginEvent(MatrixEvent):
         if not self.server.olm:
             self.server.create_olm()
             self.server.store_olm()
+            self.server.upload_keys(device_keys=True, one_time_keys=False)
 
         self.server.sync()
 

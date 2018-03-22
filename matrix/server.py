@@ -33,7 +33,12 @@ from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS, OPTIONS
 import matrix.api as API
-from matrix.api import MatrixClient, MatrixSyncMessage, MatrixLoginMessage
+from matrix.api import (
+    MatrixClient,
+    MatrixSyncMessage,
+    MatrixLoginMessage,
+    MatrixKeyUploadMessage
+)
 
 from matrix.encryption import Olm, EncryptionError
 
@@ -454,6 +459,15 @@ class MatrixServer:
     def sync(self):
         limit = None if self.next_batch else OPTIONS.sync_limit
         message = MatrixSyncMessage(self.client, self.next_batch, limit)
+        self.send_queue.append(message)
+
+    def upload_keys(self, device_keys=False, one_time_keys=False):
+        keys = self.olm.account.identity_keys() if device_keys else None
+
+        # TODO generate one time keys and upload them as well
+        message = MatrixKeyUploadMessage(self.client, self.user_id,
+                                         self.device_id, self.olm.account,
+                                         keys, None)
         self.send_queue.append(message)
 
     def login(self):
