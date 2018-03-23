@@ -33,6 +33,8 @@ from matrix.utils import (
     get_prefix_for_level, sanitize_power_level, string_strikethrough,
     line_pointer_and_tags_from_event, sender_to_prefix_and_color)
 
+from weechat import string_remove_color
+
 PowerLevel = namedtuple('PowerLevel', ['user', 'level'])
 
 
@@ -815,7 +817,8 @@ class RoomRedactionEvent(RoomEvent):
         new_message = ""
 
         if OPTIONS.redaction_type == RedactType.STRIKETHROUGH:
-            new_message = string_strikethrough(message)
+            plaintext_msg = string_remove_color(message, '')
+            new_message = string_strikethrough(plaintext_msg)
         elif OPTIONS.redaction_type == RedactType.NOTICE:
             new_message = message
         elif OPTIONS.redaction_type == RedactType.DELETE:
