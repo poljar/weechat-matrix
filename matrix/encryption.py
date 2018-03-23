@@ -18,6 +18,7 @@
 from __future__ import unicode_literals
 
 import os
+import json
 
 # pylint: disable=redefined-builtin
 from builtins import str
@@ -188,3 +189,13 @@ class Olm():
                 f.write(pickle)
         except OlmAccountError as error:
             raise EncryptionError(error)
+
+    def sign_json(self, json_dict):
+        signature = self.account.sign(json.dumps(
+            json_dict,
+            ensure_ascii=False,
+            separators=(',', ':'),
+            sort_keys=True,
+        ))
+
+        return signature

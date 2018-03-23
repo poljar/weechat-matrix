@@ -224,7 +224,7 @@ class MatrixClient:
         h = HttpRequest(RequestType.POST, self.host, path, content)
         return h
 
-    def keys_upload(self, user_id, device_id, account, keys=None,
+    def keys_upload(self, user_id, device_id, olm, keys=None,
                     one_time_keys=None):
         query_parameters = {"access_token": self.access_token}
 
@@ -235,7 +235,6 @@ class MatrixClient:
 
         content = {}
 
-        # TODO one time keys
         if keys:
             device_keys = {
                 "algorithms": [
@@ -250,12 +249,7 @@ class MatrixClient:
                 }
             }
 
-            signature = account.sign(json.dumps(
-                device_keys,
-                ensure_ascii=False,
-                separators=(',', ':'),
-                sort_keys=True,
-            ))
+            signature = olm.sign_json(device_keys)
 
             device_keys["signatures"] = {
                 user_id: {
@@ -264,6 +258,24 @@ class MatrixClient:
             }
 
             content["device_keys"] = device_keys
+
+        if one_time_keys:
+            one_time_key_dict = {}
+
+            for key_id, key in one_time_keys.items():
+                key_dict = {"key": key}
+                signature = olm.sign_json(key_dict)
+
+                one_time_key_dict["signed_curve25519:" + key_id] = {
+                    "key": key_dict.pop("key"),
+                    "signatures": {
+                        user_id: {
+                            "ed25519:" + device_id: signature
+                        }
+                    }
+                }
+
+            content["one_time_keys"] = one_time_key_dict
 
         return HttpRequest(RequestType.POST, self.host, path, content)
 
@@ -557,20 +569,22 @@ class MatrixKickMessage(MatrixMessage):
 
 class MatrixKeyUploadMessage(MatrixMessage):
 
-    def __init__(self, client, user_id, device_id, account, keys=None,
+    def __init__(self, client, user_id, device_id, olm, keys=None,
                  one_time_keys=None):
         data = {
             "device_id": device_id,
             "user_id": user_id,
-            "account": account,
+            "olm": olm,
             "keys": keys,
             "one_time_keys": one_time_keys
         }
+
+        self.device_keys = True if keys else False
 
         MatrixMessage.__init__(self, client.keys_upload, data)
 
     def decode_body(self, server):
         object_hook = partial(MatrixEvents.MatrixKeyUploadEvent.from_dict,
-                              server)
+                              server, self.device_keys)
 
         return self._decode(server, object_hook)

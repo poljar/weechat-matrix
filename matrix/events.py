@@ -69,19 +69,23 @@ class MatrixErrorEvent(MatrixEvent):
 
 class MatrixKeyUploadEvent(MatrixEvent):
 
-    def __init__(self, server):
+    def __init__(self, server, device_keys):
+        self.device_keys = device_keys
         MatrixEvent.__init__(self, server)
 
     def execute(self):
-        message = "{prefix}matrix: Uploaded olm device keys.".format(
+        if not self.device_keys:
+            return
+
+        message = "{prefix}matrix: Uploaded Olm device keys.".format(
             prefix=W.prefix("network"))
 
         W.prnt(self.server.server_buffer, message)
 
     @classmethod
-    def from_dict(cls, server, parsed_dict):
+    def from_dict(cls, server, device_keys, parsed_dict):
         try:
-            return cls(server)
+            return cls(server, device_keys)
         except (KeyError, TypeError, ValueError):
             return MatrixErrorEvent.from_dict(server, "Error uploading device"
                                               "keys", False, parsed_dict)
@@ -415,10 +419,12 @@ class MatrixBacklogEvent(MatrixEvent):
 
 class MatrixSyncEvent(MatrixEvent):
 
-    def __init__(self, server, next_batch, room_infos, invited_infos):
+    def __init__(self, server, next_batch, room_infos, invited_infos,
+                 one_time_key_count):
         self.next_batch = next_batch
         self.joined_room_infos = room_infos
         self.invited_room_infos = invited_infos
+        self.one_time_key_count = one_time_key_count
 
         MatrixEvent.__init__(self, server)
 
@@ -439,12 +445,21 @@ class MatrixSyncEvent(MatrixEvent):
     def from_dict(cls, server, parsed_dict):
         try:
             next_batch = sanitize_id(parsed_dict["next_batch"])
+            one_time_key_count = 0
+
+            if "device_one_time_keys_count" in parsed_dict:
+                if ("signed_curve25519" in
+                        parsed_dict["device_one_time_keys_count"]):
+                    one_time_key_count = (
+                        parsed_dict["device_one_time_keys_count"]["signed_curve25519"])
+
             room_info_dict = parsed_dict["rooms"]
 
             join_infos, invite_infos = MatrixSyncEvent._infos_from_dict(
                 room_info_dict)
 
-            return cls(server, next_batch, join_infos, invite_infos)
+            return cls(server, next_batch, join_infos, invite_infos,
+                       one_time_key_count)
         except (KeyError, ValueError, TypeError):
             return MatrixErrorEvent.from_dict(server, "Error syncing", False,
                                               parsed_dict)
@@ -475,5 +490,6 @@ class MatrixSyncEvent(MatrixEvent):
 
         self._queue_joined_info()
         server.next_batch = self.next_batch
+        server.check_one_time_keys(self.one_time_key_count)
 
         server.handle_events()

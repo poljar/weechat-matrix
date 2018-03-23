@@ -40,7 +40,7 @@ from matrix.api import (
     MatrixKeyUploadMessage
 )
 
-from matrix.encryption import Olm, EncryptionError
+from matrix.encryption import Olm, EncryptionError, encrypt_enabled
 
 try:
     FileNotFoundError
@@ -464,11 +464,25 @@ class MatrixServer:
     def upload_keys(self, device_keys=False, one_time_keys=False):
         keys = self.olm.account.identity_keys() if device_keys else None
 
-        # TODO generate one time keys and upload them as well
+        one_time_keys = (self.olm.account.one_time_keys()["curve25519"] if
+                         one_time_keys else None)
+
         message = MatrixKeyUploadMessage(self.client, self.user_id,
-                                         self.device_id, self.olm.account,
-                                         keys, None)
+                                         self.device_id, self.olm,
+                                         keys, one_time_keys)
         self.send_queue.append(message)
+
+    @encrypt_enabled
+    def check_one_time_keys(self, key_count):
+        max_keys = self.olm.account.max_one_time_keys()
+
+        key_count = (max_keys / 2) - key_count
+
+        if key_count <= 0:
+            return
+
+        self.olm.account.generate_one_time_keys(key_count)
+        self.upload_keys(device_keys=False, one_time_keys=True)
 
     def login(self):
         # type: (MatrixServer) -> None
