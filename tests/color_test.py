@@ -1,11 +1,14 @@
+# -*- coding: utf-8 -*-
+
 from __future__ import unicode_literals
 
 import webcolors
+from collections import OrderedDict
 from hypothesis import given
 from hypothesis.strategies import sampled_from
 
-from matrix.colors import (Formatted, color_html_to_weechat,
-                           color_weechat_to_html)
+from matrix.colors import (Formatted, FormattedString,
+                           color_html_to_weechat, color_weechat_to_html)
 
 html_prism = ("<font color=maroon>T</font><font color=red>e</font><font "
               "color=olive>s</font><font color=yellow>t</font>")
@@ -27,3 +30,15 @@ def test_color_conversion(color_name):
     hex_color = color_weechat_to_html(color_html_to_weechat(color_name))
     new_color_name = webcolors.hex_to_name(hex_color, spec='html4')
     assert new_color_name == color_name
+
+
+def test_handle_strikethrough_first():
+    valid_result = '\x1b[038;5;1mf̶o̶o̶\x1b[039m'
+
+    d1 = OrderedDict([('fgcolor', 'red'), ('strikethrough', True)])
+    d2 = OrderedDict([('strikethrough', True), ('fgcolor', 'red'), ])
+    f1 = Formatted([FormattedString('foo', d1)])
+    f2 = Formatted([FormattedString('foo', d2)])
+
+    assert f1.to_weechat() == valid_result
+    assert f2.to_weechat() == valid_result

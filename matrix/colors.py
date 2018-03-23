@@ -288,6 +288,14 @@ class Formatted():
             text = formatted_string.text
             attributes = formatted_string.attributes
 
+            # We need to handle strikethrough first, since doing
+            # a strikethrough followed by other attributes succeeds in the
+            # terminal, but doing it the other way around results in garbage.
+            if 'strikethrough' in attributes:
+                text = add_attribute(text, 'strikethrough',
+                                     attributes['strikethrough'])
+                attributes.pop('strikethrough')
+
             for key, value in attributes.items():
                 text = add_attribute(text, key, value)
             return text

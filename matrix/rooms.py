@@ -815,7 +815,8 @@ class RoomRedactionEvent(RoomEvent):
         new_message = ""
 
         if OPTIONS.redaction_type == RedactType.STRIKETHROUGH:
-            new_message = string_strikethrough(message)
+            plaintext_msg = W.string_remove_color(message, '')
+            new_message = string_strikethrough(plaintext_msg)
         elif OPTIONS.redaction_type == RedactType.NOTICE:
             new_message = message
         elif OPTIONS.redaction_type == RedactType.DELETE:
