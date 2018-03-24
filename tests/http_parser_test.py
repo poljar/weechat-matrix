@@ -55,5 +55,4 @@ def test_parsing_of_escaped_brackets():
     p = MatrixHtmlParser()
     p.feed('<pre><code>&lt;faketag&gt;</code></pre>')
     s = p.get_substrings()
-    print(s)
     assert s[0].text == '<faketag>' and len(s) == 1
