@@ -150,6 +150,7 @@ class MatrixServer:
                            prefix=W.prefix("error"), error=error)
             W.prnt("", message)
 
+    @encrypt_enabled
     def create_olm(self):
         message = ("{prefix}matrix: Creating new Olm identity for "
                    "{self_color}{user}{ncolor}"
@@ -165,6 +166,7 @@ class MatrixServer:
         W.prnt(self.server_buffer, message)
         self.olm = Olm()
 
+    @encrypt_enabled
     def store_olm(self):
         self.olm.to_session_dir(self)
 
@@ -461,6 +463,7 @@ class MatrixServer:
         message = MatrixSyncMessage(self.client, self.next_batch, limit)
         self.send_queue.append(message)
 
+    @encrypt_enabled
     def upload_keys(self, device_keys=False, one_time_keys=False):
         keys = self.olm.account.identity_keys() if device_keys else None
 
