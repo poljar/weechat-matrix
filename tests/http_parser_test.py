@@ -33,9 +33,26 @@ def test_html_numeric_reference_parsing(entitydef):
     assert parser.unescape('&#{};'.format(num)) == character
 
 
+@given(sampled_from(html_entities))
+def test_html_entityref_reconstruction_from_name(entitydef):
+    name = entitydef[0]
+    parser = MatrixHtmlParser()
+    parser.handle_entityref(name)
+    s = parser.get_substrings()
+    assert s[0].text == parser.unescape('&{};'.format(name)) and len(s) == 1
+
+
+@given(sampled_from(html_entities))
+def test_html_charref_reconstruction_from_name(entitydef):
+    num = entitydef[2]
+    parser = MatrixHtmlParser()
+    parser.handle_charref(num)
+    s = parser.get_substrings()
+    assert s[0].text == parser.unescape('&#{};'.format(num)) and len(s) == 1
+
+
 def test_parsing_of_escaped_brackets():
     p = MatrixHtmlParser()
     p.feed('<pre><code>&lt;faketag&gt;</code></pre>')
     s = p.get_substrings()
-    print(s)
     assert s[0].text == '<faketag>' and len(s) == 1

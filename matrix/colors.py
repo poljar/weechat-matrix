@@ -404,7 +404,7 @@ class MatrixHtmlParser(HTMLParser):
         self.text += self.unescape("&{};".format(name))
 
     def handle_charref(self, name):
-        self.text += self.unescape("&{};".format(name))
+        self.text += self.unescape("&#{};".format(name))
 
     def get_substrings(self):
         if self.text:
