@@ -74,6 +74,9 @@ class MatrixKeyUploadEvent(MatrixEvent):
         MatrixEvent.__init__(self, server)
 
     def execute(self):
+        self.server.olm.mark_keys_as_published()
+        self.server.store_olm()
+
         if not self.device_keys:
             return
 

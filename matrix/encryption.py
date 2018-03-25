@@ -199,3 +199,7 @@ class Olm():
         ))
 
         return signature
+
+    @encrypt_enabled
+    def mark_keys_as_published(self):
+        self.account.mark_keys_as_published()
