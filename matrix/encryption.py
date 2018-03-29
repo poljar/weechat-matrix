@@ -23,6 +23,7 @@ import json
 # pylint: disable=redefined-builtin
 from builtins import str
 
+from collections import defaultdict
 from functools import wraps
 from future.moves.itertools import zip_longest
 
@@ -30,6 +31,9 @@ import matrix.globals
 
 try:
     from olm.account import Account, OlmAccountError
+    from olm.session import (InboundSession, OlmSessionError, OlmMessage,
+                             OlmPreKeyMessage)
+    from olm.group_session import InboundGroupSession, OlmGroupSessionError
 except ImportError:
     matrix.globals.ENCRYPTION = False
 
@@ -151,12 +155,54 @@ class EncryptionError(Exception):
 class Olm():
 
     @encrypt_enabled
-    def __init__(self, account=None):
-        # type: (Server, Account) -> None
+    def __init__(
+        self,
+        account=None,
+        sessions=defaultdict(list),
+        group_sessions=defaultdict(dict)
+    ):
+        # type: (Account, Dict[str, List[Session]) -> None
         if account:
             self.account = account
         else:
             self.account = Account()
+
+        self.sessions = sessions
+        self.group_sessions = group_sessions
+
+    def _create_session(self, sender, sender_key, message):
+        session = InboundSession(self.account, message, sender_key)
+        self.sessions[sender].append(session)
+        self.account.remove_one_time_keys(session)
+
+        return session
+
+    def create_group_session(self, room_id, session_id, session_key):
+        session = InboundGroupSession(session_key)
+        self.group_sessions[room_id][session_id] = session
+
+    @encrypt_enabled
+    def decrypt(self, sender, sender_key, message):
+        plaintext = None
+
+        for session in self.sessions[sender]:
+            try:
+                if isinstance(message, OlmPreKeyMessage):
+                    if not session.matches(message):
+                        continue
+
+                plaintext = session.decrypt(message)
+                break
+            except OlmSessionError:
+                pass
+
+        session = self._create_session(sender, sender_key, message)
+
+        try:
+            plaintext = session.decrypt(message)
+            return plaintext
+        except OlmSessionError:
+            return None
 
     @classmethod
     @encrypt_enabled

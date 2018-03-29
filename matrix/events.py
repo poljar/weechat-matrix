@@ -28,6 +28,11 @@ from matrix.rooms import (matrix_create_room_buffer, RoomInfo, RoomMessageText,
                           RoomMessageEvent, RoomRedactedMessageEvent,
                           RoomMessageEmote)
 
+try:
+    from olm.session import OlmMessage, OlmPreKeyMessage
+except ImportError:
+    pass
+
 
 class MatrixEvent():
 
@@ -444,6 +449,75 @@ class MatrixSyncEvent(MatrixEvent):
 
         return (join_infos, invite_infos)
 
+    @staticmethod
+    def _get_olm_device_event(server, parsed_dict):
+        device_key = server.olm.account.device_keys["curve25519"]
+
+        if device_key not in parsed_dict["content"]["ciphertext"]:
+            return None
+
+        ciphertext = parsed_dict["content"]["ciphertext"].pop(device_key)
+        sender = sanitize_id(parsed_dict["sender"])
+        sender_key = sanitize_id(parsed_dict["sender_key"])
+
+        message = None
+
+        if ciphertext["type"] == 0:
+            message = OlmPreKeyMessage(parsed_dict["body"])
+        elif ciphertext["type"] == 1:
+            message = OlmMessage(parsed_dict["body"])
+        else:
+            raise ValueError("Invalid Olm message type")
+
+        olm = server.olm
+        plaintext = olm.decrypt(sender, sender_key, message)
+
+        # TODO check sender key
+        decrypted_sender = sanitize_id(plaintext["sender"])
+        decrypted_recepient = sanitize_id(plaintext["recipient"])
+        decrypted_recepient_key = sanitize_id(
+            plaintext["recipient_keys"]["ed25519"])
+
+        if (sender != decrypted_sender or
+                server.user_id != decrypted_recepient or
+                device_key != decrypted_recepient_key):
+            error_message = ("{prefix}matrix: Mismatch in decrypted Olm"
+                             "message").format(W.prefix("error"))
+            W.prnt("", error_message)
+            return None
+
+        if plaintext["type"] != "m.room.key":
+            return None
+
+        MatrixSyncEvent._handle_key_event(server, sender_key, plaintext)
+
+    @staticmethod
+    def _handle_key_event(server, sender_key, parsed_dict):
+        # type: (MatrixServer, str, Dict[Any, Any] -> None
+        olm = server.olm
+        content = parsed_dict.pop("content")
+
+        if content["type"] != "m.megolm.v1.aes-sha2":
+            return
+
+        room_id = sanitize_id(content["room_id"])
+        session_id = sanitize_id(content["session_id"])
+        session_key = sanitize_id(content["session_key"])
+
+        if session_id in olm.group_sessions[room_id]:
+            return
+
+        olm.create_group_session(room_id, session_id, session_key)
+
+    @staticmethod
+    def _get_to_device_events(server, parsed_dict):
+        # type: (MatrixServer, Dict[Any, Any]) -> None
+        for event in parsed_dict["events"]:
+            if event["type"] == "m.room.encrypted":
+                if (event["content"]["algorithm"] ==
+                        'm.olm.v1.curve25519-aes-sha2'):
+                    MatrixSyncEvent._get_olm_device_event(server, parsed_dict)
+
     @classmethod
     def from_dict(cls, server, parsed_dict):
         try:
@@ -455,6 +529,9 @@ class MatrixSyncEvent(MatrixEvent):
                         parsed_dict["device_one_time_keys_count"]):
                     one_time_key_count = (
                         parsed_dict["device_one_time_keys_count"]["signed_curve25519"])
+
+            MatrixSyncEvent._get_to_device_events(
+                server.olm, parsed_dict.pop("to_device"))
 
             room_info_dict = parsed_dict["rooms"]
 
