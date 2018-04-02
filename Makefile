@@ -7,15 +7,21 @@ PYTHON ?= python
 lib := $(patsubst matrix/%.py, $(DESTDIR)$(PREFIX)/python/matrix/%.py, \
 	 $(wildcard matrix/*.py))
 
-install: install-lib
-	install -Dm644 main.py $(DESTDIR)$(PREFIX)/python/matrix.py
+install: install-dir install-lib
+	install -m644 main.py $(DESTDIR)$(PREFIX)/python/matrix.py
 
 install-lib: $(lib)
+install-dir:
+	install -d $(DESTDIR)$(PREFIX)/python/matrix
+
+uninstall:
+	rm $(DESTDIR)$(PREFIX)/python/matrix.py $(DESTDIR)$(PREFIX)/python/matrix/*
+	rmdir $(DESTDIR)$(PREFIX)/python/matrix
 
 phony:
 
 $(DESTDIR)$(PREFIX)/python/matrix/%.py: matrix/%.py phony
-	install -Dm644 $< $@
+	install -m644 $< $@
 
 test:
 	python3 -m pytest
