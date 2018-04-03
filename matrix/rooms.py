@@ -17,6 +17,8 @@
 from __future__ import unicode_literals
 from builtins import str
 
+import json
+
 from pprint import pformat
 
 from collections import namedtuple, deque
@@ -243,7 +245,7 @@ class RoomInfo():
         return None, None
 
     @staticmethod
-    def parse_event(event_dict):
+    def parse_event(olm, room_id, event_dict):
         # type: (Dict[Any, Any]) -> (RoomEvent, RoomEvent)
         state_event = None
         message_event = None
@@ -270,11 +272,30 @@ class RoomInfo():
             state_event = RoomAliasEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.encryption":
             state_event = RoomEncryptionEvent.from_dict(event_dict)
+        elif event_dict["type"] == "m.room.encrypted":
+            state_event, message_event = RoomInfo._decrypt_event(olm, room_id,
+                                                                 event_dict)
 
         return state_event, message_event
 
     @staticmethod
-    def _parse_events(parsed_dict, messages=True, state=True):
+    def _decrypt_event(olm, room_id, event_dict):
+        session_id = event_dict["content"]["session_id"]
+        ciphertext = event_dict["content"]["ciphertext"]
+        plaintext = olm.group_decrypt(room_id, session_id, ciphertext)
+
+        if not plaintext:
+            return None, None
+
+        parsed_plaintext = json.loads(plaintext, encoding="utf-8")
+
+        event_dict["content"] = parsed_plaintext["content"]
+        event_dict["type"] = parsed_plaintext["type"]
+
+        return RoomInfo.parse_event(olm, room_id, event_dict)
+
+    @staticmethod
+    def _parse_events(olm, room_id, parsed_dict, messages=True, state=True):
         state_events = []
         message_events = []
 
@@ -283,7 +304,7 @@ class RoomInfo():
 
         try:
             for event in parsed_dict:
-                m_event, s_event = RoomInfo.parse_event(event)
+                m_event, s_event = RoomInfo.parse_event(olm, room_id, event)
                 state_events.append(m_event)
                 message_events.append(s_event)
         except (ValueError, TypeError, KeyError) as error:
@@ -306,14 +327,14 @@ class RoomInfo():
         return events
 
     @classmethod
-    def from_dict(cls, room_id, parsed_dict):
+    def from_dict(cls, olm, room_id, parsed_dict):
         prev_batch = sanitize_id(parsed_dict['timeline']['prev_batch'])
 
         state_dict = parsed_dict['state']['events']
         timeline_dict = parsed_dict['timeline']['events']
 
-        state_events = RoomInfo._parse_events(state_dict, messages=False)
-        timeline_events = RoomInfo._parse_events(timeline_dict)
+        state_events = RoomInfo._parse_events(olm, room_id, state_dict, messages=False)
+        timeline_events = RoomInfo._parse_events(olm, room_id, timeline_dict)
 
         events = state_events + timeline_events
 

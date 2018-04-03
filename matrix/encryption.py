@@ -171,15 +171,20 @@ class Olm():
         self.group_sessions = group_sessions
 
     def _create_session(self, sender, sender_key, message):
+        W.prnt("", "matrix: Creating session for {}".format(sender))
         session = InboundSession(self.account, message, sender_key)
+        W.prnt("", "matrix: Created session for {}".format(sender))
         self.sessions[sender].append(session)
-        self.account.remove_one_time_keys(session)
+        # self.account.remove_one_time_keys(session)
+        # TODO store account here
 
         return session
 
     def create_group_session(self, room_id, session_id, session_key):
+        W.prnt("", "matrix: Creating group session for {}".format(room_id))
         session = InboundGroupSession(session_key)
         self.group_sessions[room_id][session_id] = session
+        # TODO store account here
 
     @encrypt_enabled
     def decrypt(self, sender, sender_key, message):
@@ -203,6 +208,19 @@ class Olm():
             return plaintext
         except OlmSessionError:
             return None
+
+    @encrypt_enabled
+    def group_decrypt(self, room_id, session_id, ciphertext):
+        if session_id not in self.group_sessions[room_id]:
+            return None
+
+        session = self.group_sessions[room_id][session_id]
+        try:
+            plaintext = session.decrypt(ciphertext)
+        except OlmGroupSessionError:
+            return None
+
+        return plaintext
 
     @classmethod
     @encrypt_enabled
