@@ -157,11 +157,17 @@ class Olm():
     @encrypt_enabled
     def __init__(
         self,
+        user,
+        device_id,
+        session_path,
         account=None,
         sessions=defaultdict(list),
         group_sessions=defaultdict(dict)
     ):
-        # type: (Account, Dict[str, List[Session]) -> None
+        # type: (str, str, str, Account, Dict[str, List[Session]) -> None
+        self.user = user
+        self.device_id = device_id
+        self.session_path = session_path
         if account:
             self.account = account
         else:
@@ -224,28 +230,25 @@ class Olm():
 
     @classmethod
     @encrypt_enabled
-    def from_session_dir(cls, server):
+    def from_session_dir(cls, user, device_id, session_path):
         # type: (Server) -> Olm
-        account_file_name = "{}_{}.account".format(server.user,
-                                                   server.device_id)
-        session_path = server.get_session_path()
+        account_file_name = "{}_{}.account".format(user, device_id)
         path = os.path.join(session_path, account_file_name)
 
         try:
             with open(path, "rb") as f:
                 pickle = f.read()
                 account = Account.from_pickle(pickle)
-                return cls(account)
+                return cls(user, device_id, session_path, account)
         except OlmAccountError as error:
             raise EncryptionError(error)
 
     @encrypt_enabled
-    def to_session_dir(self, server):
+    def to_session_dir(self):
         # type: (Server) -> None
-        account_file_name = "{}_{}.account".format(server.user,
-                                                   server.device_id)
-        session_path = server.get_session_path()
-        path = os.path.join(session_path, account_file_name)
+        account_file_name = "{}_{}.account".format(self.user,
+                                                   self.device_id)
+        path = os.path.join(self.session_path, account_file_name)
 
         try:
             with open(path, "wb") as f:

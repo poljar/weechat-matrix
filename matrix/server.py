@@ -141,7 +141,11 @@ class MatrixServer:
 
     def _load_olm(self):
         try:
-            self.olm = Olm.from_session_dir(self)
+            self.olm = Olm.from_session_dir(
+                self.user,
+                self.device_id,
+                self.get_session_path()
+            )
         except FileNotFoundError:
             pass
         except EncryptionError as error:
@@ -164,11 +168,11 @@ class MatrixServer:
                        server=self.name,
                        device=self.device_id)
         W.prnt(self.server_buffer, message)
-        self.olm = Olm()
+        self.olm = Olm(self.user, self.device_id, self.get_session_path())
 
     @encrypt_enabled
     def store_olm(self):
-        self.olm.to_session_dir(self)
+        self.olm.to_session_dir()
 
     def _create_options(self, config_file):
         options = [
