@@ -222,11 +222,14 @@ class Olm():
                         continue
 
                 plaintext = session.decrypt(message)
-                break
+                return plaintext
             except OlmSessionError:
                 pass
 
-        session = self._create_session(sender, sender_key, message)
+        try:
+            session = self._create_session(sender, sender_key, message)
+        except OlmSessionError:
+            return None
 
         try:
             plaintext = session.decrypt(message)

@@ -475,6 +475,9 @@ class MatrixSyncEvent(MatrixEvent):
         olm = server.olm
         plaintext = olm.decrypt(sender, sender_key, message)
 
+        if not plaintext:
+            return None
+
         # TODO check sender key
         parsed_plaintext = json.loads(plaintext, encoding='utf-8')
         decrypted_sender = parsed_plaintext["sender"]
