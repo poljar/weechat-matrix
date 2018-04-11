@@ -146,6 +146,12 @@ class MatrixServer:
                 self.device_id,
                 self.get_session_path()
             )
+            message = ("{prefix}matrix: Loaded Olm account for {user} (device:"
+                       "{device})").format(prefix=W.prefix("network"),
+                                           user=self.user,
+                                           device=self.device_id)
+            W.prnt("", message)
+
         except FileNotFoundError:
             pass
         except EncryptionError as error:

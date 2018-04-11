@@ -508,7 +508,7 @@ class MatrixSyncEvent(MatrixEvent):
         session_id = content["session_id"]
         session_key = content["session_key"]
 
-        if session_id in olm.group_sessions[room_id]:
+        if session_id in olm.inbound_group_sessions[room_id]:
             return
 
         olm.create_group_session(room_id, session_id, session_key)
