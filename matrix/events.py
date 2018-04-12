@@ -19,7 +19,7 @@ from builtins import str
 
 import json
 
-from collections import deque
+from collections import deque, defaultdict
 from functools import partial
 from operator import itemgetter
 
@@ -29,6 +29,8 @@ from matrix.utils import (tags_for_message, sanitize_id, sanitize_token,
 from matrix.rooms import (matrix_create_room_buffer, RoomInfo, RoomMessageText,
                           RoomMessageEvent, RoomRedactedMessageEvent,
                           RoomMessageEmote)
+
+from matrix.encryption import OlmDeviceKey
 
 try:
     from olm.session import OlmMessage, OlmPreKeyMessage
@@ -305,6 +307,47 @@ class MatrixKickEvent(MatrixEvent):
         except KeyError:
             return MatrixErrorEvent.from_dict(server, "Error kicking user",
                                               False, parsed_dict)
+
+
+class MatrixKeyQueryEvent(MatrixEvent):
+
+    def __init__(self, server, keys):
+        self.keys = keys
+        MatrixEvent.__init__(self, server)
+
+    @staticmethod
+    def _get_keys(key_dict):
+        keys = {}
+
+        for key_type, key in key_dict.items():
+            key_type, _ = key_type.split(":")
+            keys[key_type] = key
+
+        return keys
+
+    @classmethod
+    def from_dict(cls, server, parsed_dict):
+        keys = defaultdict(list)
+        try:
+            for user_id, device_dict in parsed_dict["device_keys"].items():
+                for device_id, key_dict in device_dict.items():
+                    device_keys = MatrixKeyQueryEvent._get_keys(
+                        key_dict.pop("keys"))
+                    keys[user_id].append(OlmDeviceKey(user_id, device_id,
+                                                      device_keys))
+            return cls(server, keys)
+        except KeyError:
+            return MatrixErrorEvent.from_dict(server, "Error kicking user",
+                                              False, parsed_dict)
+
+    def execute(self):
+        olm = self.server.olm
+
+        if olm.device_keys == self.keys:
+            return
+
+        olm.device_keys = self.keys
+        # TODO invalidate megolm sessions for rooms that got new devices
 
 
 class MatrixBacklogEvent(MatrixEvent):

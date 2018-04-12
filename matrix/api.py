@@ -279,6 +279,20 @@ class MatrixClient:
 
         return HttpRequest(RequestType.POST, self.host, path, content)
 
+    def keys_query(self, users):
+        query_parameters = {"access_token": self.access_token}
+
+        path = ("{api}/keys/query?"
+                "{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    query_parameters=urlencode(query_parameters))
+
+        content = {
+            "device_keys": {user: {} for user in users}
+        }
+
+        return HttpRequest(RequestType.POST, self.host, path, content)
+
     def mxc_to_http(self, mxc):
         # type: (str) -> str
         url = urlparse(mxc)
@@ -586,5 +600,21 @@ class MatrixKeyUploadMessage(MatrixMessage):
     def decode_body(self, server):
         object_hook = partial(MatrixEvents.MatrixKeyUploadEvent.from_dict,
                               server, self.device_keys)
+
+        return self._decode(server, object_hook)
+
+
+class MatrixKeyQueryMessage(MatrixMessage):
+
+    def __init__(self, client, users):
+        data = {
+            "users": users,
+        }
+
+        MatrixMessage.__init__(self, client.keys_query, data)
+
+    def decode_body(self, server):
+        object_hook = partial(MatrixEvents.MatrixKeyQueryEvent.from_dict,
+                              server)
 
         return self._decode(server, object_hook)

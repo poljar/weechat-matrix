@@ -37,7 +37,8 @@ from matrix.api import (
     MatrixClient,
     MatrixSyncMessage,
     MatrixLoginMessage,
-    MatrixKeyUploadMessage
+    MatrixKeyUploadMessage,
+    MatrixKeyQueryMessage
 )
 
 from matrix.encryption import Olm, EncryptionError, encrypt_enabled
@@ -92,6 +93,7 @@ class MatrixServer:
         self.send_fd_hook = None                         # type: weechat.hook
         self.send_buffer = b""                           # type: bytes
         self.current_message = None                      # type: MatrixMessage
+        self.device_check_timestamp = None
 
         self.http_parser = HttpParser()                  # type: HttpParser
         self.http_buffer = []                            # type: List[bytes]
@@ -497,6 +499,21 @@ class MatrixServer:
         self.olm.account.generate_one_time_keys(key_count)
         self.upload_keys(device_keys=False, one_time_keys=True)
 
+    @encrypt_enabled
+    def query_keys(self):
+        users = []
+
+        for room in self.rooms.values():
+            if not room.encrypted:
+                continue
+            users += list(room.users)
+
+        if not users:
+            return
+
+        message = MatrixKeyQueryMessage(self.client, users)
+        self.send_queue.append(message)
+
     def login(self):
         # type: (MatrixServer) -> None
         message = MatrixLoginMessage(self.client, self.user, self.password,
@@ -704,6 +721,20 @@ def matrix_timer_cb(server_name, remaining_calls):
             # to the queue and exit the loop
             server.send_queue.appendleft(message)
             break
+
+    if not server.next_batch:
+        return W.WEECHAT_RC_OK
+
+    # check for new devices by users in encrypted rooms periodically
+    if (not server.device_check_timestamp or
+            current_time - server.device_check_timestamp > 600):
+
+        W.prnt(server.server_buffer,
+               "{prefix}matrix: Querying user devices.".format(
+                   prefix=W.prefix("networ")))
+
+        server.query_keys()
+        server.device_check_timestamp = current_time
 
     return W.WEECHAT_RC_OK
 

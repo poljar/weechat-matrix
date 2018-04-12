@@ -153,6 +153,14 @@ class EncryptionError(Exception):
     pass
 
 
+class OlmDeviceKey():
+    def __init__(self, user_id, device_id, key_dict):
+        # type: (str, str, Dict[str, str])
+        self.user_id = user_id
+        self.device_id = device_id
+        self.keys = key_dict
+
+
 class Olm():
 
     @encrypt_enabled
@@ -171,6 +179,7 @@ class Olm():
         self.device_id = device_id
         self.session_path = session_path
         self.database = database
+        self.device_keys = {}
 
         if not database:
             db_file = "{}_{}.db".format(user, device_id)
