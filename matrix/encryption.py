@@ -42,7 +42,7 @@ from matrix.globals import W, SERVERS
 from matrix.utf import utf8_decode
 
 
-def own_buffer(f):
+def own_buffer_or_error(f):
 
     @wraps(f)
     def wrapper(data, buffer, *args, **kwargs):
@@ -52,6 +52,10 @@ def own_buffer(f):
                 return f(server.name, buffer, *args, **kwargs)
             elif buffer == server.server_buffer:
                 return f(server.name, buffer, *args, **kwargs)
+
+        W.prnt("", "{prefix}matrix: command \"olm\" must be executed on a "
+               "matrix buffer (server or channel)".format(
+                   prefix=W.prefix("error")))
 
         return W.WEECHAT_RC_OK
 
@@ -118,7 +122,7 @@ def partition_key(key):
     return ' '.join(''.join(g) for g in groups)
 
 
-@own_buffer
+@own_buffer_or_error
 @utf8_decode
 def matrix_olm_command_cb(server_name, buffer, args):
     server = SERVERS[server_name]
