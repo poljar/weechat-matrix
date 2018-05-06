@@ -180,7 +180,8 @@ class MatrixServer:
 
     @encrypt_enabled
     def store_olm(self):
-        self.olm.to_session_dir()
+        if self.olm:
+            self.olm.to_session_dir()
 
     def _create_options(self, config_file):
         options = [
