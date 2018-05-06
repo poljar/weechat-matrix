@@ -126,21 +126,43 @@ def matrix_olm_command_cb(server_name, buffer, args):
 
     if not command or command == "info":
         olm = server.olm
-        device_msg = ("  - Device ID:       {}\n".format(server.device_id)
-                      if server.device_id else "")
-        id_key = partition_key(olm.account.identity_keys()["curve25519"])
-        fp_key = partition_key(olm.account.identity_keys()["ed25519"])
-        message = ("{prefix}matrix: Identity keys:\n"
-                   "  - User:            {user}\n"
-                   "{device_msg}"
-                   "  - Identity key:    {id_key}\n"
-                   "  - Fingerprint key: {fp_key}\n").format(
-                       prefix=W.prefix("network"),
-                       user=server.user,
-                       device_msg=device_msg,
-                       id_key=id_key,
-                       fp_key=fp_key)
-        W.prnt(server.server_buffer, message)
+
+        if not args or args[0] == "private":
+            device_msg = ("  - Device ID:       {}\n".format(server.device_id)
+                          if server.device_id else "")
+            id_key = partition_key(olm.account.identity_keys()["curve25519"])
+            fp_key = partition_key(olm.account.identity_keys()["ed25519"])
+            message = ("{prefix}matrix: Identity keys:\n"
+                       "  - User:            {user}\n"
+                       "{device_msg}"
+                       "  - Identity key:    {id_key}\n"
+                       "  - Fingerprint key: {fp_key}\n").format(
+                           prefix=W.prefix("network"),
+                           user=server.user,
+                           device_msg=device_msg,
+                           id_key=id_key,
+                           fp_key=fp_key)
+            W.prnt(server.server_buffer, message)
+        elif args[0] == "all":
+            for user, keys in olm.device_keys.items():
+                message = ("{prefix}matrix: Identity keys:\n"
+                           "  - User: {user}\n").format(
+                               prefix=W.prefix("network"),
+                               user=user)
+                W.prnt(server.server_buffer, message)
+
+                for key in keys:
+                    id_key = partition_key(key.keys["curve25519"])
+                    fp_key = partition_key(key.keys["ed25519"])
+                    device_msg = ("    - Device ID:       {}\n".format(
+                        key.device_id) if key.device_id else "")
+                    message = ("{device_msg}"
+                               "    - Identity key:    {id_key}\n"
+                               "    - Fingerprint key: {fp_key}\n\n").format(
+                                   device_msg=device_msg,
+                                   id_key=id_key,
+                                   fp_key=fp_key)
+                    W.prnt(server.server_buffer, message)
     else:
         message = ("{prefix}matrix: Command not implemented.".format(
             prefix=W.prefix("error")))
