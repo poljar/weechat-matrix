@@ -522,10 +522,9 @@ class MatrixSyncEvent(MatrixEvent):
             return None
 
         # TODO check sender key
-        parsed_plaintext = json.loads(plaintext, encoding='utf-8')
-        decrypted_sender = parsed_plaintext["sender"]
-        decrypted_recepient = parsed_plaintext["recipient"]
-        decrypted_recepient_key = parsed_plaintext["recipient_keys"]["ed25519"]
+        decrypted_sender = plaintext["sender"]
+        decrypted_recepient = plaintext["recipient"]
+        decrypted_recepient_key = plaintext["recipient_keys"]["ed25519"]
 
         if (sender != decrypted_sender or
                 server.user_id != decrypted_recepient or
@@ -536,10 +535,10 @@ class MatrixSyncEvent(MatrixEvent):
             W.prnt("", error_message)
             return None
 
-        if parsed_plaintext["type"] != "m.room_key":
+        if plaintext["type"] != "m.room_key":
             return None
 
-        MatrixSyncEvent._handle_key_event(server, sender_key, parsed_plaintext)
+        MatrixSyncEvent._handle_key_event(server, sender_key, plaintext)
 
     @staticmethod
     def _handle_key_event(server, sender_key, parsed_dict):
