@@ -410,10 +410,11 @@ def room_input_cb(server_name, buffer, input_data):
     room_id = key_from_value(server.buffers, buffer)
     room = server.rooms[room_id]
 
-    if room.encrypted:
-        return W.WEECHAT_RC_OK
-
     formatted_data = Formatted.from_input_line(input_data)
+
+    if room.encrypted:
+        server.send_room_message(room_id, formatted_data)
+        return W.WEECHAT_RC_OK
 
     message = MatrixSendMessage(
         server.client, room_id=room_id, formatted_message=formatted_data)

@@ -476,6 +476,26 @@ class MatrixServer:
         message = MatrixSyncMessage(self.client, self.next_batch, limit)
         self.send_queue.append(message)
 
+    def send_room_message(self, room_id, formatted_data):
+        # type: (str, Formatted) -> None
+        room = self.rooms[room_id]
+
+        if not room.encrypted:
+            return
+
+        missing = self.olm.get_missing_sessions(room.users.keys())
+
+        if missing:
+            W.prnt("", "{prefix}matrix: Olm session missing for room, can't"
+                       " encrypt message.")
+            W.prnt("", pprint.pformat(missing))
+            # message = MatrixKeyClaimMessage(self.client, missing)
+            # self.send_or_queue(message)
+            # TODO claim keys for the missing user/device combinations
+            return
+
+        # self.send_queue.append(message)
+
     @encrypt_enabled
     def upload_keys(self, device_keys=False, one_time_keys=False):
         keys = self.olm.account.identity_keys() if device_keys else None

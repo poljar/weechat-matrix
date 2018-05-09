@@ -134,6 +134,9 @@ def matrix_me_command_cb(data, buffer, args):
                 room_id=room_id,
                 formatted_message=formatted_data)
 
+            if server.rooms[room_id].encrypted:
+                return W.WEECHAT_RC_OK
+
             server.send_or_queue(message)
 
             return W.WEECHAT_RC_OK

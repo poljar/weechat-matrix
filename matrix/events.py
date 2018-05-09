@@ -18,6 +18,7 @@ from __future__ import unicode_literals
 from builtins import str
 
 import json
+import pprint
 
 from collections import deque, defaultdict
 from functools import partial
@@ -337,10 +338,12 @@ class MatrixKeyQueryEvent(MatrixEvent):
                                                       device_keys))
             return cls(server, keys)
         except KeyError:
+            # TODO error message
             return MatrixErrorEvent.from_dict(server, "Error kicking user",
                                               False, parsed_dict)
 
     def execute(self):
+        # TODO move this logic into an Olm method
         olm = self.server.olm
 
         if olm.device_keys == self.keys:
@@ -348,6 +351,20 @@ class MatrixKeyQueryEvent(MatrixEvent):
 
         olm.device_keys = self.keys
         # TODO invalidate megolm sessions for rooms that got new devices
+
+
+class MatrixKeyClaimEvent(MatrixEvent):
+
+    def __init__(self, server, keys):
+        self.keys = keys
+        MatrixEvent.__init__(self, server)
+
+    @classmethod
+    def from_dict(cls, server, parsed_dict):
+        raise NotImplementedError
+
+    def execute(self):
+        pass
 
 
 class MatrixBacklogEvent(MatrixEvent):

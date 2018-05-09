@@ -20,6 +20,7 @@ from __future__ import unicode_literals
 import os
 import json
 import sqlite3
+import pprint
 
 # pylint: disable=redefined-builtin
 from builtins import str, bytes
@@ -34,7 +35,11 @@ try:
     from olm.account import Account, OlmAccountError
     from olm.session import (Session, InboundSession, OlmSessionError,
                              OlmPreKeyMessage)
-    from olm.group_session import InboundGroupSession, OlmGroupSessionError
+    from olm.group_session import (
+        InboundGroupSession,
+        OutboundGroupSession,
+        OlmGroupSessionError
+    )
 except ImportError:
     matrix.globals.ENCRYPTION = False
 
@@ -229,6 +234,7 @@ class Olm():
 
         self.sessions = sessions
         self.inbound_group_sessions = inbound_group_sessions
+        self.outbound_group_sessions = {}
 
     def _create_session(self, sender, sender_key, message):
         W.prnt("", "matrix: Creating session for {}".format(sender))
@@ -244,6 +250,32 @@ class Olm():
         session = InboundGroupSession(session_key)
         self.inbound_group_sessions[room_id][session_id] = session
         self._store_inbound_group_session(room_id, session)
+
+    def create_outbound_group_session(self, room_id):
+        session = OutboundGroupSession()
+        self.outbound_group_sessions[room_id] = session
+        self.create_group_session(room_id, session.id, session.session_key)
+
+    @encrypt_enabled
+    def get_missing_sessions(self, users):
+        # type: (List[str]) -> Dict[str, Dict[str, str]]
+        missing = {}
+
+        for user in users:
+            devices = []
+
+            for key in self.device_keys[user]:
+                # we don't need a session for our own device, skip it
+                if key.device_id == self.device_id:
+                    continue
+
+                if not self.sessions[user][key.device_id]:
+                    devices.append(key.device_id)
+
+            if devices:
+                missing[user] = {device: "ed25519" for device in devices}
+
+        return missing
 
     @encrypt_enabled
     def decrypt(self, sender, sender_key, message):
