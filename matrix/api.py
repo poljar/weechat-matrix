@@ -94,6 +94,19 @@ class MatrixClient:
 
         return HttpRequest(RequestType.GET, self.host, path)
 
+    def room_encrypted_message(self, room_id, content):
+        # type: (str, Dict[Any, Any]) -> HttpRequest
+        query_parameters = {"access_token": self.access_token}
+
+        path = ("{api}/rooms/{room}/send/m.room.encrypted/"
+                "{tx_id}?{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    room=quote(room_id),
+                    tx_id=quote(str(self._get_txn_id())),
+                    query_parameters=urlencode(query_parameters))
+
+        return HttpRequest(RequestType.PUT, self.host, path, content)
+
     def room_send_message(self,
                           room_id,
                           message_type,
@@ -306,6 +319,18 @@ class MatrixClient:
         }
 
         return HttpRequest(RequestType.POST, self.host, path, content)
+
+    def to_device(self, event_type, content):
+        query_parameters = {"access_token": self.access_token}
+
+        path = ("{api}/sendToDevice/{event_type}/{tx_id}?"
+                "{query_parameters}").format(
+                    api=MATRIX_API_PATH,
+                    event_type=event_type,
+                    tx_id=quote(str(self._get_txn_id())),
+                    query_parameters=urlencode(query_parameters))
+
+        return HttpRequest(RequestType.PUT, self.host, path, content)
 
     def mxc_to_http(self, mxc):
         # type: (str) -> str
@@ -646,5 +671,49 @@ class MatrixKeyClaimMessage(MatrixMessage):
     def decode_body(self, server):
         object_hook = partial(MatrixEvents.MatrixKeyClaimEvent.from_dict,
                               server)
+
+        return self._decode(server, object_hook)
+
+
+class MatrixToDeviceMessage(MatrixMessage):
+    def __init__(self, client, to_device_dict):
+        data = {
+            "content": to_device_dict,
+            "event_type": "m.room.encrypted"
+        }
+
+        MatrixMessage.__init__(self, client.to_device, data)
+
+    def decode_body(self, server):
+        object_hook = partial(MatrixEvents.MatrixToDeviceEvent.from_dict,
+                              server)
+
+        return self._decode(server, object_hook)
+
+
+class MatrixEncryptedMessage(MatrixMessage):
+
+    def __init__(self,
+                 client,
+                 room_id,
+                 formatted_message,
+                 content):
+        self.room_id = room_id
+        self.formatted_message = formatted_message
+
+        data = {
+            "room_id": self.room_id,
+            "content": content
+        }
+
+        MatrixMessage.__init__(self, client.room_encrypted_message, data)
+
+    def decode_body(self, server):
+        object_hook = partial(
+            MatrixEvents.MatrixSendEvent.from_dict,
+            server,
+            self.room_id,
+            self.formatted_message,
+        )
 
         return self._decode(server, object_hook)

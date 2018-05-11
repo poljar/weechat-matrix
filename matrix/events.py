@@ -367,6 +367,23 @@ class MatrixKeyClaimEvent(MatrixEvent):
         pass
 
 
+class MatrixToDeviceEvent(MatrixEvent):
+
+    def __init__(self, server):
+        MatrixEvent.__init__(self, server)
+
+    @classmethod
+    def from_dict(cls, server, parsed_dict):
+        try:
+            if parsed_dict == {}:
+                return cls(server)
+
+            raise KeyError
+        except KeyError:
+            return MatrixErrorEvent.from_dict(server, ("Error sending to "
+                                                       "device message"),
+                                              False, parsed_dict)
+
 class MatrixBacklogEvent(MatrixEvent):
 
     def __init__(self, server, room_id, end_token, events):

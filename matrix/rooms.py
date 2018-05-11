@@ -652,6 +652,11 @@ class RoomMemberJoin(RoomEvent):
 
         # calculate room display name and set it as the buffer list name
         room_name = room.display_name(server.user_id)
+
+        # A user has joined an encrypted room, we need to check for new devices
+        if room.encrypted:
+            server.device_check_timestamp = None
+
         W.buffer_set(buff, "short_name", room_name)
 
 

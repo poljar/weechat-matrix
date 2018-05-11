@@ -34,7 +34,7 @@ import matrix.globals
 try:
     from olm.account import Account, OlmAccountError
     from olm.session import (Session, InboundSession, OlmSessionError,
-                             OlmPreKeyMessage)
+                             OlmMessage, OlmPreKeyMessage)
     from olm.group_session import (
         InboundGroupSession,
         OutboundGroupSession,
@@ -313,6 +313,29 @@ class Olm():
         except OlmSessionError:
             return None
 
+    def group_encrypt(self, room_id, plaintext_dict):
+        # type: (str, Dict[str, str]) -> Dict[str, str], Bool
+        is_new = False
+        plaintext_dict["room_id"] = room_id
+
+        if not room_id in self.outbound_group_sessions:
+            self.create_outbound_group_session(room_id)
+            is_new = True
+
+        session = self.outbound_group_sessions[room_id]
+
+        ciphertext = session.encrypt(Olm._to_json(plaintext_dict))
+
+        payload_dict = {
+            "algorithm": "m.megolm.v1.aes-sha2",
+            "sender_key": self.account.identity_keys()["curve25519"],
+            "ciphertext": ciphertext,
+            "session_id": session.id,
+            "device_id": self.device_id
+        }
+
+        return payload_dict, is_new
+
     @encrypt_enabled
     def group_decrypt(self, room_id, session_id, ciphertext):
         if session_id not in self.inbound_group_sessions[room_id]:
@@ -325,6 +348,69 @@ class Olm():
             return None
 
         return plaintext
+
+    def share_group_session(self, room_id, own_id, users):
+        group_session = self.outbound_group_sessions[room_id]
+
+        key_content = {
+            "algorithm": "m.megolm.v1.aes-sha2",
+            "room_id": room_id,
+            "session_id": group_session.id,
+            "session_key": group_session.session_key,
+            "chain_index": group_session.message_index
+        }
+
+        payload_dict = {
+            "type": "m.room_key",
+            "content": key_content,
+            # TODO we don't have the user_id in the Olm class
+            "sender": own_id,
+            "sender_device": self.device_id,
+            "keys": {
+                "ed25519": self.account.identity_keys()["ed25519"]
+            }
+        }
+
+        to_device_dict = {
+            "messages": {}
+        }
+
+        for user in users:
+
+            for key in self.device_keys[user]:
+                if key.device_id == self.device_id:
+                    continue
+
+                device_payload_dict = payload_dict.copy()
+                # TODO sort the sessions
+                session = self.sessions[user][key.device_id][0]
+                device_payload_dict["recipient"] = user
+                device_payload_dict["recipient_keys"] = {
+                    "ed25519": key.keys["ed25519"]
+                }
+
+                W.prnt("", pprint.pformat(device_payload_dict))
+
+                olm_message = session.encrypt(Olm._to_json(device_payload_dict))
+
+                olm_dict = {
+                    "algorithm": "m.olm.v1.curve25519-aes-sha2",
+                    "sender_key": self.account.identity_keys()["curve25519"],
+                    "ciphertext": {
+                        key.keys["curve25519"]: {
+                            "type": (0 if isinstance(olm_message,
+                                OlmPreKeyMessage) else 1),
+                            "body": olm_message.ciphertext
+                        }
+                    }
+                }
+
+                to_device_dict["messages"][user] = {
+                    key.device_id: olm_dict
+                }
+
+        return to_device_dict
+        # return {}
 
     @classmethod
     @encrypt_enabled
@@ -473,6 +559,16 @@ class Olm():
         ))
 
         return signature
+
+    @staticmethod
+    def _to_json(json_dict):
+        # type: (Dict[Any, Any]) -> str
+        return json.dumps(
+            json_dict,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True
+        )
 
     @encrypt_enabled
     def mark_keys_as_published(self):

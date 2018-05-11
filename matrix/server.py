@@ -38,7 +38,9 @@ from matrix.api import (
     MatrixSyncMessage,
     MatrixLoginMessage,
     MatrixKeyUploadMessage,
-    MatrixKeyQueryMessage
+    MatrixKeyQueryMessage,
+    MatrixToDeviceMessage,
+    MatrixEncryptedMessage
 )
 
 from matrix.encryption import Olm, EncryptionError, encrypt_enabled
@@ -483,6 +485,7 @@ class MatrixServer:
         if not room.encrypted:
             return
 
+        # TODO don't send messages unless all the devices are verified
         missing = self.olm.get_missing_sessions(room.users.keys())
 
         if missing:
@@ -494,7 +497,42 @@ class MatrixServer:
             # TODO claim keys for the missing user/device combinations
             return
 
-        # self.send_queue.append(message)
+        body = {"msgtype": "m.text", "body": formatted_data.to_plain()}
+
+        if formatted_data.is_formatted():
+            body["format"] = "org.matrix.custom.html"
+            body["formatted_body"] = formatted_data.to_html()
+
+        plaintext_dict = {
+            "type": "m.room.message",
+            "content": body
+        }
+
+        W.prnt("", "matrix: Encrypting message")
+
+        payload_dict, session_is_new = self.olm.group_encrypt(
+            room_id,
+            plaintext_dict
+        )
+
+        if session_is_new:
+            to_device_dict = self.olm.share_group_session(
+                room_id,
+                self.user_id,
+                room.users.keys()
+            )
+            message = MatrixToDeviceMessage(self.client, to_device_dict)
+            W.prnt("", "matrix: Megolm session missing for room.")
+            self.send_queue.append(message)
+
+        message = MatrixEncryptedMessage(
+            self.client,
+            room_id,
+            formatted_data,
+            payload_dict
+        )
+
+        self.send_queue.append(message)
 
     @encrypt_enabled
     def upload_keys(self, device_keys=False, one_time_keys=False):
