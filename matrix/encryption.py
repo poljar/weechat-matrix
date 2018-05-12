@@ -34,7 +34,7 @@ import matrix.globals
 try:
     from olm.account import Account, OlmAccountError
     from olm.session import (Session, InboundSession, OlmSessionError,
-                             OlmMessage, OlmPreKeyMessage)
+                             OlmPreKeyMessage)
     from olm.group_session import (
         InboundGroupSession,
         OutboundGroupSession,
@@ -318,7 +318,7 @@ class Olm():
         is_new = False
         plaintext_dict["room_id"] = room_id
 
-        if not room_id in self.outbound_group_sessions:
+        if room_id not in self.outbound_group_sessions:
             self.create_outbound_group_session(room_id)
             is_new = True
 
@@ -391,15 +391,19 @@ class Olm():
 
                 W.prnt("", pprint.pformat(device_payload_dict))
 
-                olm_message = session.encrypt(Olm._to_json(device_payload_dict))
+                olm_message = session.encrypt(
+                    Olm._to_json(device_payload_dict)
+                )
 
                 olm_dict = {
                     "algorithm": "m.olm.v1.curve25519-aes-sha2",
                     "sender_key": self.account.identity_keys()["curve25519"],
                     "ciphertext": {
                         key.keys["curve25519"]: {
-                            "type": (0 if isinstance(olm_message,
-                                OlmPreKeyMessage) else 1),
+                            "type": (0 if isinstance(
+                                olm_message,
+                                OlmPreKeyMessage
+                            ) else 1),
                             "body": olm_message.ciphertext
                         }
                     }
@@ -410,7 +414,6 @@ class Olm():
                 }
 
         return to_device_dict
-        # return {}
 
     @classmethod
     @encrypt_enabled
