@@ -313,14 +313,14 @@ class Olm():
         except OlmSessionError:
             return None
 
-    def group_encrypt(self, room_id, plaintext_dict):
-        # type: (str, Dict[str, str]) -> Dict[str, str], Bool
-        is_new = False
+    def group_encrypt(self, room_id, plaintext_dict, own_id, users):
+        # type: (str, Dict[str, str]) -> Dict[str, str], Optional[Dict[Any, Any]]
         plaintext_dict["room_id"] = room_id
+        to_device_dict = None
 
         if room_id not in self.outbound_group_sessions:
             self.create_outbound_group_session(room_id)
-            is_new = True
+            to_device_dict = self.share_group_session(room_id, own_id, users)
 
         session = self.outbound_group_sessions[room_id]
 
@@ -334,7 +334,7 @@ class Olm():
             "device_id": self.device_id
         }
 
-        return payload_dict, is_new
+        return payload_dict, to_device_dict
 
     @encrypt_enabled
     def group_decrypt(self, room_id, session_id, ciphertext):

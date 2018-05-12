@@ -510,19 +510,16 @@ class MatrixServer:
 
         W.prnt("", "matrix: Encrypting message")
 
-        payload_dict, session_is_new = self.olm.group_encrypt(
+        payload_dict, to_device_dict = self.olm.group_encrypt(
             room_id,
-            plaintext_dict
+            plaintext_dict,
+            self.user_id,
+            room.users.keys()
         )
 
-        if session_is_new:
-            to_device_dict = self.olm.share_group_session(
-                room_id,
-                self.user_id,
-                room.users.keys()
-            )
-            message = MatrixToDeviceMessage(self.client, to_device_dict)
+        if to_device_dict:
             W.prnt("", "matrix: Megolm session missing for room.")
+            message = MatrixToDeviceMessage(self.client, to_device_dict)
             self.send_queue.append(message)
 
         message = MatrixEncryptedMessage(
