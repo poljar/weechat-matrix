@@ -409,9 +409,10 @@ class Olm():
                     }
                 }
 
-                to_device_dict["messages"][user] = {
-                    key.device_id: olm_dict
-                }
+                if user not in to_device_dict["messages"]:
+                    to_device_dict["messages"][user] = {}
+
+                to_device_dict["messages"][user][key.device_id] = olm_dict
 
         return to_device_dict
 
