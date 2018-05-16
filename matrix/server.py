@@ -24,7 +24,7 @@ import time
 import datetime
 import pprint
 
-from collections import deque
+from collections import deque, defaultdict
 from http_parser.pyparser import HttpParser
 
 from matrix.plugin_options import Option, DebugType
@@ -40,7 +40,8 @@ from matrix.api import (
     MatrixKeyUploadMessage,
     MatrixKeyQueryMessage,
     MatrixToDeviceMessage,
-    MatrixEncryptedMessage
+    MatrixEncryptedMessage,
+    MatrixKeyClaimMessage
 )
 
 from matrix.encryption import Olm, EncryptionError, encrypt_enabled
@@ -63,7 +64,9 @@ class MatrixServer:
         self.options = dict()                # type: Dict[str, weechat.config]
         self.device_name = "Weechat Matrix"  # type: str
         self.device_id = ""                  # type: str
+
         self.olm = None                      # type: Olm
+        self.encryption_queue = defaultdict(deque)
 
         self.user = ""                       # type: str
         self.password = ""                   # type: str
@@ -478,7 +481,12 @@ class MatrixServer:
         message = MatrixSyncMessage(self.client, self.next_batch, limit)
         self.send_queue.append(message)
 
-    def send_room_message(self, room_id, formatted_data):
+    def send_room_message(
+        self,
+        room_id,
+        formatted_data,
+        already_claimed=False
+    ):
         # type: (str, Formatted) -> None
         room = self.rooms[room_id]
 
@@ -488,13 +496,13 @@ class MatrixServer:
         # TODO don't send messages unless all the devices are verified
         missing = self.olm.get_missing_sessions(room.users.keys())
 
-        if missing:
+        if missing and not already_claimed:
             W.prnt("", "{prefix}matrix: Olm session missing for room, can't"
                        " encrypt message.")
             W.prnt("", pprint.pformat(missing))
-            # message = MatrixKeyClaimMessage(self.client, missing)
-            # self.send_or_queue(message)
-            # TODO claim keys for the missing user/device combinations
+            self.encryption_queue[room_id].append(formatted_data)
+            message = MatrixKeyClaimMessage(self.client, room_id, missing)
+            self.send_or_queue(message)
             return
 
         body = {"msgtype": "m.text", "body": formatted_data.to_plain()}

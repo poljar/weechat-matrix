@@ -31,7 +31,7 @@ from matrix.rooms import (matrix_create_room_buffer, RoomInfo, RoomMessageText,
                           RoomMessageEvent, RoomRedactedMessageEvent,
                           RoomMessageEmote)
 
-from matrix.encryption import OlmDeviceKey
+from matrix.encryption import OlmDeviceKey, OneTimeKey
 
 try:
     from olm.session import OlmMessage, OlmPreKeyMessage
@@ -355,16 +355,38 @@ class MatrixKeyQueryEvent(MatrixEvent):
 
 class MatrixKeyClaimEvent(MatrixEvent):
 
-    def __init__(self, server, keys):
+    def __init__(self, server, room_id, keys):
         self.keys = keys
+        self.room_id = room_id
         MatrixEvent.__init__(self, server)
 
     @classmethod
-    def from_dict(cls, server, parsed_dict):
-        raise NotImplementedError
+    def from_dict(cls, server, room_id, parsed_dict):
+        W.prnt("", pprint.pformat(parsed_dict))
+        keys = []
+        try:
+            for user_id, user_dict in parsed_dict["one_time_keys"].items():
+                for device_id, device_dict in user_dict.items():
+                    for key_dict in device_dict.values():
+                        # TODO check the signature of the key
+                        key = OneTimeKey(user_id, device_id, key_dict["key"])
+                        keys.append(key)
+
+            return cls(server, room_id, keys)
+        except KeyError:
+            return MatrixErrorEvent.from_dict(
+                server, ("Error claiming onetime keys."), False, parsed_dict)
 
     def execute(self):
-        pass
+        server = self.server
+        olm = server.olm
+
+        for key in self.keys:
+            olm.create_session(key.user_id, key.device_id, key.key)
+
+        while server.encryption_queue[self.room_id]:
+            formatted_message = server.encryption_queue[self.room_id].popleft()
+            server.send_room_message(self.room_id, formatted_message, True)
 
 
 class MatrixToDeviceEvent(MatrixEvent):
@@ -383,6 +405,7 @@ class MatrixToDeviceEvent(MatrixEvent):
             return MatrixErrorEvent.from_dict(server, ("Error sending to "
                                                        "device message"),
                                               False, parsed_dict)
+
 
 class MatrixBacklogEvent(MatrixEvent):
 

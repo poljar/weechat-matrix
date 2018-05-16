@@ -306,7 +306,7 @@ class MatrixClient:
 
         return HttpRequest(RequestType.POST, self.host, path, content)
 
-    def key_claim(self, key_dict):
+    def keys_claim(self, key_dict):
         query_parameters = {"access_token": self.access_token}
 
         path = ("{api}/keys/claim?"
@@ -315,7 +315,8 @@ class MatrixClient:
                     query_parameters=urlencode(query_parameters))
 
         content = {
-            "one_time_keys": {key_dict}
+            "one_time_keys": key_dict,
+            "timeout": 10000
         }
 
         return HttpRequest(RequestType.POST, self.host, path, content)
@@ -661,16 +662,17 @@ class MatrixKeyQueryMessage(MatrixMessage):
 
 class MatrixKeyClaimMessage(MatrixMessage):
 
-    def __init__(self, client, key_dict):
+    def __init__(self, client, room_id, key_dict):
+        self.room_id = room_id
         data = {
             "key_dict": key_dict,
         }
 
-        MatrixMessage.__init__(self, client.keys_query, data)
+        MatrixMessage.__init__(self, client.keys_claim, data)
 
     def decode_body(self, server):
         object_hook = partial(MatrixEvents.MatrixKeyClaimEvent.from_dict,
-                              server)
+                              server, self.room_id)
 
         return self._decode(server, object_hook)
 

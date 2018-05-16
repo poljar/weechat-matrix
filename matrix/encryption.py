@@ -33,8 +33,8 @@ import matrix.globals
 
 try:
     from olm.account import Account, OlmAccountError
-    from olm.session import (Session, InboundSession, OlmSessionError,
-                             OlmPreKeyMessage)
+    from olm.session import (Session, InboundSession, OutboundSession,
+                             OlmSessionError, OlmPreKeyMessage)
     from olm.group_session import (
         InboundGroupSession,
         OutboundGroupSession,
@@ -193,6 +193,14 @@ class OlmDeviceKey():
         self.keys = key_dict
 
 
+class OneTimeKey():
+    def __init__(self, user_id, device_id, key):
+        # type: (str, str, str) -> None
+        self.user_id = user_id
+        self.device_id = device_id
+        self.key = key
+
+
 class Olm():
 
     @encrypt_enabled
@@ -245,6 +253,28 @@ class Olm():
 
         return session
 
+    def create_session(self, user_id, device_id, one_time_key):
+        W.prnt("", "matrix: Creating session for {}".format(user_id))
+        id_key = None
+
+        for user, keys in self.device_keys.items():
+            if user != user_id:
+                continue
+
+            for key in keys:
+                if key.device_id == device_id:
+                    id_key = key.keys["curve25519"]
+                    break
+
+        if not id_key:
+            W.prnt("", "ERRR not found ID key")
+        W.prnt("", "Found id key {}".format(id_key))
+        session = OutboundSession(self.account, id_key, one_time_key)
+        self._update_acc_in_db()
+        self.sessions[user_id][device_id].append(session)
+        self._store_session(user_id, device_id, session)
+        W.prnt("", "matrix: Created session for {}".format(user_id))
+
     def create_group_session(self, room_id, session_id, session_key):
         W.prnt("", "matrix: Creating group session for {}".format(room_id))
         session = InboundGroupSession(session_key)
@@ -270,10 +300,12 @@ class Olm():
                     continue
 
                 if not self.sessions[user][key.device_id]:
+                    W.prnt("", "Missing session for device {}".format(key.device_id))
                     devices.append(key.device_id)
 
             if devices:
-                missing[user] = {device: "ed25519" for device in devices}
+                missing[user] = {device: "signed_curve25519" for
+                                 device in devices}
 
         return missing
 
@@ -376,9 +408,14 @@ class Olm():
         }
 
         for user in users:
+            if user not in self.device_keys:
+                continue
 
             for key in self.device_keys[user]:
                 if key.device_id == self.device_id:
+                    continue
+
+                if not self.sessions[user][key.device_id]:
                     continue
 
                 device_payload_dict = payload_dict.copy()
@@ -388,8 +425,6 @@ class Olm():
                 device_payload_dict["recipient_keys"] = {
                     "ed25519": key.keys["ed25519"]
                 }
-
-                W.prnt("", pprint.pformat(device_payload_dict))
 
                 olm_message = session.encrypt(
                     Olm._to_json(device_payload_dict)
@@ -414,6 +449,7 @@ class Olm():
 
                 to_device_dict["messages"][user][key.device_id] = olm_dict
 
+        # W.prnt("", pprint.pformat(to_device_dict))
         return to_device_dict
 
     @classmethod
