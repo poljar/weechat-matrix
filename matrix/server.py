@@ -44,7 +44,12 @@ from matrix.api import (
     MatrixKeyClaimMessage
 )
 
-from matrix.encryption import Olm, EncryptionError, encrypt_enabled
+from matrix.encryption import (
+    Olm,
+    EncryptionError,
+    OlmTrustError,
+    encrypt_enabled
+)
 
 try:
     FileNotFoundError
@@ -518,26 +523,34 @@ class MatrixServer:
 
         W.prnt("", "matrix: Encrypting message")
 
-        payload_dict, to_device_dict = self.olm.group_encrypt(
-            room_id,
-            plaintext_dict,
-            self.user_id,
-            room.users.keys()
-        )
+        try:
+            payload_dict, to_device_dict = self.olm.group_encrypt(
+                room_id,
+                plaintext_dict,
+                self.user_id,
+                room.users.keys()
+            )
 
-        if to_device_dict:
-            W.prnt("", "matrix: Megolm session missing for room.")
-            message = MatrixToDeviceMessage(self.client, to_device_dict)
+            if to_device_dict:
+                W.prnt("", "matrix: Megolm session missing for room.")
+                message = MatrixToDeviceMessage(self.client, to_device_dict)
+                self.send_queue.append(message)
+
+            message = MatrixEncryptedMessage(
+                self.client,
+                room_id,
+                formatted_data,
+                payload_dict
+            )
+
             self.send_queue.append(message)
 
-        message = MatrixEncryptedMessage(
-            self.client,
-            room_id,
-            formatted_data,
-            payload_dict
-        )
-
-        self.send_queue.append(message)
+        except OlmTrustError:
+            m = ("{prefix}matrix: Untrusted devices found in room, "
+                 "verification is needed before sending a message").format(
+                    prefix=W.prefix("error"))
+            W.prnt(self.server_buffer, m)
+            return
 
     @encrypt_enabled
     def upload_keys(self, device_keys=False, one_time_keys=False):

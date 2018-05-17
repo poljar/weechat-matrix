@@ -59,6 +59,10 @@ class ParseError(Exception):
     pass
 
 
+class OlmTrustError(Exception):
+    pass
+
+
 class WeechatArgParse(argparse.ArgumentParser):
     def print_usage(self, file):
         pass
@@ -470,6 +474,7 @@ class Olm():
         self.session_path = session_path
         self.database = database
         self.device_keys = {}
+        self.shared_sessions = []
 
         if not database:
             db_file = "{}_{}.db".format(user, device_id)
@@ -615,7 +620,12 @@ class Olm():
 
         if room_id not in self.outbound_group_sessions:
             self.create_outbound_group_session(room_id)
+
+        if self.outbound_group_sessions[room_id].id not in self.shared_sessions:
             to_device_dict = self.share_group_session(room_id, own_id, users)
+            self.shared_sessions.append(
+                self.outbound_group_sessions[room_id].id
+            )
 
         session = self.outbound_group_sessions[room_id]
 
@@ -680,6 +690,9 @@ class Olm():
 
                 if not self.sessions[user][key.device_id]:
                     continue
+
+                if not self.trust_db.check(key):
+                    raise OlmTrustError
 
                 device_payload_dict = payload_dict.copy()
                 # TODO sort the sessions
