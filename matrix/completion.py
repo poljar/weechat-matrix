@@ -118,6 +118,59 @@ def matrix_message_completion_cb(data, completion_item, buffer, completion):
     return W.WEECHAT_RC_OK
 
 
+def server_from_buffer(buffer):
+    for server in SERVERS.values():
+            if buffer in server.buffers.values():
+                return server
+            elif buffer == server.server_buffer:
+                return server
+    return None
+
+
+@utf8_decode
+def matrix_olm_user_completion_cb(data, completion_item, buffer, completion):
+    server = server_from_buffer(buffer)
+
+    if not server:
+        return W.WEECHAT_RC_OK
+
+    olm = server.olm
+
+    for user in olm.device_keys:
+        W.hook_completion_list_add(completion, user, 0,
+                                   W.WEECHAT_LIST_POS_SORT)
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
+    server = server_from_buffer(buffer)
+
+    if not server:
+        return W.WEECHAT_RC_OK
+
+    olm = server.olm
+
+    args = W.hook_completion_get_string(completion, "args")
+
+    fields = args.split()
+
+    if len(fields) < 2:
+        return W.WEECHAT_RC_OK
+
+    user = fields[1]
+
+    if user not in olm.device_keys:
+        return W.WEECHAT_RC_OK
+
+    for device in olm.device_keys[user]:
+        W.hook_completion_list_add(completion, device.device_id, 0,
+                                   W.WEECHAT_LIST_POS_SORT)
+
+    return W.WEECHAT_RC_OK
+
+
 def init_completion():
     W.hook_completion("matrix_server_commands", "Matrix server completion",
                       "matrix_server_command_completion_cb", "")
@@ -133,3 +186,9 @@ def init_completion():
 
     W.hook_completion("matrix_debug_types", "Matrix debugging type completion",
                       "matrix_debug_completion_cb", "")
+
+    W.hook_completion("olm_user_ids", "Matrix olm user id completion",
+                      "matrix_olm_user_completion_cb", "")
+
+    W.hook_completion("olm_devices", "Matrix olm device id completion",
+                      "matrix_olm_device_completion_cb", "")

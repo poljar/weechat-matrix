@@ -126,7 +126,7 @@ def matrix_hook_olm_command():
         ('info all|blacklisted|private|unverified|verified ||'
          'blacklist %(device_ids) ||'
          'unverify %(user_ids) %(device_ids) ||'
-         'verify %(user_ids) %(device_ids)'),
+         'verify %(olm_user_ids) %(olm_devices)'),
         # Function name
         'matrix_olm_command_cb',
         '')
