@@ -39,10 +39,14 @@ except NameError:
 import matrix.globals
 
 try:
-    from olm.account import Account, OlmAccountError
-    from olm.session import (Session, InboundSession, OutboundSession,
-                             OlmSessionError, OlmPreKeyMessage)
-    from olm.group_session import (
+    from olm import (
+        Account,
+        OlmAccountError,
+        Session,
+        InboundSession,
+        OutboundSession,
+        OlmSessionError,
+        OlmPreKeyMessage,
         InboundGroupSession,
         OutboundGroupSession,
         OlmGroupSessionError
@@ -787,7 +791,7 @@ class Olm():
                     cursor.execute("""update olmsessions set pickle=?
                                       where user = ? and session_id = ? and
                                       device_id = ?""",
-                                   (session.pickle(), user, session.id(),
+                                   (session.pickle(), user, session.id,
                                     device_id))
         self.database.commit()
 
@@ -800,7 +804,7 @@ class Olm():
             for session in session_dict.values():
                 cursor.execute("""update inbound_group_sessions set pickle=?
                                   where room_id = ? and session_id = ?""",
-                               (session.pickle(), room_id, session.id()))
+                               (session.pickle(), room_id, session.id))
         self.database.commit()
 
         cursor.close()
@@ -809,7 +813,7 @@ class Olm():
         cursor = self.database.cursor()
 
         cursor.execute("insert into olmsessions values(?,?,?,?)",
-                       (user, device_id, session.id(), session.pickle()))
+                       (user, device_id, session.id, session.pickle()))
 
         self.database.commit()
 

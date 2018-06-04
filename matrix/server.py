@@ -556,7 +556,7 @@ class MatrixServer:
     def upload_keys(self, device_keys=False, one_time_keys=False):
         keys = self.olm.account.identity_keys() if device_keys else None
 
-        one_time_keys = (self.olm.account.one_time_keys()["curve25519"] if
+        one_time_keys = (self.olm.account.one_time_keys["curve25519"] if
                          one_time_keys else None)
 
         message = MatrixKeyUploadMessage(self.client, self.user_id,
@@ -566,7 +566,7 @@ class MatrixServer:
 
     @encrypt_enabled
     def check_one_time_keys(self, key_count):
-        max_keys = self.olm.account.max_one_time_keys()
+        max_keys = self.olm.account.max_one_time_keys
 
         key_count = (max_keys / 2) - key_count
 
