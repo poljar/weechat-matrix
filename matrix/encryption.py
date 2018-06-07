@@ -759,15 +759,31 @@ class Olm():
         inbound_group_sessions = defaultdict(dict)
 
         try:
-            account = Account.from_pickle(bytes(account_pickle, "utf-8"))
+            try:
+                account_pickle = bytes(account_pickle, "utf-8")
+            except TypeError:
+                pass
+
+            account = Account.from_pickle(account_pickle)
 
             for db_session in db_sessions:
+                session_pickle = db_session[2]
+                try:
+                    session_pickle = bytes(session_pickle, "utf-8")
+                except TypeError:
+                    pass
+
                 sessions[db_session[0]][db_session[1]].append(
-                    Session.from_pickle(bytes(db_session[2], "utf-8")))
+                    Session.from_pickle(session_pickle))
 
             for db_session in db_inbound_group_sessions:
-                session = InboundGroupSession.from_pickle(
-                    bytes(db_session[1], "utf-8"))
+                session_pickle = db_session[1]
+                try:
+                    session_pickle = bytes(session_pickle, "utf-8")
+                except TypeError:
+                    pass
+
+                session = InboundGroupSession.from_pickle(session_pickle)
                 inbound_group_sessions[db_session[0]][session.id] = session
 
             return cls(user, device_id, session_path, database, account,
