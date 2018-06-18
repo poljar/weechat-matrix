@@ -250,7 +250,9 @@ class RoomInfo():
         state_event = None
         message_event = None
 
-        if event_dict["type"] == "m.room.message":
+        if "redacted_by" in event_dict["unsigned"]:
+            message_event = RoomRedactedMessageEvent.from_dict(event_dict)
+        elif event_dict["type"] == "m.room.message":
             message_event = RoomInfo._message_from_event(event_dict)
         elif event_dict["type"] == "m.room.member":
             state_event, message_event = (
@@ -309,10 +311,11 @@ class RoomInfo():
                 message_events.append(s_event)
         except (ValueError, TypeError, KeyError) as error:
             message = ("{prefix}matrix: Error parsing "
-                       "room event of type {type}: {error}").format(
+                       "room event of type {type}: {error}\n{event}").format(
                            prefix=W.prefix("error"),
                            type=event["type"],
-                           error=pformat(error))
+                           error=pformat(error),
+                           event=pformat(event))
             W.prnt("", message)
             raise
 
