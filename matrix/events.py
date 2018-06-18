@@ -553,7 +553,7 @@ class MatrixSyncEvent(MatrixEvent):
 
     @staticmethod
     def _get_olm_device_event(server, parsed_dict):
-        device_key = server.olm.account.identity_keys()["curve25519"]
+        device_key = server.olm.account.identity_keys["curve25519"]
 
         if device_key not in parsed_dict["content"]["ciphertext"]:
             return None
@@ -585,7 +585,7 @@ class MatrixSyncEvent(MatrixEvent):
 
         if (sender != decrypted_sender or
                 server.user_id != decrypted_recepient or
-                olm.account.identity_keys()["ed25519"] !=
+                olm.account.identity_keys["ed25519"] !=
                 decrypted_recepient_key):
             error_message = ("{prefix}matrix: Mismatch in decrypted Olm "
                              "message").format(prefix=W.prefix("error"))

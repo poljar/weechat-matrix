@@ -181,8 +181,8 @@ def olm_info_command(server, args):
     if args.category == "private":
         device_msg = ("  - Device ID:       {}\n".format(server.device_id)
                       if server.device_id else "")
-        id_key = partition_key(olm.account.identity_keys()["curve25519"])
-        fp_key = partition_key(olm.account.identity_keys()["ed25519"])
+        id_key = partition_key(olm.account.identity_keys["curve25519"])
+        fp_key = partition_key(olm.account.identity_keys["ed25519"])
         message = ("{prefix}matrix: Identity keys:\n"
                    "  - User:            {user}\n"
                    "{device_msg}"
@@ -637,7 +637,7 @@ class Olm():
 
         payload_dict = {
             "algorithm": "m.megolm.v1.aes-sha2",
-            "sender_key": self.account.identity_keys()["curve25519"],
+            "sender_key": self.account.identity_keys["curve25519"],
             "ciphertext": ciphertext,
             "session_id": session.id,
             "device_id": self.device_id
@@ -676,7 +676,7 @@ class Olm():
             "sender": own_id,
             "sender_device": self.device_id,
             "keys": {
-                "ed25519": self.account.identity_keys()["ed25519"]
+                "ed25519": self.account.identity_keys["ed25519"]
             }
         }
 
@@ -712,7 +712,7 @@ class Olm():
 
                 olm_dict = {
                     "algorithm": "m.olm.v1.curve25519-aes-sha2",
-                    "sender_key": self.account.identity_keys()["curve25519"],
+                    "sender_key": self.account.identity_keys["curve25519"],
                     "ciphertext": {
                         key.keys["curve25519"]: {
                             "type": (0 if isinstance(
