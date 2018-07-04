@@ -1,25 +1,31 @@
+import random
+import string
+import datetime
+
+
+weechat_base_colors = {
+    "black":        "0",
+    "red":          "1",
+    "green":        "2",
+    "brown":        "3",
+    "blue":         "4",
+    "magenta":      "5",
+    "cyan":         "6",
+    "default":      "7",
+    "gray":         "8",
+    "lightred":     "9",
+    "lightgreen":   "10",
+    "yellow":       "11",
+    "lightblue":    "12",
+    "lightmagenta": "13",
+    "lightcyan":    "14",
+    "white":        "15"
+}
+
+
 def color(color_name):
     # type: (str) -> str
     # yapf: disable
-    weechat_base_colors = {
-        "black":        "0",
-        "red":          "1",
-        "green":        "2",
-        "brown":        "3",
-        "blue":         "4",
-        "magenta":      "5",
-        "cyan":         "6",
-        "default":      "7",
-        "gray":         "8",
-        "lightred":     "9",
-        "lightgreen":   "10",
-        "yellow":       "11",
-        "lightblue":    "12",
-        "lightmagenta": "13",
-        "lightcyan":    "14",
-        "white":        "15"
-    }
-
     escape_codes = []
     reset_code = "0"
 
@@ -111,6 +117,15 @@ def prnt(_, string):
     print(string)
 
 
+def prnt_date_tags(_, date, tags_string, data):
+    message = "{} {} [{}]".format(
+        datetime.datetime.fromtimestamp(date),
+        data,
+        tags_string
+    )
+    print(message)
+
+
 def config_search_section(*args, **kwargs):
     pass
 
@@ -124,4 +139,33 @@ def mkdir_home(*args, **kwargs):
 
 
 def info_get(info, *args):
+    if info == "nick_color_name":
+        return random.choice(list(weechat_base_colors.keys()))
+
     return ""
+
+
+def buffer_new(*args, **kwargs):
+    return "".join(
+        random.choice(string.ascii_uppercase + string.digits) for _ in range(8)
+    )
+
+
+def buffer_set(*args, **kwargs):
+    return
+
+
+def nicklist_add_group(*args, **kwargs):
+    return
+
+
+def nicklist_add_nick(*args, **kwargs):
+    return
+
+
+def nicklist_remove_nick(*args, **kwargs):
+    return
+
+
+def nicklist_search_nick(*args, **kwargs):
+    return buffer_new(args, kwargs)

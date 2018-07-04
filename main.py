@@ -78,10 +78,10 @@ from matrix.config import (matrix_config_init, matrix_config_read,
 
 import matrix.globals
 
-from matrix.globals import W, SERVERS
+from matrix.globals import W, SERVERS, SCRIPT_NAME
 
 # yapf: disable
-WEECHAT_SCRIPT_NAME = "matrix"                                 # type: str
+WEECHAT_SCRIPT_NAME = SCRIPT_NAME
 WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"              # type: str
 WEECHAT_SCRIPT_AUTHOR = "Damir Jelić <poljar@termina.org.uk>"  # type: str
 WEECHAT_SCRIPT_VERSION = "0.1"                                 # type: str

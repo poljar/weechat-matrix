@@ -32,3 +32,4 @@ OPTIONS = PluginOptions()  # type: PluginOptions
 SERVERS = dict()  # type: Dict[str, MatrixServer]
 CONFIG = None  # type: weechat.config
 ENCRYPTION = True  # type: bool
+SCRIPT_NAME = "matrix"  # type: str
