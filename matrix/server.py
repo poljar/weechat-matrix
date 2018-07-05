@@ -688,6 +688,9 @@ class MatrixServer:
             left = True
 
         elif isinstance(event, RoomMemberInvite):
+            if is_state_event:
+                return
+
             room_buffer.invite(event.invited_user, date)
             return
 
