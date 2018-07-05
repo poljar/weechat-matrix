@@ -156,45 +156,15 @@ class MatrixUser:
         # yapf: enable
 
 
-def matrix_create_room_buffer(server, room_id):
-    # type: (MatrixServer, str) -> None
-    buf = W.buffer_new(room_id, "room_input_cb", server.name, "room_close_cb",
-                       server.name)
-
-    W.buffer_set(buf, "localvar_set_type", 'channel')
-    W.buffer_set(buf, "type", 'formatted')
-
-    W.buffer_set(buf, "localvar_set_channel", room_id)
-
-    W.buffer_set(buf, "localvar_set_nick", server.user)
-
-    W.buffer_set(buf, "localvar_set_server", server.name)
-
-    short_name = strip_matrix_server(room_id)
-    W.buffer_set(buf, "short_name", short_name)
-
-    W.nicklist_add_group(buf, '', "000|o", "weechat.color.nicklist_group", 1)
-    W.nicklist_add_group(buf, '', "001|h", "weechat.color.nicklist_group", 1)
-    W.nicklist_add_group(buf, '', "002|v", "weechat.color.nicklist_group", 1)
-    W.nicklist_add_group(buf, '', "999|...", "weechat.color.nicklist_group", 1)
-
-    W.buffer_set(buf, "nicklist", "1")
-    W.buffer_set(buf, "nicklist_display_groups", "0")
-
-    # TODO make this configurable
-    W.buffer_set(buf, "highlight_tags_restrict", "matrix_message")
-
-    server.buffers[room_id] = buf
-    server.rooms[room_id] = MatrixRoom(room_id)
-
-
 class RoomInfo():
 
-    def __init__(self, room_id, prev_batch, events):
+    def __init__(self, room_id, prev_batch, state, timeline):
         # type: (str, str, List[Any], List[Any]) -> None
         self.room_id = room_id
         self.prev_batch = prev_batch
-        self.events = deque(events)
+
+        self.state = deque(state)
+        self.timeline = deque(timeline)
 
     @staticmethod
     def _message_from_event(event):
@@ -219,66 +189,40 @@ class RoomInfo():
             raise ValueError
 
         if event_dict["content"]["membership"] == "join":
-            event = RoomMemberJoin.from_dict(event_dict)
-
-            try:
-                message = RoomMembershipMessage(
-                    event.event_id, event.sender, event.timestamp,
-                    "has joined", "join")
-
-                return event, message
-            except AttributeError:
-                return event, None
+            return RoomMemberJoin.from_dict(event_dict)
 
         elif event_dict["content"]["membership"] == "leave":
-            event = RoomMemberLeave.from_dict(event_dict)
+            return RoomMemberLeave.from_dict(event_dict)
 
-            try:
-                msg = ("has left" if event.sender == event.leaving_user else
-                       "has been kicked")
-                message = RoomMembershipMessage(
-                    event.event_id, event.leaving_user, event.timestamp, msg, "quit")
-                return event, message
-            except AttributeError:
-                return event, None
-
-        return None, None
+        return None
 
     @staticmethod
     def parse_event(olm, room_id, event_dict):
         # type: (Dict[Any, Any]) -> (RoomEvent, RoomEvent)
-        state_event = None
-        message_event = None
+        event = None
 
         if "redacted_by" in event_dict["unsigned"]:
-            message_event = RoomRedactedMessageEvent.from_dict(event_dict)
+            event = RoomRedactedMessageEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.message":
-            message_event = RoomInfo._message_from_event(event_dict)
+            event = RoomInfo._message_from_event(event_dict)
         elif event_dict["type"] == "m.room.member":
-            state_event, message_event = (
-                RoomInfo._membership_from_dict(event_dict))
+            event = RoomInfo._membership_from_dict(event_dict)
         elif event_dict["type"] == "m.room.power_levels":
-            state_event = RoomPowerLevels.from_dict(event_dict)
+            event = RoomPowerLevels.from_dict(event_dict)
         elif event_dict["type"] == "m.room.topic":
-            state_event = RoomTopicEvent.from_dict(event_dict)
-            message_event = RoomTopiceMessage(
-                state_event.event_id,
-                state_event.sender,
-                state_event.timestamp,
-                state_event.topic)
+            event = RoomTopicEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.redaction":
-            message_event = RoomRedactionEvent.from_dict(event_dict)
+            event = RoomRedactionEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.name":
-            state_event = RoomNameEvent.from_dict(event_dict)
+            event = RoomNameEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.canonical_alias":
-            state_event = RoomAliasEvent.from_dict(event_dict)
+            event = RoomAliasEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.encryption":
-            state_event = RoomEncryptionEvent.from_dict(event_dict)
+            event = RoomEncryptionEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.encrypted":
-            state_event, message_event = RoomInfo._decrypt_event(olm, room_id,
-                                                                 event_dict)
+            event = RoomInfo._decrypt_event(olm, room_id, event_dict)
 
-        return state_event, message_event
+        return event
 
     @staticmethod
     def _decrypt_event(olm, room_id, event_dict):
@@ -287,7 +231,7 @@ class RoomInfo():
         plaintext = olm.group_decrypt(room_id, session_id, ciphertext)
 
         if not plaintext:
-            return None, None
+            return None
 
         parsed_plaintext = json.loads(plaintext, encoding="utf-8")
 
@@ -297,18 +241,13 @@ class RoomInfo():
         return RoomInfo.parse_event(olm, room_id, event_dict)
 
     @staticmethod
-    def _parse_events(olm, room_id, parsed_dict, messages=True, state=True):
-        state_events = []
-        message_events = []
-
-        if not messages and not state:
-            return []
+    def _parse_events(olm, room_id, parsed_dict):
+        events = []
 
         try:
             for event in parsed_dict:
-                m_event, s_event = RoomInfo.parse_event(olm, room_id, event)
-                state_events.append(m_event)
-                message_events.append(s_event)
+                e = RoomInfo.parse_event(olm, room_id, event)
+                events.append(e)
         except (ValueError, TypeError, KeyError) as error:
             message = ("{prefix}matrix: Error parsing "
                        "room event of type {type}: {error}\n{event}").format(
@@ -319,14 +258,6 @@ class RoomInfo():
             W.prnt("", message)
             raise
 
-        events = []
-
-        if state:
-            events = events + state_events
-
-        if messages:
-            events = events + message_events
-
         return events
 
     @classmethod
@@ -336,12 +267,23 @@ class RoomInfo():
         state_dict = parsed_dict['state']['events']
         timeline_dict = parsed_dict['timeline']['events']
 
-        state_events = RoomInfo._parse_events(olm, room_id, state_dict, messages=False)
-        timeline_events = RoomInfo._parse_events(olm, room_id, timeline_dict)
+        state_events = RoomInfo._parse_events(
+            olm,
+            room_id,
+            state_dict
+        )
+        timeline_events = RoomInfo._parse_events(
+            olm,
+            room_id,
+            timeline_dict
+        )
 
-        events = state_events + timeline_events
-
-        return cls(room_id, prev_batch, list(filter(None, events)))
+        return cls(
+            room_id,
+            prev_batch,
+            list(filter(None, state_events)),
+            list(filter(None, timeline_events))
+        )
 
 
 class RoomEvent():

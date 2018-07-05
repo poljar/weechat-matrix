@@ -73,8 +73,9 @@ class WeechatArgParse(argparse.ArgumentParser):
 
     def error(self, message):
         m = ("{prefix}Error: {message} for command {command} "
-            "(see /help {command})").format(prefix=W.prefix("error"),
-                                            message=message, command=self.prog)
+             "(see /help {command})").format(prefix=W.prefix("error"),
+                                             message=message,
+                                             command=self.prog)
         W.prnt("", m)
         raise ParseError
 

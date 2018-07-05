@@ -29,10 +29,19 @@ from http_parser.pyparser import HttpParser
 
 from matrix.plugin_options import Option, DebugType
 from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
-                          create_server_buffer, tags_for_message)
+                          create_server_buffer, tags_for_message,
+                          server_ts_to_weechat, shorten_sender)
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS, OPTIONS
 import matrix.api as API
+from .buffer import WeechatChannelBuffer, RoomUser
+from .rooms import (
+    MatrixRoom,
+    RoomMessageText,
+    RoomMessageEmote,
+    MatrixUser,
+    RoomMemberJoin
+)
 from matrix.api import (
     MatrixClient,
     MatrixSyncMessage,
@@ -40,9 +49,12 @@ from matrix.api import (
     MatrixKeyUploadMessage,
     MatrixKeyQueryMessage,
     MatrixToDeviceMessage,
+    MatrixSendMessage,
     MatrixEncryptedMessage,
     MatrixKeyClaimMessage
 )
+
+from .events import MatrixSendEvent
 
 from matrix.encryption import (
     Olm,
@@ -77,6 +89,7 @@ class MatrixServer:
         self.password = ""                   # type: str
 
         self.rooms = dict()                  # type: Dict[str, MatrixRoom]
+        self.room_buffers = dict()  # type: Dict[str, WeechatChannelBuffer]
         self.buffers = dict()                # type: Dict[str, weechat.buffer]
         self.server_buffer = None            # type: weechat.buffer
         self.fd_hook = None                  # type: weechat.hook
@@ -433,7 +446,7 @@ class MatrixServer:
 
         if self.server_buffer:
             message = ("{prefix}matrix: disconnected from server"
-                      ).format(prefix=W.prefix("network"))
+                       ).format(prefix=W.prefix("network"))
             server_buffer_prnt(self, message)
 
         if reconnect:
@@ -486,16 +499,20 @@ class MatrixServer:
         message = MatrixSyncMessage(self.client, self.next_batch, limit)
         self.send_queue.append(message)
 
+    def _send_unencrypted_message(self, room_id, formatted_data):
+        message = MatrixSendMessage(
+            self.client, room_id=room_id, formatted_message=formatted_data)
+        self.send_or_queue(message)
+
     def send_room_message(
         self,
-        room_id,
+        room,
         formatted_data,
         already_claimed=False
     ):
         # type: (str, Formatted) -> None
-        room = self.rooms[room_id]
-
         if not room.encrypted:
+            self._send_unencrypted_message(room.room_id, formatted_data)
             return
 
         # TODO don't send messages unless all the devices are verified
@@ -505,8 +522,8 @@ class MatrixServer:
             W.prnt("", "{prefix}matrix: Olm session missing for room, can't"
                        " encrypt message.")
             W.prnt("", pprint.pformat(missing))
-            self.encryption_queue[room_id].append(formatted_data)
-            message = MatrixKeyClaimMessage(self.client, room_id, missing)
+            self.encryption_queue[room.room_id].append(formatted_data)
+            message = MatrixKeyClaimMessage(self.client, room.room_id, missing)
             self.send_or_queue(message)
             return
 
@@ -525,7 +542,7 @@ class MatrixServer:
 
         try:
             payload_dict, to_device_dict = self.olm.group_encrypt(
-                room_id,
+                room.room_id,
                 plaintext_dict,
                 self.user_id,
                 room.users.keys()
@@ -538,7 +555,7 @@ class MatrixServer:
 
             message = MatrixEncryptedMessage(
                 self.client,
-                room_id,
+                room.room_id,
                 formatted_data,
                 payload_dict
             )
@@ -612,19 +629,46 @@ class MatrixServer:
         server_buffer_prnt(self, pprint.pformat(message.request.payload))
         server_buffer_prnt(self, pprint.pformat(message.response.body))
 
+    def handle_room_event(self, room, room_buffer, event, is_state_event):
+        if isinstance(event, RoomMemberJoin):
+            if event.sender in room.users:
+                user = room.users[event.sender]
+                if event.display_name:
+                    user.display_name = event.display_name
+            else:
+                short_name = shorten_sender(event.sender)
+                user = MatrixUser(short_name, event.display_name)
+                buffer_user = RoomUser(user.name, event.sender)
+                room.users[event.sender] = user
+
+                if self.user_id == event.sender:
+                    buffer_user.color = "weechat.color.chat_nick_self"
+                    user.nick_color = "weechat.color.chat_nick_self"
+
+                room_buffer.join(
+                    buffer_user,
+                    server_ts_to_weechat(event.timestamp),
+                    not is_state_event
+                )
+        else:
+            tags = tags_for_message("message")
+            event.execute(self, room, room_buffer._ptr, tags)
+
     def _loop_events(self, info, n):
 
         for i in range(n+1):
+            is_state = False
             try:
-                event = info.events.popleft()
+                event = info.state.popleft()
+                is_state = True
             except IndexError:
-                return i
+                try:
+                    event = info.timeline.popleft()
+                except IndexError:
+                    return i
 
-            room = self.rooms[info.room_id]
-            buf = self.buffers[info.room_id]
-
-            tags = tags_for_message("message")
-            event.execute(self, room, buf, tags)
+            room, room_buffer = self.find_room_from_id(info.room_id)
+            self.handle_room_event(room, room_buffer, event, is_state)
 
         self.event_queue.appendleft(info)
         return i
@@ -657,6 +701,32 @@ class MatrixServer:
 
                 return
 
+    def handle_own_messages(self, room_buffer, message):
+        if isinstance(message, RoomMessageText):
+            msg = (message.formatted_message.to_weechat()
+                   if message.formatted_message
+                   else message.message)
+
+            date = server_ts_to_weechat(message.timestamp)
+            room_buffer.self_message(self.user, msg, date)
+
+            return
+        elif isinstance(message, RoomMessageEmote):
+            date = server_ts_to_weechat(message.timestamp)
+            room_buffer.self_action(self.user, message.message, date)
+
+            return
+
+        raise NotImplementedError("Unsupported message of type {}".format(
+            type(message)))
+
+    def handle_matrix_response(self, response):
+        if isinstance(response, MatrixSendEvent):
+            _, room_buffer = self.find_room_from_id(response.room_id)
+            self.handle_own_messages(room_buffer, response.message)
+        else:
+            response.execute()
+
     def handle_response(self, message):
         # type: (MatrixMessage) -> None
 
@@ -674,7 +744,7 @@ class MatrixServer:
                 return
 
             event = message.event
-            event.execute()
+            self.handle_matrix_response(event)
         else:
             status_code = message.response.status
             if status_code == 504:
@@ -704,6 +774,26 @@ class MatrixServer:
         prnt_debug(DebugType.TIMING, self, info_message)
 
         return
+
+    def create_room_buffer(self, room_id):
+        buf = WeechatChannelBuffer(room_id, self.name, self.user)
+        # TODO this should turned into a propper class
+        self.room_buffers[room_id] = buf
+        self.buffers[room_id] = buf._ptr
+        self.rooms[room_id] = MatrixRoom(room_id)
+        pass
+
+    def find_room_from_ptr(self, pointer):
+        room_id = key_from_value(self.buffers, pointer)
+        room = self.rooms[room_id]
+        room_buffer = self.room_buffers[room_id]
+
+        return room, room_buffer
+
+    def find_room_from_id(self, room_id):
+        room = self.rooms[room_id]
+        room_buffer = self.room_buffers[room_id]
+        return room, room_buffer
 
 
 @utf8_decode

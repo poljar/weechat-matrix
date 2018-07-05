@@ -28,7 +28,7 @@ from builtins import super
 @utf8_decode
 def room_buffer_input_cb(server_name, buffer, input_data):
     server = SERVERS[server_name]
-    room, room_buffer = server.find_room(buffer)
+    room, room_buffer = server.find_room_from_ptr(buffer)
 
     if not room_buffer:
         # TODO log error
@@ -40,9 +40,7 @@ def room_buffer_input_cb(server_name, buffer, input_data):
 
     formatted_data = Formatted.from_input_line(input_data)
 
-    if room.encrypted:
-        server.send_room_message(room.id, formatted_data)
-        return W.WEECHAT_RC_OK
+    server.send_room_message(room, formatted_data)
 
     return W.WEECHAT_RC_OK
 
@@ -86,6 +84,13 @@ class WeechatChannelBuffer(object):
             "notify_message",
             "log1"
         ],
+        "self_message": [
+            SCRIPT_NAME + "_message",
+            "notify_none",
+            "no_highlight",
+            "self_msg",
+            "log1"
+        ],
         "old_message": [
             SCRIPT_NAME + "_message",
             "notify_message",
@@ -107,6 +112,10 @@ class WeechatChannelBuffer(object):
         "invite": [
             SCRIPT_NAME + "_invite",
             "log4"
+        ],
+        "topic": [
+            SCRIPT_NAME + "_topic",
+            "log3",
         ]
     }
 
@@ -123,12 +132,16 @@ class WeechatChannelBuffer(object):
             name,
             "room_buffer_input_cb",
             server_name,
-            "room_buffer_input_cb",
+            "room_buffer_close_cb",
             server_name,
         )
 
         self.name = ""
         self.users = {}  # type: Dict[str, RoomUser]
+
+        self.topic = ""
+        self.topic_author = ""
+        self.topic_date = None
 
         W.buffer_set(self._ptr, "localvar_set_type", 'channel')
         W.buffer_set(self._ptr, "type", 'formatted')
@@ -216,7 +229,7 @@ class WeechatChannelBuffer(object):
 
     def _message_tags(self, user, message_type):
         # type: (str, RoomUser, str) -> List[str]
-        tags = self.tags[message_type].copy()
+        tags = list(self.tags[message_type])
 
         tags.append("nick_{nick}".format(nick=user.nick))
 
@@ -235,10 +248,10 @@ class WeechatChannelBuffer(object):
         # A message from a non joined user
         return RoomUser(nick)
 
-    def message(self, nick, message, date):
+    def message(self, nick, message, date, tags=[]):
         # type: (str, str, int, str) -> None
         user = self._get_user(nick)
-        tags = self._message_tags(user, "message")
+        tags = tags or self._message_tags(user, "message")
 
         prefix_string = ("" if not user.prefix else "{}{}{}".format(
             W.color(self._get_prefix_color(user.prefix)),
@@ -264,10 +277,10 @@ class WeechatChannelBuffer(object):
 
         self.message(nick, data, date)
 
-    def action(self, nick, message, date):
+    def action(self, nick, message, date, tags=[]):
         # type: (str, str, int) -> None
         user = self._get_user(nick)
-        tags = self._message_tags(user, "action")
+        tags = tags or self._message_tags(user, "action")
 
         nick_prefix = ("" if not user.prefix else "{}{}{}".format(
             W.color(self._get_prefix_color(user.prefix)),
@@ -282,7 +295,7 @@ class WeechatChannelBuffer(object):
             nick_color=W.color(user.color),
             author=nick,
             ncolor=W.color("reset"),
-            msg=self.message)
+            msg=message)
 
         self.print_date_tags(data, date, tags)
 
@@ -293,9 +306,9 @@ class WeechatChannelBuffer(object):
 
         if user.prefix == "&":
             group_name = "000|o"
-        elif user.power_level == "@":
+        elif user.prefix == "@":
             group_name = "001|h"
-        elif user.power_level > "+":
+        elif user.prefix > "+":
             group_name = "002|v"
 
         return group_name
@@ -400,3 +413,41 @@ class WeechatChannelBuffer(object):
     def kick(self, user, date, message=True, extra_tags=[]):
         # type: (WeechatUser, int, Optional[bool], Optional[List[str]]) -> None
         self._leave(user, date, message, "kick", extra_tags=[])
+
+    def _print_topic(self, nick, topic, date):
+        user = self._get_user(nick)
+        tags = self._message_tags(user, "topic")
+
+        data = ("{prefix}{nick} has changed "
+                "the topic for {chan_color}{room}{ncolor} "
+                "to \"{topic}\"").format(
+                    prefix=W.prefix("network"),
+                    nick=user.nick,
+                    chan_color=W.color("chat_channel"),
+                    ncolor=W.color("reset"),
+                    room=self.name,
+                    topic=topic
+                )
+
+        self.print_date_tags(data, date, tags)
+
+    def topic(self, nick, topic, date, message=True):
+        W.buffer_set(self._ptr, "title", topic)
+
+        if message:
+            self._print_topic(nick, topic, date)
+
+        self.topic = topic
+        self.topic_author = nick
+        self.topic_date = date
+
+    def self_message(self, nick, message, date):
+        user = self._get_user(nick)
+        tags = self._message_tags(user, "self_message")
+        self.message(nick, message, date, tags)
+
+    def self_action(self, nick, message, date):
+        user = self._get_user(nick)
+        tags = self._message_tags(user, "self_message")
+        tags.append(SCRIPT_NAME + "_action")
+        self.action(nick, message, date, tags)

@@ -27,11 +27,12 @@ from operator import itemgetter
 from matrix.globals import W
 from matrix.utils import (tags_for_message, sanitize_id, sanitize_token,
                           sanitize_text, tags_from_line_data)
-from matrix.rooms import (matrix_create_room_buffer, RoomInfo, RoomMessageText,
+from matrix.rooms import (RoomInfo, RoomMessageText,
                           RoomMessageEvent, RoomRedactedMessageEvent,
                           RoomMessageEmote)
 
 from matrix.encryption import OlmDeviceKey, OneTimeKey
+from .buffer import RoomUser
 
 try:
     from olm.session import OlmMessage, OlmPreKeyMessage
@@ -657,7 +658,7 @@ class MatrixSyncEvent(MatrixEvent):
             info = self.joined_room_infos.pop()
 
             if info.room_id not in server.buffers:
-                matrix_create_room_buffer(server, info.room_id)
+                server.create_room_buffer(info.room_id)
 
             room = server.rooms[info.room_id]
 

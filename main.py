@@ -46,6 +46,7 @@ from matrix.commands import (hook_commands, hook_page_up, matrix_command_cb,
                              matrix_command_pgup_cb, matrix_redact_command_cb,
                              matrix_command_buf_clear_cb, matrix_me_command_cb,
                              matrix_command_kick_cb)
+from matrix.buffer import room_buffer_input_cb, room_buffer_close_cb
 
 from matrix.server import (
     MatrixServer,
