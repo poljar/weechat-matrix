@@ -208,6 +208,9 @@ class RoomInfo():
         elif event_dict["content"]["membership"] == "leave":
             return RoomMemberLeave.from_dict(event_dict)
 
+        elif event_dict["content"]["membership"] == "invite":
+            return RoomMemberInvite.from_dict(event_dict)
+
         return None
 
     @staticmethod
@@ -306,6 +309,10 @@ class RoomEvent():
         self.event_id = event_id
         self.sender = sender
         self.timestamp = timestamp
+
+
+class RoomMembershipEvent(RoomEvent):
+    pass
 
 
 class RoomRedactedMessageEvent(RoomEvent):
@@ -527,11 +534,22 @@ class RoomMessageMedia(RoomMessageEvent):
         self._print_message(msg, room, buff, tags)
 
 
-class RoomMemberJoin(RoomEvent):
+class RoomMemberJoin(RoomMembershipEvent):
 
-    def __init__(self, event_id, sender, timestamp, display_name, state_key):
+    def __init__(
+        self,
+        event_id,
+        sender,
+        timestamp,
+        display_name,
+        state_key,
+        content,
+        prev_content
+    ):
         self.display_name = display_name
         self.state_key = state_key
+        self.content = content
+        self.prev_content = prev_content
         RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
@@ -541,16 +559,42 @@ class RoomMemberJoin(RoomEvent):
         timestamp = sanitize_ts(event_dict["origin_server_ts"])
         state_key = sanitize_id(event_dict["state_key"])
         display_name = None
+        content = event_dict["content"]
+        prev_content = (event_dict["unsigned"]["prev_content"]
+                        if "prev_content" in event_dict["unsigned"] else None)
 
         if event_dict["content"]:
             if "display_name" in event_dict["content"]:
                 display_name = sanitize_text(
                     event_dict["content"]["displayname"])
 
-        return cls(event_id, sender, timestamp, display_name, state_key)
+        return cls(
+            event_id,
+            sender,
+            timestamp,
+            display_name,
+            state_key,
+            content,
+            prev_content
+        )
 
 
-class RoomMemberLeave(RoomEvent):
+class RoomMemberInvite(RoomMembershipEvent):
+    def __init__(self, event_id, sender, invited_user, timestamp):
+        self.invited_user = invited_user
+        RoomEvent.__init__(self, event_id, sender, timestamp)
+
+    @classmethod
+    def from_dict(cls, event_dict):
+        event_id = sanitize_id(event_dict["event_id"])
+        sender = sanitize_id(event_dict["sender"])
+        invited_user = sanitize_id(event_dict["state_key"])
+        timestamp = sanitize_ts(event_dict["origin_server_ts"])
+
+        return cls(event_id, sender, invited_user, timestamp)
+
+
+class RoomMemberLeave(RoomMembershipEvent):
 
     def __init__(self, event_id, sender, leaving_user, timestamp):
         self.leaving_user = leaving_user

@@ -385,8 +385,9 @@ class WeechatChannelBuffer(object):
             message = self._membership_message(user, "join")
             self.print_date_tags(message, date, tags)
 
-    def invite(self, user, date, extra_tags=[]):
-        # type: (WeechatUser, int, Optional[bool], Optional[List[str]]) -> None
+    def invite(self, nick, date, extra_tags=[]):
+        # type: (str, int, Optional[bool], Optional[List[str]]) -> None
+        user = self._get_user(nick)
         tags = self._message_tags(user, "invite")
         message = self._membership_message(user, "invite")
         self.print_date_tags(message, date, tags + extra_tags)

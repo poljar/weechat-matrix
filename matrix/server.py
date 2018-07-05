@@ -40,8 +40,10 @@ from .rooms import (
     RoomMessageText,
     RoomMessageEmote,
     MatrixUser,
+    RoomMembershipEvent,
     RoomMemberJoin,
     RoomMemberLeave,
+    RoomMemberInvite,
     RoomTopicEvent
 )
 from matrix.api import (
@@ -638,7 +640,7 @@ class MatrixServer:
         event,
         is_state_event
     ):
-        if isinstance(event, RoomMemberJoin):
+        def join(event, date, room, room_buffer, is_state_event):
             room.handle_event(event)
             user = room.users[event.sender]
             buffer_user = RoomUser(user.name, event.sender)
@@ -655,14 +657,39 @@ class MatrixServer:
                 not is_state_event
             )
 
-        elif isinstance(event, RoomMemberLeave):
-            user = room.users[event.sender]
-            date = server_ts_to_weechat(event.timestamp)
+        date = server_ts_to_weechat(event.timestamp)
 
-            if event.sender == event.leaving_user:
-                room_buffer.part(user.name, date, not is_state_event)
+        joined = False
+        left = False
+
+        if isinstance(event, RoomMemberJoin):
+            if event.prev_content and "membership" in event.prev_content:
+                if (event.prev_content["membership"] == "leave"
+                        or event.prev_content["membership"] == "invite"):
+                    join(event, date, room, room_buffer, is_state_event)
+                    joined = True
+                else:
+                    # TODO print out profile changes
+                    return
             else:
-                room_buffer.kick(user.name, date, not is_state_event)
+                # No previous content for this user in this room, so he just
+                # joined.
+                join(event, date, room, room_buffer, is_state_event)
+                joined = True
+
+        elif isinstance(event, RoomMemberLeave):
+            # TODO the nick can be a display name or a full sender name
+            nick = shorten_sender(event.sender)
+            if event.sender == event.leaving_user:
+                room_buffer.part(nick, date, not is_state_event)
+            else:
+                room_buffer.kick(nick, date, not is_state_event)
+
+            left = True
+
+        elif isinstance(event, RoomMemberInvite):
+            room_buffer.invite(event.sender, date)
+            return
 
         # calculate room display name and set it as the buffer list name
         room_name = room.display_name(self.user_id)
@@ -670,11 +697,11 @@ class MatrixServer:
 
         # A user has joined or left an encrypted room, we need to check for
         # new devices and create a new group session
-        if room.encrypted:
+        if room.encrypted and (joined or left):
             self.device_check_timestamp = None
 
     def handle_room_event(self, room, room_buffer, event, is_state_event):
-        if isinstance(event, (RoomMemberJoin, RoomMemberLeave)):
+        if isinstance(event, RoomMembershipEvent):
             self.handle_room_membership_events(
                 room,
                 room_buffer,
