@@ -122,8 +122,8 @@ class WeechatChannelBuffer(object):
     membership_messages = {
         "join": "has joined",
         "part": "has left",
-        "kick": "has been kicked",
-        "invite": "has been invited"
+        "kick": "has been kicked from",
+        "invite": "has been invited to"
     }
 
     def __init__(self, name, server_name, user):
@@ -352,6 +352,8 @@ class WeechatChannelBuffer(object):
         # type: (WeechatUser, str) -> str
         action_color = ("green" if message_type == "join"
                         or message_type == "invite" else "red")
+        prefix = ("join" if message_type == "join" or message_type == "invite"
+                  else "quit")
 
         membership_message = self.membership_messages[message_type]
 
@@ -359,7 +361,7 @@ class WeechatChannelBuffer(object):
                    "{del_color}({host_color}{host}{del_color})"
                    "{action_color} {message} "
                    "{channel_color}{room}{ncolor}").format(
-            prefix=W.prefix(message_type),
+            prefix=W.prefix(prefix),
             color=W.color(user.color),
             author=user.nick,
             ncolor=W.color("reset"),
@@ -369,7 +371,7 @@ class WeechatChannelBuffer(object):
             action_color=W.color(action_color),
             message=membership_message,
             channel_color=W.color("chat_channel"),
-            room=self.name)
+            room=self.short_name)
 
         return message
 
@@ -391,10 +393,14 @@ class WeechatChannelBuffer(object):
 
     def _remove_user_from_nicklist(self, user):
         # type: (WeechatUser) -> None
-        pass
+        nick_pointer = W.nicklist_search_nick(self._ptr, "", user.nick)
 
-    def _leave(self, user, date, message, leave_type, extra_tags):
-        # type: (WeechatUser, int, bool, str, List[str]) -> None
+        if nick_pointer:
+            W.nicklist_remove_nick(self._ptr, nick_pointer)
+
+    def _leave(self, nick, date, message, leave_type, extra_tags):
+        # type: (str, int, bool, str, List[str]) -> None
+        user = self._get_user(nick)
         self._remove_user_from_nicklist(user)
 
         if message:
@@ -405,13 +411,13 @@ class WeechatChannelBuffer(object):
         if user.nick in self.users:
             del self.users[user.nick]
 
-    def part(self, user, date, message=True, extra_tags=[]):
-        # type: (WeechatUser, int, Optional[bool], Optional[List[str]]) -> None
-        self._leave(user, date, message, "leave", extra_tags)
+    def part(self, nick, date, message=True, extra_tags=[]):
+        # type: (str, int, Optional[bool], Optional[List[str]]) -> None
+        self._leave(nick, date, message, "part", extra_tags)
 
-    def kick(self, user, date, message=True, extra_tags=[]):
-        # type: (WeechatUser, int, Optional[bool], Optional[List[str]]) -> None
-        self._leave(user, date, message, "kick", extra_tags=[])
+    def kick(self, nick, date, message=True, extra_tags=[]):
+        # type: (str, int, Optional[bool], Optional[List[str]]) -> None
+        self._leave(nick, date, message, "kick", extra_tags=[])
 
     def _print_topic(self, nick, topic, date):
         user = self._get_user(nick)

@@ -143,6 +143,20 @@ class MatrixRoom:
         """
         return not self.is_named()
 
+    def handle_event(self, event):
+        if isinstance(event, RoomMemberJoin):
+            if event.sender in self.users:
+                user = self.users[event.sender]
+                if event.display_name:
+                    user.display_name = event.display_name
+            else:
+                short_name = shorten_sender(event.sender)
+                user = MatrixUser(short_name, event.display_name)
+                self.users[event.sender] = user
+        elif isinstance(event, RoomMemberLeave):
+            if event.leaving_user in self.users:
+                del self.users[event.leaving_user]
+
 
 class MatrixUser:
 
@@ -513,43 +527,11 @@ class RoomMessageMedia(RoomMessageEvent):
         self._print_message(msg, room, buff, tags)
 
 
-class RoomMembershipMessage(RoomEvent):
-    def __init__(self, event_id, sender, timestamp, message, prefix):
-        self.message = message
-        self.prefix = prefix
-        RoomEvent.__init__(self, event_id, sender, timestamp)
-
-    def execute(self, server, room, buff, tags):
-        nick, color_name = sender_to_nick_and_color(room, self.sender)
-        event_tags = add_event_tags(self.event_id, nick, None, [])
-        # TODO this should be configurable
-        action_color = "red" if self.prefix == "quit" else "green"
-
-        data = ("{prefix}{color}{author}{ncolor} "
-                "{del_color}({host_color}{user_id}{del_color})"
-                "{action_color} {message} "
-                "{channel_color}{room}{ncolor}").format(
-            prefix=W.prefix(self.prefix),
-            color=W.color(color_name),
-            author=nick,
-            ncolor=W.color("reset"),
-            del_color=W.color("chat_delimiters"),
-            host_color=W.color("chat_host"),
-            user_id=self.sender,
-            action_color=W.color(action_color),
-            message=self.message,
-            channel_color=W.color("chat_channel"),
-            room="" if room.is_group() else room.named_room_name())
-        date = server_ts_to_weechat(self.timestamp)
-        tags_string = ",".join(event_tags)
-
-        W.prnt_date_tags(buff, date, tags_string, data)
-
-
 class RoomMemberJoin(RoomEvent):
 
-    def __init__(self, event_id, sender, timestamp, display_name):
+    def __init__(self, event_id, sender, timestamp, display_name, state_key):
         self.display_name = display_name
+        self.state_key = state_key
         RoomEvent.__init__(self, event_id, sender, timestamp)
 
     @classmethod
@@ -557,6 +539,7 @@ class RoomMemberJoin(RoomEvent):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
         timestamp = sanitize_ts(event_dict["origin_server_ts"])
+        state_key = sanitize_id(event_dict["state_key"])
         display_name = None
 
         if event_dict["content"]:
@@ -564,7 +547,7 @@ class RoomMemberJoin(RoomEvent):
                 display_name = sanitize_text(
                     event_dict["content"]["displayname"])
 
-        return cls(event_id, sender, timestamp, display_name)
+        return cls(event_id, sender, timestamp, display_name, state_key)
 
 
 class RoomMemberLeave(RoomEvent):
@@ -581,19 +564,6 @@ class RoomMemberLeave(RoomEvent):
         timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
         return cls(event_id, sender, leaving_user, timestamp)
-
-    def execute(self, server, room, buff, tags):
-        if self.leaving_user in room.users:
-            nick_pointer = W.nicklist_search_nick(buff, "", self.leaving_user)
-
-            if nick_pointer:
-                W.nicklist_remove_nick(buff, nick_pointer)
-
-            del room.users[self.leaving_user]
-
-            # calculate room display name and set it as the buffer list name
-            room_name = room.display_name(server.user_id)
-            W.buffer_set(buff, "short_name", room_name)
 
 
 class RoomPowerLevels(RoomEvent):

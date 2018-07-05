@@ -639,38 +639,39 @@ class MatrixServer:
         is_state_event
     ):
         if isinstance(event, RoomMemberJoin):
-            if event.sender in room.users:
-                user = room.users[event.sender]
-                if event.display_name:
-                    user.display_name = event.display_name
-            else:
-                short_name = shorten_sender(event.sender)
-                user = MatrixUser(short_name, event.display_name)
-                buffer_user = RoomUser(user.name, event.sender)
-                # TODO remove this duplication
-                user.nick_color = buffer_user.color
-                room.users[event.sender] = user
+            room.handle_event(event)
+            user = room.users[event.sender]
+            buffer_user = RoomUser(user.name, event.sender)
+            # TODO remove this duplication
+            user.nick_color = buffer_user.color
 
-                if self.user_id == event.sender:
-                    buffer_user.color = "weechat.color.chat_nick_self"
-                    user.nick_color = "weechat.color.chat_nick_self"
+            if self.user_id == event.sender:
+                buffer_user.color = "weechat.color.chat_nick_self"
+                user.nick_color = "weechat.color.chat_nick_self"
 
-                room_buffer.join(
-                    buffer_user,
-                    server_ts_to_weechat(event.timestamp),
-                    not is_state_event
-                )
+            room_buffer.join(
+                buffer_user,
+                server_ts_to_weechat(event.timestamp),
+                not is_state_event
+            )
 
-            # calculate room display name and set it as the buffer list name
-            room_name = room.display_name(self.user_id)
-            room_buffer.short_name = room_name
-
-            # A user has joined an encrypted room, we need to check for
-            # new devices
-            if room.encrypted:
-                self.device_check_timestamp = None
         elif isinstance(event, RoomMemberLeave):
-            pass
+            user = room.users[event.sender]
+            date = server_ts_to_weechat(event.timestamp)
+
+            if event.sender == event.leaving_user:
+                room_buffer.part(user.name, date, not is_state_event)
+            else:
+                room_buffer.kick(user.name, date, not is_state_event)
+
+        # calculate room display name and set it as the buffer list name
+        room_name = room.display_name(self.user_id)
+        room_buffer.short_name = room_name
+
+        # A user has joined or left an encrypted room, we need to check for
+        # new devices and create a new group session
+        if room.encrypted:
+            self.device_check_timestamp = None
 
     def handle_room_event(self, room, room_buffer, event, is_state_event):
         if isinstance(event, (RoomMemberJoin, RoomMemberLeave)):
