@@ -40,7 +40,9 @@ from .rooms import (
     RoomMessageText,
     RoomMessageEmote,
     MatrixUser,
-    RoomMemberJoin
+    RoomMemberJoin,
+    RoomMemberLeave,
+    RoomTopicEvent
 )
 from matrix.api import (
     MatrixClient,
@@ -629,7 +631,13 @@ class MatrixServer:
         server_buffer_prnt(self, pprint.pformat(message.request.payload))
         server_buffer_prnt(self, pprint.pformat(message.response.body))
 
-    def handle_room_event(self, room, room_buffer, event, is_state_event):
+    def handle_room_membership_events(
+        self,
+        room,
+        room_buffer,
+        event,
+        is_state_event
+    ):
         if isinstance(event, RoomMemberJoin):
             if event.sender in room.users:
                 user = room.users[event.sender]
@@ -639,6 +647,8 @@ class MatrixServer:
                 short_name = shorten_sender(event.sender)
                 user = MatrixUser(short_name, event.display_name)
                 buffer_user = RoomUser(user.name, event.sender)
+                # TODO remove this duplication
+                user.nick_color = buffer_user.color
                 room.users[event.sender] = user
 
                 if self.user_id == event.sender:
@@ -650,6 +660,39 @@ class MatrixServer:
                     server_ts_to_weechat(event.timestamp),
                     not is_state_event
                 )
+
+            # calculate room display name and set it as the buffer list name
+            room_name = room.display_name(self.user_id)
+            room_buffer.short_name = room_name
+
+            # A user has joined an encrypted room, we need to check for
+            # new devices
+            if room.encrypted:
+                self.device_check_timestamp = None
+        elif isinstance(event, RoomMemberLeave):
+            pass
+
+    def handle_room_event(self, room, room_buffer, event, is_state_event):
+        if isinstance(event, (RoomMemberJoin, RoomMemberLeave)):
+            self.handle_room_membership_events(
+                room,
+                room_buffer,
+                event,
+                is_state_event
+            )
+        elif isinstance(event, RoomTopicEvent):
+            try:
+                user = room.users[event.sender]
+                nick = user.name
+            except KeyError:
+                nick = event.sender
+
+            room_buffer.change_topic(
+                nick,
+                event.topic,
+                server_ts_to_weechat(event.timestamp),
+                not is_state_event
+            )
         else:
             tags = tags_for_message("message")
             event.execute(self, room, room_buffer._ptr, tags)

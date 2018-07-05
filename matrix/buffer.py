@@ -139,7 +139,6 @@ class WeechatChannelBuffer(object):
         self.name = ""
         self.users = {}  # type: Dict[str, RoomUser]
 
-        self.topic = ""
         self.topic_author = ""
         self.topic_date = None
 
@@ -425,15 +424,21 @@ class WeechatChannelBuffer(object):
                     nick=user.nick,
                     chan_color=W.color("chat_channel"),
                     ncolor=W.color("reset"),
-                    room=self.name,
+                    room=self.short_name,
                     topic=topic
                 )
 
         self.print_date_tags(data, date, tags)
 
-    def topic(self, nick, topic, date, message=True):
+    @property
+    def topic(self):
+        return W.buffer_get_string(self._ptr, "title")
+
+    @topic.setter
+    def topic(self, topic):
         W.buffer_set(self._ptr, "title", topic)
 
+    def change_topic(self, nick, topic, date, message=True):
         if message:
             self._print_topic(nick, topic, date)
 
@@ -451,3 +456,11 @@ class WeechatChannelBuffer(object):
         tags = self._message_tags(user, "self_message")
         tags.append(SCRIPT_NAME + "_action")
         self.action(nick, message, date, tags)
+
+    @property
+    def short_name(self):
+        return W.buffer_get_string(self._ptr, "short_name")
+
+    @short_name.setter
+    def short_name(self, name):
+        W.buffer_set(self._ptr, "short_name", name)

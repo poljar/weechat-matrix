@@ -566,44 +566,6 @@ class RoomMemberJoin(RoomEvent):
 
         return cls(event_id, sender, timestamp, display_name)
 
-    def execute(self, server, room, buff, tags):
-        short_name = shorten_sender(self.sender)
-
-        if self.sender in room.users:
-            user = room.users[self.sender]
-            if self.display_name:
-                user.display_name = self.display_name
-        else:
-            user = MatrixUser(short_name, self.display_name)
-
-        if not user.nick_color:
-            if self.sender == server.user_id:
-                highlight_words = [self.sender, user.name]
-
-                if self.display_name:
-                    highlight_words.append(self.display_name)
-
-                user.nick_color = "weechat.color.chat_nick_self"
-                W.buffer_set(buff, "highlight_words", ",".join(highlight_words))
-            else:
-                user.nick_color = W.info_get("nick_color_name", user.name)
-
-        room.users[self.sender] = user
-
-        nick_pointer = W.nicklist_search_nick(buff, "", self.sender)
-
-        if not nick_pointer:
-            add_user_to_nicklist(buff, self.sender, user)
-
-        # calculate room display name and set it as the buffer list name
-        room_name = room.display_name(server.user_id)
-
-        # A user has joined an encrypted room, we need to check for new devices
-        if room.encrypted:
-            server.device_check_timestamp = None
-
-        W.buffer_set(buff, "short_name", room_name)
-
 
 class RoomMemberLeave(RoomEvent):
 
@@ -675,43 +637,6 @@ class RoomPowerLevels(RoomEvent):
             self._set_power_level(room, buff, level)
 
 
-class RoomTopiceMessage(RoomEvent):
-
-    def __init__(self, event_id, sender, timestamp, topic):
-        self.topic = topic
-        RoomEvent.__init__(self, event_id, sender, timestamp)
-
-    def execute(self, server, room, buff, tags):
-        topic = self.topic
-
-        nick, color_name = sender_to_nick_and_color(room, self.sender)
-
-        author = ("{nick_color}{user}{ncolor}").format(
-            nick_color=W.color(color_name), user=nick, ncolor=W.color("reset"))
-
-        # TODO print old topic if configured so
-        if room.is_named():
-            message = ("{prefix}{nick} has changed "
-                       "the topic for {chan_color}{room}{ncolor} "
-                       "to \"{topic}\"").format(
-                           prefix=W.prefix("network"),
-                           nick=author,
-                           chan_color=W.color("chat_channel"),
-                           ncolor=W.color("reset"),
-                           room=room.named_room_name(),
-                           topic=topic)
-        else:
-            message = ('{prefix}{nick} has changed the topic to '
-                       '"{topic}"').format(
-                           prefix=W.prefix("network"),
-                           nick=author,
-                           topic=topic)
-
-        tags = ["matrix_topic", "log3", "matrix_id_{}".format(self.event_id)]
-        date = server_ts_to_weechat(self.timestamp)
-        W.prnt_date_tags(buff, date, ",".join(tags), message)
-
-
 class RoomTopicEvent(RoomEvent):
 
     def __init__(self, event_id, sender, timestamp, topic):
@@ -727,16 +652,6 @@ class RoomTopicEvent(RoomEvent):
         topic = sanitize_text(event_dict["content"]["topic"])
 
         return cls(event_id, sender, timestamp, topic)
-
-    def execute(self, server, room, buff, tags):
-        topic = self.topic
-
-        W.buffer_set(buff, "title", topic)
-
-        room.topic = topic
-        room.topic_author = self.sender
-        room.topic_date = datetime.fromtimestamp(
-            server_ts_to_weechat(self.timestamp))
 
 
 class RoomRedactionEvent(RoomEvent):
