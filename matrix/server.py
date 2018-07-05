@@ -641,7 +641,6 @@ class MatrixServer:
         is_state_event
     ):
         def join(event, date, room, room_buffer, is_state_event):
-            room.handle_event(event)
             user = room.users[event.sender]
             buffer_user = RoomUser(user.name, event.sender)
             # TODO remove this duplication
@@ -657,6 +656,7 @@ class MatrixServer:
                 not is_state_event
             )
 
+        room.handle_event(event)
         date = server_ts_to_weechat(event.timestamp)
 
         joined = False
@@ -688,7 +688,7 @@ class MatrixServer:
             left = True
 
         elif isinstance(event, RoomMemberInvite):
-            room_buffer.invite(event.sender, date)
+            room_buffer.invite(event.invited_user, date)
             return
 
         # calculate room display name and set it as the buffer list name
