@@ -40,10 +40,11 @@ PowerLevel = namedtuple('PowerLevel', ['user', 'level'])
 
 class MatrixRoom:
 
-    def __init__(self, room_id):
+    def __init__(self, room_id, own_user_id):
         # type: (str) -> None
         # yapf: disable
         self.room_id = room_id        # type: str
+        self.own_user_id = own_user_id
         self.canonical_alias = None   # type: str
         self.name = None              # type: str
         self.topic = ""               # type: str
@@ -153,9 +154,23 @@ class MatrixRoom:
                 short_name = shorten_sender(event.sender)
                 user = MatrixUser(short_name, event.display_name)
                 self.users[event.sender] = user
+                return True
+
         elif isinstance(event, RoomMemberLeave):
             if event.leaving_user in self.users:
                 del self.users[event.leaving_user]
+                return True
+
+        elif isinstance(event, RoomNameEvent):
+            self.name = event.name
+
+        elif isinstance(event, RoomAliasEvent):
+            self.canonical_alias = event.canonical_alias
+
+        elif isinstance(event, RoomEncryptionEvent):
+            self.encrypted = True
+
+        return False
 
 
 class MatrixUser:
@@ -337,35 +352,6 @@ class RoomRedactedMessageEvent(RoomEvent):
 
         return cls(event_id, sender, timestamp, censor, reason)
 
-    def execute(self, server, room, buff, tags):
-        nick, color_name = sender_to_nick_and_color(room, self.sender)
-        color = color_for_tags(color_name)
-        date = server_ts_to_weechat(self.timestamp)
-
-        event_tags = add_event_tags(self.event_id, nick, color, tags)
-
-        reason = (", reason: \"{reason}\"".format(reason=self.reason)
-                  if self.reason else "")
-
-        censor, _ = sender_to_nick_and_color(room, self.censor)
-
-        msg = ("{del_color}<{log_color}Message redacted by: "
-               "{censor}{log_color}{reason}{del_color}>{ncolor}").format(
-                   del_color=W.color("chat_delimiters"),
-                   ncolor=W.color("reset"),
-                   log_color=W.color("logger.color.backlog_line"),
-                   censor=censor,
-                   reason=reason)
-
-        event_tags.append("matrix_redacted")
-
-        tags_string = ",".join(event_tags)
-
-        data = "{author}\t{msg}".format(author=nick, msg=msg)
-
-        W.prnt_date_tags(buff, date, tags_string, data)
-
-
 class RoomMessageEvent(RoomEvent):
 
     @classmethod
@@ -463,12 +449,6 @@ class RoomMessageText(RoomMessageEvent):
                     sanitize_text(event['content']['formatted_body']))
 
         return cls(event_id, sender, timestamp, msg, formatted_msg)
-
-    def execute(self, server, room, buff, tags):
-        msg = (self.formatted_message.to_weechat()
-               if self.formatted_message else self.message)
-
-        self._print_message(msg, room, buff, tags)
 
 
 class RoomMessageEmote(RoomMessageSimple):
@@ -688,60 +668,6 @@ class RoomRedactionEvent(RoomEvent):
 
         return cls(event_id, sender, timestamp, redaction_id, reason)
 
-    @staticmethod
-    def already_redacted(tags):
-        if "matrix_redacted" in tags:
-            return True
-        return False
-
-    def _redact_line(self, data_pointer, tags, room, buff):
-        hdata_line_data = W.hdata_get('line_data')
-
-        message = W.hdata_string(hdata_line_data, data_pointer, 'message')
-        censor, _ = sender_to_nick_and_color(room, self.sender)
-
-        reason = ("" if not self.reason else
-                  ", reason: \"{reason}\"".format(reason=self.reason))
-
-        redaction_msg = ("{del_color}<{log_color}Message redacted by: "
-                         "{censor}{log_color}{reason}{del_color}>"
-                         "{ncolor}").format(
-                             del_color=W.color("chat_delimiters"),
-                             ncolor=W.color("reset"),
-                             log_color=W.color("logger.color.backlog_line"),
-                             censor=censor,
-                             reason=reason)
-
-        new_message = ""
-
-        if OPTIONS.redaction_type == RedactType.STRIKETHROUGH:
-            plaintext_msg = W.string_remove_color(message, '')
-            new_message = string_strikethrough(plaintext_msg)
-        elif OPTIONS.redaction_type == RedactType.NOTICE:
-            new_message = message
-        elif OPTIONS.redaction_type == RedactType.DELETE:
-            pass
-
-        message = " ".join(s for s in [new_message, redaction_msg] if s)
-
-        tags.append("matrix_redacted")
-
-        new_data = {'tags_array': ','.join(tags), 'message': message}
-
-        W.hdata_update(hdata_line_data, data_pointer, new_data)
-
-    def execute(self, server, room, buff, tags):
-        data_pointer, tags = line_pointer_and_tags_from_event(
-            buff, self.redaction_id)
-
-        if not data_pointer:
-            return
-
-        if RoomRedactionEvent.already_redacted(tags):
-            return
-
-        self._redact_line(data_pointer, tags, room, buff)
-
 
 class RoomNameEvent(RoomEvent):
 
@@ -759,18 +685,6 @@ class RoomNameEvent(RoomEvent):
 
         return cls(event_id, sender, timestamp, name)
 
-    def execute(self, server, room, buff, tags):
-        if not self.name:
-            return
-
-        room.name = self.name
-        W.buffer_set(buff, "name", self.name)
-        W.buffer_set(buff, "localvar_set_channel", self.name)
-
-        # calculate room display name and set it as the buffer list name
-        room_name = room.display_name(server.user_id)
-        W.buffer_set(buff, "short_name", room_name)
-
 
 class RoomAliasEvent(RoomEvent):
 
@@ -787,19 +701,6 @@ class RoomAliasEvent(RoomEvent):
         canonical_alias = sanitize_id(event_dict["content"]["alias"])
 
         return cls(event_id, sender, timestamp, canonical_alias)
-
-    def execute(self, server, room, buff, tags):
-        if not self.canonical_alias:
-            return
-
-        # TODO: What should we do with this?
-        # W.buffer_set(buff, "name", self.name)
-        # W.buffer_set(buff, "localvar_set_channel", self.name)
-
-        # calculate room display name and set it as the buffer list name
-        room.canonical_alias = self.canonical_alias
-        room_name = room.display_name(server.user_id)
-        W.buffer_set(buff, "short_name", room_name)
 
 
 class RoomEncryptionEvent(RoomEvent):

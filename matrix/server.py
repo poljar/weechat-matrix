@@ -34,7 +34,7 @@ from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS, OPTIONS
 import matrix.api as API
-from .buffer import WeechatChannelBuffer, RoomUser
+from .buffer import RoomBuffer
 from .rooms import (
     MatrixRoom,
     RoomMessageText,
@@ -633,101 +633,6 @@ class MatrixServer:
         server_buffer_prnt(self, pprint.pformat(message.request.payload))
         server_buffer_prnt(self, pprint.pformat(message.response.body))
 
-    def handle_room_membership_events(
-        self,
-        room,
-        room_buffer,
-        event,
-        is_state_event
-    ):
-        def join(event, date, room, room_buffer, is_state_event):
-            user = room.users[event.sender]
-            buffer_user = RoomUser(user.name, event.sender)
-            # TODO remove this duplication
-            user.nick_color = buffer_user.color
-
-            if self.user_id == event.sender:
-                buffer_user.color = "weechat.color.chat_nick_self"
-                user.nick_color = "weechat.color.chat_nick_self"
-
-            room_buffer.join(
-                buffer_user,
-                server_ts_to_weechat(event.timestamp),
-                not is_state_event
-            )
-
-        room.handle_event(event)
-        date = server_ts_to_weechat(event.timestamp)
-
-        joined = False
-        left = False
-
-        if isinstance(event, RoomMemberJoin):
-            if event.prev_content and "membership" in event.prev_content:
-                if (event.prev_content["membership"] == "leave"
-                        or event.prev_content["membership"] == "invite"):
-                    join(event, date, room, room_buffer, is_state_event)
-                    joined = True
-                else:
-                    # TODO print out profile changes
-                    return
-            else:
-                # No previous content for this user in this room, so he just
-                # joined.
-                join(event, date, room, room_buffer, is_state_event)
-                joined = True
-
-        elif isinstance(event, RoomMemberLeave):
-            # TODO the nick can be a display name or a full sender name
-            nick = shorten_sender(event.sender)
-            if event.sender == event.leaving_user:
-                room_buffer.part(nick, date, not is_state_event)
-            else:
-                room_buffer.kick(nick, date, not is_state_event)
-
-            left = True
-
-        elif isinstance(event, RoomMemberInvite):
-            if is_state_event:
-                return
-
-            room_buffer.invite(event.invited_user, date)
-            return
-
-        # calculate room display name and set it as the buffer list name
-        room_name = room.display_name(self.user_id)
-        room_buffer.short_name = room_name
-
-        # A user has joined or left an encrypted room, we need to check for
-        # new devices and create a new group session
-        if room.encrypted and (joined or left):
-            self.device_check_timestamp = None
-
-    def handle_room_event(self, room, room_buffer, event, is_state_event):
-        if isinstance(event, RoomMembershipEvent):
-            self.handle_room_membership_events(
-                room,
-                room_buffer,
-                event,
-                is_state_event
-            )
-        elif isinstance(event, RoomTopicEvent):
-            try:
-                user = room.users[event.sender]
-                nick = user.name
-            except KeyError:
-                nick = event.sender
-
-            room_buffer.change_topic(
-                nick,
-                event.topic,
-                server_ts_to_weechat(event.timestamp),
-                not is_state_event
-            )
-        else:
-            tags = tags_for_message("message")
-            event.execute(self, room, room_buffer._ptr, tags)
-
     def _loop_events(self, info, n):
 
         for i in range(n+1):
@@ -742,7 +647,15 @@ class MatrixServer:
                     return i
 
             room, room_buffer = self.find_room_from_id(info.room_id)
-            self.handle_room_event(room, room_buffer, event, is_state)
+            # The room changed it's members, if the room is encrypted update
+            # the device list
+            if room.handle_event(event) and room.encrypted:
+                self.device_check_timestamp = None
+
+            if is_state:
+                room_buffer.handle_state_event(event)
+            else:
+                room_buffer.handle_timeline_event(event)
 
         self.event_queue.appendleft(info)
         return i
@@ -777,18 +690,10 @@ class MatrixServer:
 
     def handle_own_messages(self, room_buffer, message):
         if isinstance(message, RoomMessageText):
-            msg = (message.formatted_message.to_weechat()
-                   if message.formatted_message
-                   else message.message)
-
-            date = server_ts_to_weechat(message.timestamp)
-            room_buffer.self_message(self.user, msg, date)
-
+            room_buffer.self_message(message)
             return
         elif isinstance(message, RoomMessageEmote):
-            date = server_ts_to_weechat(message.timestamp)
-            room_buffer.self_action(self.user, message.message, date)
-
+            room_buffer.self_action(message)
             return
 
         raise NotImplementedError("Unsupported message of type {}".format(
@@ -850,12 +755,12 @@ class MatrixServer:
         return
 
     def create_room_buffer(self, room_id):
-        buf = WeechatChannelBuffer(room_id, self.name, self.user)
+        room = MatrixRoom(room_id, self.user_id)
+        buf = RoomBuffer(room, self.name)
         # TODO this should turned into a propper class
         self.room_buffers[room_id] = buf
-        self.buffers[room_id] = buf._ptr
-        self.rooms[room_id] = MatrixRoom(room_id)
-        pass
+        self.buffers[room_id] = buf.weechat_buffer._ptr
+        self.rooms[room_id] = room
 
     def find_room_from_ptr(self, pointer):
         room_id = key_from_value(self.buffers, pointer)
