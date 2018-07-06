@@ -284,7 +284,11 @@ class RoomInfo():
     def _decrypt_event(olm, room_id, event_dict):
         session_id = event_dict["content"]["session_id"]
         ciphertext = event_dict["content"]["ciphertext"]
-        plaintext = olm.group_decrypt(room_id, session_id, ciphertext)
+        plaintext, message_index = olm.group_decrypt(
+            room_id,
+            session_id,
+            ciphertext
+        )
 
         if not plaintext:
             return None, None
