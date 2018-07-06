@@ -24,6 +24,11 @@ from matrix.globals import W, SERVERS, OPTIONS
 
 from matrix.plugin_options import ServerBufferType
 
+try:
+    from urlparse import urlparse
+except ImportError:
+    from urllib.parse import urlparse
+
 
 def key_from_value(dictionary, value):
     # type: (Dict[str, Any], Any) -> str
@@ -350,3 +355,20 @@ def event_id_from_tags(tags):
             return tag[10:]
 
     return ""
+
+
+def mxc_to_http(mxc):
+    # type: (str) -> str
+    url = urlparse(mxc)
+
+    if url.scheme != "mxc":
+        return None
+
+    if not url.netloc or not url.path:
+        return None
+
+    return "https://{}/_matrix/media/r0/download/{}{}".format(
+        url.netloc,
+        url.netloc,
+        url.path
+    )

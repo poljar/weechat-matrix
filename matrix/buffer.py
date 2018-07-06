@@ -21,10 +21,15 @@ import time
 from builtins import super
 from functools import partial
 
-from .globals import W, SERVERS, OPTIONS, SCRIPT_NAME
+from .globals import W, SERVERS, OPTIONS, SCRIPT_NAME, ENCRYPTION
 from .utf import utf8_decode
 from .colors import Formatted
-from .utils import shorten_sender, server_ts_to_weechat, string_strikethrough
+from .utils import (
+    shorten_sender,
+    server_ts_to_weechat,
+    string_strikethrough,
+    mxc_to_http
+)
 from .plugin_options import RedactType
 
 
@@ -38,8 +43,12 @@ from .rooms import (
     RoomTopicEvent,
     RoomMessageText,
     RoomMessageEmote,
+    RoomMessageNotice,
+    RoomMessageMedia,
+    RoomMessageUnknown,
     RoomRedactionEvent,
-    RoomRedactedMessageEvent
+    RoomRedactedMessageEvent,
+    RoomEncryptionEvent
 )
 
 
@@ -804,11 +813,14 @@ class RoomBuffer(object):
     def handle_timeline_event(self, event):
         if isinstance(event, RoomMembershipEvent):
             self.handle_membership_events(event, False)
+
         elif isinstance(event, (RoomNameEvent, RoomAliasEvent)):
             room_name = self.room.display_name(self.room.own_user_id)
             self.weechat_buffer.short_name = room_name
+
         elif isinstance(event, RoomTopicEvent):
             self._handle_topic(event, False)
+
         elif isinstance(event, RoomMessageText):
             nick = self.find_nick(event.sender)
             data = (event.formatted_message.to_weechat()
@@ -821,6 +833,7 @@ class RoomBuffer(object):
                 date,
                 self.get_event_tags(event)
             )
+
         elif isinstance(event, RoomMessageEmote):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.timestamp)
@@ -830,10 +843,53 @@ class RoomBuffer(object):
                 date,
                 self.get_event_tags(event)
             )
+
+        elif isinstance(event, RoomMessageNotice):
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.timestamp)
+            self.weechat_buffer.notice(
+                nick,
+                event.message,
+                date,
+                self.get_event_tags(event)
+            )
+        elif isinstance(event, RoomMessageMedia):
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.timestamp)
+            http_url = mxc_to_http(event.url)
+            url = http_url if http_url else event.url
+
+            description = ("/{}".format(event.description)
+                           if event.description else "")
+            data = "{url}{desc}".format(url=url, desc=description)
+
+            self.weechat_buffer.message(
+                nick,
+                data,
+                date,
+                self.get_event_tags(event)
+            )
+
+        elif isinstance(event, RoomMessageUnknown):
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.timestamp)
+            data = ("Unknown message of type {t}, body: {body}").format(
+                    t=self.message_type, body=self.message)
+
         elif isinstance(event, RoomRedactionEvent):
             self._redact_line(event)
+
         elif isinstance(event, RoomRedactedMessageEvent):
             self._handle_redacted_message(event)
+
+        elif isinstance(event, RoomEncryptionEvent):
+            if ENCRYPTION:
+                return
+
+            message = ("This room is encrypted, encryption is "
+                       "currently unsuported. Message sending is disabled for "
+                       "this room.")
+            self.weechat_buffer.error(message)
 
     def self_message(self, message):
         nick = self.find_nick(self.room.own_user_id)

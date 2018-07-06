@@ -333,7 +333,8 @@ class MatrixClient:
 
         return HttpRequest(RequestType.PUT, self.host, path, content)
 
-    def mxc_to_http(self, mxc):
+    @staticmethod
+    def mxc_to_http(mxc):
         # type: (str) -> str
         url = urlparse(mxc)
 
@@ -343,13 +344,11 @@ class MatrixClient:
         if not url.netloc or not url.path:
             return None
 
-        http_url = ("https://{host}/_matrix/media/r0/download/"
-                    "{server_name}{mediaId}").format(
-                        host=self.host,
-                        server_name=url.netloc,
-                        mediaId=url.path)
-
-        return http_url
+        return "https://{}/_matrix/media/r0/download/{}{}".format(
+            url.netloc,
+            url.netloc,
+            url.path
+        )
 
 
 class MatrixMessage():

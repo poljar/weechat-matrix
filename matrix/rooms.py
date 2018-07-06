@@ -15,17 +15,14 @@
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 from __future__ import unicode_literals
-from builtins import str
 
 import json
 
 from pprint import pformat
 
 from collections import namedtuple, deque
-from datetime import datetime
 
-from matrix.globals import W, OPTIONS
-from matrix.plugin_options import RedactType
+from matrix.globals import W
 
 from matrix.colors import Formatted
 from matrix.utils import (
@@ -47,9 +44,6 @@ class MatrixRoom:
         self.own_user_id = own_user_id
         self.canonical_alias = None   # type: str
         self.name = None              # type: str
-        self.topic = ""               # type: str
-        self.topic_author = ""        # type: str
-        self.topic_date = None        # type: datetime.datetime
         self.prev_batch = ""          # type: str
         self.users = dict()           # type: Dict[str, MatrixUser]
         self.encrypted = False        # type: bool
@@ -114,7 +108,6 @@ class MatrixRoom:
                 num=num_users-1)
         else:
             return "Empty room?"
-
 
     def machine_name(self):
         """
@@ -454,36 +447,11 @@ class RoomMessageText(RoomMessageEvent):
 
 
 class RoomMessageEmote(RoomMessageSimple):
-
-    def execute(self, server, room, buff, tags):
-        nick, color_name = sender_to_nick_and_color(room, self.sender)
-        color = color_for_tags(color_name)
-
-        event_tags = add_event_tags(self.event_id, nick, color, tags)
-        event_tags.append("matrix_action")
-
-        tags_string = ",".join(event_tags)
-
-        data = "{prefix}{nick_color}{author}{ncolor} {msg}".format(
-            prefix=W.prefix("action"),
-            nick_color=W.color(color_name),
-            author=nick,
-            ncolor=W.color("reset"),
-            msg=self.message)
-
-        date = server_ts_to_weechat(self.timestamp)
-        W.prnt_date_tags(buff, date, tags_string, data)
+    pass
 
 
 class RoomMessageNotice(RoomMessageText):
-
-    def execute(self, server, room, buff, tags):
-        msg = "{color}{message}{ncolor}".format(
-            color=W.color("irc.color.notice"),
-            message=self.message,
-            ncolor=W.color("reset"))
-
-        self._print_message(msg, room, buff, tags)
+    pass
 
 
 class RoomMessageMedia(RoomMessageEvent):
@@ -503,17 +471,6 @@ class RoomMessageMedia(RoomMessageEvent):
         description = sanitize_text(event["content"]["body"])
 
         return cls(event_id, sender, timestamp, mxc_url, description)
-
-    def execute(self, server, room, buff, tags):
-        http_url = server.client.mxc_to_http(self.url)
-        url = http_url if http_url else self.url
-
-        description = (" ({})".format(self.description)
-                       if self.description else "")
-
-        msg = "{url}{desc}".format(url=url, desc=description)
-
-        self._print_message(msg, room, buff, tags)
 
 
 class RoomMemberJoin(RoomMembershipEvent):
@@ -714,12 +671,3 @@ class RoomEncryptionEvent(RoomEvent):
         timestamp = sanitize_ts(event_dict["origin_server_ts"])
 
         return cls(event_id, sender, timestamp)
-
-    def execute(self, server, room, buff, tags):
-        room.encrypted = True
-
-        message = ("{prefix}This room is encrypted, encryption is "
-                   "currently unsuported. Message sending is disabled for "
-                   "this room.").format(prefix=W.prefix("error"))
-
-        W.prnt(buff, message)
