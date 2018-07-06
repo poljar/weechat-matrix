@@ -885,6 +885,7 @@ class RoomBuffer(object):
                 date,
                 self.get_event_tags(event)
             )
+
         elif isinstance(event, RoomMessageMedia):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.timestamp)
@@ -906,7 +907,15 @@ class RoomBuffer(object):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.timestamp)
             data = ("Unknown message of type {t}, body: {body}").format(
-                    t=self.message_type, body=self.message)
+                t=event.message_type,
+                body=event.message
+            )
+            self.weechat_buffer.message(
+                nick,
+                data,
+                date,
+                self.get_event_tags(event)
+            )
 
         elif isinstance(event, RoomRedactionEvent):
             self._redact_line(event)
@@ -925,6 +934,9 @@ class RoomBuffer(object):
 
         elif isinstance(event, RoomPowerLevels):
             self._handle_power_level(event)
+
+        else:
+            W.prnt("", "Unhandled event of type {}.".format(type(event)))
 
     def self_message(self, message):
         nick = self.find_nick(self.room.own_user_id)
