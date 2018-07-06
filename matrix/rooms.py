@@ -287,7 +287,8 @@ class RoomInfo():
                            error=pformat(error),
                            event=pformat(event))
             W.prnt("", message)
-            raise
+            e = BadEvent.from_dict(event)
+            events.append(e)
 
         return events
 
@@ -323,6 +324,22 @@ class RoomEvent():
         self.event_id = event_id
         self.sender = sender
         self.timestamp = timestamp
+
+
+class BadEvent(RoomEvent):
+    def __init__(self, event_id, sender, timestamp, source):
+        self.source = source
+
+    def from_dict(cls, event):
+        event_id = (sanitize_id(event["event_id"])
+                    if "event_id" in event else None)
+        sender = (sanitize_id(event["sender"])
+                  if "sender" in event else None)
+        timestamp = (sanitize_id(event["origin_server_ts"])
+                     if "origin_server_ts" in event else None)
+        source = json.dumps(event)
+
+        return cls(event_id, sender, timestamp, source)
 
 
 class RoomRedactedMessageEvent(RoomEvent):
