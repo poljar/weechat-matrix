@@ -48,6 +48,7 @@ class MatrixRoom:
         self.users = dict()           # type: Dict[str, MatrixUser]
         self.encrypted = False        # type: bool
         self.backlog_pending = False  # type: bool
+        self.power_levels = {}
         # yapf: enable
 
     def display_name(self, own_user_id):
@@ -145,6 +146,9 @@ class MatrixRoom:
                     user.display_name = event.display_name
             else:
                 short_name = shorten_sender(event.sender)
+                # TODO the default power level doesn't have to be 0
+                level = (self.power_levels[event.sender] if event.sender in
+                         self.power_levels else 0)
                 user = MatrixUser(short_name, event.display_name)
                 self.users[event.sender] = user
                 return True
@@ -162,6 +166,14 @@ class MatrixRoom:
 
         elif isinstance(event, RoomEncryptionEvent):
             self.encrypted = True
+
+        elif isinstance(event, RoomPowerLevels):
+            self.power_levels = event.power_levels
+
+            # Update the power levels of the joined users
+            for user_id, level in self.power_levels.items():
+                if user_id in self.users:
+                    self.users[user_id].power_level = level
 
         return False
 
@@ -560,34 +572,10 @@ class RoomPowerLevels(RoomEvent):
         event_id = sanitize_id(event_dict["event_id"])
         sender = sanitize_id(event_dict["sender"])
         timestamp = sanitize_ts(event_dict["origin_server_ts"])
-        power_levels = []
 
-        for user, level in event_dict["content"]["users"].items():
-            power_levels.append(
-                PowerLevel(sanitize_id(user), sanitize_power_level(level)))
+        power_levels = event_dict["content"].pop("users")
 
         return cls(event_id, sender, timestamp, power_levels)
-
-    def _set_power_level(self, room, buff, power_level):
-        user_id = power_level.user
-        level = power_level.level
-
-        if user_id not in room.users:
-            return
-
-        user = room.users[user_id]
-        user.power_level = level
-        user.prefix = get_prefix_for_level(level)
-
-        nick_pointer = W.nicklist_search_nick(buff, "", user_id)
-
-        if nick_pointer:
-            W.nicklist_remove_nick(buff, nick_pointer)
-            add_user_to_nicklist(buff, user_id, user)
-
-    def execute(self, server, room, buff, tags):
-        for level in self.power_levels:
-            self._set_power_level(room, buff, level)
 
 
 class RoomTopicEvent(RoomEvent):

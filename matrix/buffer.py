@@ -48,7 +48,8 @@ from .rooms import (
     RoomMessageUnknown,
     RoomRedactionEvent,
     RoomRedactedMessageEvent,
-    RoomEncryptionEvent
+    RoomEncryptionEvent,
+    RoomPowerLevels
 )
 
 
@@ -91,6 +92,22 @@ class RoomUser(WeechatUser):
         # type: (str, str, int) -> None
         prefix = self._get_prefix(power_level)
         return super().__init__(nick, user_id, prefix)
+
+    @property
+    def power_level(self):
+        # This shouldn't be used since it's a lossy function. It's only here
+        # for the setter
+        if self.prefix == "&":
+            return 100
+        if self.prefix == "@":
+            return 50
+        if self.prefix == "+":
+            return 10
+        return 0
+
+    @power_level.setter
+    def power_level(self, level):
+        self.prefix = self._get_prefix(level)
 
     @staticmethod
     def _get_prefix(power_level):
@@ -804,11 +821,26 @@ class RoomBuffer(object):
     def get_event_tags(event):
         return ["matrix_id_{}".format(event.event_id)]
 
+    def _handle_power_level(self, event):
+        for user_id in self.room.power_levels:
+            if user_id in self.displayed_nicks:
+                nick = self.find_nick(user_id)
+
+                user = self.weechat_buffer.users[nick]
+                user.power_level = self.room.power_levels[user_id]
+
+                # There is no way to change the group of a user without
+                # removing him from the nicklist
+                self.weechat_buffer._remove_user_from_nicklist(user)
+                self.weechat_buffer._add_user_to_nicklist(user)
+
     def handle_state_event(self, event):
         if isinstance(event, RoomMembershipEvent):
             self.handle_membership_events(event, True)
         elif isinstance(event, RoomTopicEvent):
             self._handle_topic(event, True)
+        elif isinstance(event, RoomPowerLevels):
+            self._handle_power_level(event)
 
     def handle_timeline_event(self, event):
         if isinstance(event, RoomMembershipEvent):
@@ -890,6 +922,9 @@ class RoomBuffer(object):
                        "currently unsuported. Message sending is disabled for "
                        "this room.")
             self.weechat_buffer.error(message)
+
+        elif isinstance(event, RoomPowerLevels):
+            self._handle_power_level(event)
 
     def self_message(self, message):
         nick = self.find_nick(self.room.own_user_id)
