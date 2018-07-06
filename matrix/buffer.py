@@ -677,10 +677,16 @@ class RoomBuffer(object):
     def handle_membership_events(self, event, is_state):
         def join(event, date, is_state):
             user = self.room.users[event.sender]
-            buffer_user = RoomUser(user.name, event.sender, user.power_level)
-            # TODO we need to check that the displayed nick is unique if it
-            # isn't use the full user_id
-            self.displayed_nicks[event.sender] = user.name
+
+            # TODO make this configurable
+            if user.name in self.displayed_nicks.values():
+                # Use the full user id, but don't include the @
+                nick = event.sender[1:]
+            else:
+                nick = user.name
+
+            buffer_user = RoomUser(nick, event.sender, user.power_level)
+            self.displayed_nicks[event.sender] = nick
 
             if self.room.own_user_id == event.sender:
                 buffer_user.color = "weechat.color.chat_nick_self"
