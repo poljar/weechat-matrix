@@ -37,9 +37,6 @@ from .rooms import (
     RoomNameEvent,
     RoomAliasEvent,
     RoomMembershipEvent,
-    RoomMemberJoin,
-    RoomMemberLeave,
-    RoomMemberInvite,
     RoomTopicEvent,
     RoomMessageText,
     RoomMessageEmote,
@@ -700,10 +697,9 @@ class RoomBuffer(object):
 
         date = server_ts_to_weechat(event.timestamp)
 
-        if isinstance(event, RoomMemberJoin):
+        if event.content["membership"] == "join":
             if event.prev_content and "membership" in event.prev_content:
-                if (event.prev_content["membership"] == "leave"
-                        or event.prev_content["membership"] == "invite"):
+                if (event.prev_content["membership"] != "join"):
                     join(event, date, is_state)
                 else:
                     # TODO print out profile changes
@@ -713,21 +709,21 @@ class RoomBuffer(object):
                 # joined.
                 join(event, date, is_state)
 
-        elif isinstance(event, RoomMemberLeave):
-            nick = self.find_nick(event.leaving_user)
-            if event.sender == event.leaving_user:
+        elif event.content["membership"] == "leave":
+            nick = self.find_nick(event.state_key)
+            if event.sender == event.state_key:
                 self.weechat_buffer.part(nick, date, not is_state)
             else:
                 self.weechat_buffer.kick(nick, date, not is_state)
 
-            if event.leaving_user in self.displayed_nicks:
-                del self.displayed_nicks[event.leaving_user]
+            if event.state_key in self.displayed_nicks:
+                del self.displayed_nicks[event.state_key]
 
-        elif isinstance(event, RoomMemberInvite):
+        elif event.content["membership"] == "invite":
             if is_state:
                 return
 
-            self.weechat_buffer.invite(event.invited_user, date)
+            self.weechat_buffer.invite(event.state_key, date)
             return
 
         room_name = self.room.display_name(self.room.own_user_id)

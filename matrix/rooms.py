@@ -138,25 +138,35 @@ class MatrixRoom:
         """
         return not self.is_named()
 
-    def handle_event(self, event):
-        if isinstance(event, RoomMemberJoin):
+    def _handle_membership(self, event):
+        if event.content["membership"] == "join":
             if event.sender in self.users:
                 user = self.users[event.sender]
-                if event.display_name:
-                    user.display_name = event.display_name
+                if "display_name" in event.content:
+                    user.display_name = event.content["display_name"]
             else:
                 short_name = shorten_sender(event.sender)
                 # TODO the default power level doesn't have to be 0
                 level = (self.power_levels[event.sender] if event.sender in
                          self.power_levels else 0)
-                user = MatrixUser(short_name, event.display_name)
+                display_name = (event.content["display_name"]
+                                if "display_name" in event.content else None)
+
+                user = MatrixUser(short_name, display_name, level)
                 self.users[event.sender] = user
                 return True
 
-        elif isinstance(event, RoomMemberLeave):
-            if event.leaving_user in self.users:
-                del self.users[event.leaving_user]
+        elif event.content["membership"] == "leave":
+            if event.state_key in self.users:
+                del self.users[event.state_key]
                 return True
+
+        elif event.content["membership"] == "invite":
+            pass
+
+    def handle_event(self, event):
+        if isinstance(event, RoomMembershipEvent):
+            self._handle_membership(event)
 
         elif isinstance(event, RoomNameEvent):
             self.name = event.name
@@ -180,11 +190,11 @@ class MatrixRoom:
 
 class MatrixUser:
 
-    def __init__(self, name, display_name):
+    def __init__(self, name, display_name=None, power_level=0):
         # yapf: disable
         self.name = name                  # type: str
         self.display_name = display_name  # type: str
-        self.power_level = 0              # type: int
+        self.power_level = power_level    # type: int
         # yapf: enable
 
 
@@ -214,24 +224,6 @@ class RoomInfo():
         return RoomMessageEvent.from_dict(event)
 
     @staticmethod
-    def _membership_from_dict(event_dict):
-        if (event_dict["content"]["membership"] not in [
-                "invite", "join", "knock", "leave", "ban"
-        ]):
-            raise ValueError
-
-        if event_dict["content"]["membership"] == "join":
-            return RoomMemberJoin.from_dict(event_dict)
-
-        elif event_dict["content"]["membership"] == "leave":
-            return RoomMemberLeave.from_dict(event_dict)
-
-        elif event_dict["content"]["membership"] == "invite":
-            return RoomMemberInvite.from_dict(event_dict)
-
-        return None
-
-    @staticmethod
     def parse_event(olm, room_id, event_dict):
         # type: (Dict[Any, Any]) -> (RoomEvent, RoomEvent)
         event = None
@@ -241,7 +233,7 @@ class RoomInfo():
         elif event_dict["type"] == "m.room.message":
             event = RoomInfo._message_from_event(event_dict)
         elif event_dict["type"] == "m.room.member":
-            event = RoomInfo._membership_from_dict(event_dict)
+            event = RoomMembershipEvent.from_dict(event_dict)
         elif event_dict["type"] == "m.room.power_levels":
             event = RoomPowerLevels.from_dict(event_dict)
         elif event_dict["type"] == "m.room.topic":
@@ -331,10 +323,6 @@ class RoomEvent():
         self.event_id = event_id
         self.sender = sender
         self.timestamp = timestamp
-
-
-class RoomMembershipEvent(RoomEvent):
-    pass
 
 
 class RoomRedactedMessageEvent(RoomEvent):
@@ -485,19 +473,16 @@ class RoomMessageMedia(RoomMessageEvent):
         return cls(event_id, sender, timestamp, mxc_url, description)
 
 
-class RoomMemberJoin(RoomMembershipEvent):
-
+class RoomMembershipEvent(RoomEvent):
     def __init__(
         self,
         event_id,
         sender,
         timestamp,
-        display_name,
         state_key,
         content,
         prev_content
     ):
-        self.display_name = display_name
         self.state_key = state_key
         self.content = content
         self.prev_content = prev_content
@@ -509,56 +494,18 @@ class RoomMemberJoin(RoomMembershipEvent):
         sender = sanitize_id(event_dict["sender"])
         timestamp = sanitize_ts(event_dict["origin_server_ts"])
         state_key = sanitize_id(event_dict["state_key"])
-        display_name = None
         content = event_dict["content"]
         prev_content = (event_dict["unsigned"]["prev_content"]
                         if "prev_content" in event_dict["unsigned"] else None)
-
-        if event_dict["content"]:
-            if "display_name" in event_dict["content"]:
-                display_name = sanitize_text(
-                    event_dict["content"]["displayname"])
 
         return cls(
             event_id,
             sender,
             timestamp,
-            display_name,
             state_key,
             content,
             prev_content
         )
-
-
-class RoomMemberInvite(RoomMembershipEvent):
-    def __init__(self, event_id, sender, invited_user, timestamp):
-        self.invited_user = invited_user
-        RoomEvent.__init__(self, event_id, sender, timestamp)
-
-    @classmethod
-    def from_dict(cls, event_dict):
-        event_id = sanitize_id(event_dict["event_id"])
-        sender = sanitize_id(event_dict["sender"])
-        invited_user = sanitize_id(event_dict["state_key"])
-        timestamp = sanitize_ts(event_dict["origin_server_ts"])
-
-        return cls(event_id, sender, invited_user, timestamp)
-
-
-class RoomMemberLeave(RoomMembershipEvent):
-
-    def __init__(self, event_id, sender, leaving_user, timestamp):
-        self.leaving_user = leaving_user
-        RoomEvent.__init__(self, event_id, sender, timestamp)
-
-    @classmethod
-    def from_dict(cls, event_dict):
-        event_id = sanitize_id(event_dict["event_id"])
-        sender = sanitize_id(event_dict["sender"])
-        leaving_user = sanitize_id(event_dict["state_key"])
-        timestamp = sanitize_ts(event_dict["origin_server_ts"])
-
-        return cls(event_id, sender, leaving_user, timestamp)
 
 
 class RoomPowerLevels(RoomEvent):

@@ -39,12 +39,6 @@ from .rooms import (
     MatrixRoom,
     RoomMessageText,
     RoomMessageEmote,
-    MatrixUser,
-    RoomMembershipEvent,
-    RoomMemberJoin,
-    RoomMemberLeave,
-    RoomMemberInvite,
-    RoomTopicEvent
 )
 from matrix.api import (
     MatrixClient,
