@@ -180,8 +180,6 @@ class MatrixUser:
         self.name = name                  # type: str
         self.display_name = display_name  # type: str
         self.power_level = 0              # type: int
-        self.nick_color = ""              # type: str
-        self.prefix = ""                  # type: str
         # yapf: enable
 
 
