@@ -387,7 +387,8 @@ class MatrixKeyClaimEvent(MatrixEvent):
 
         while server.encryption_queue[self.room_id]:
             formatted_message = server.encryption_queue[self.room_id].popleft()
-            server.send_room_message(self.room_id, formatted_message, True)
+            room, _ = server.find_room_from_id(self.room_id)
+            server.send_room_message(room, formatted_message, True)
 
 
 class MatrixToDeviceEvent(MatrixEvent):
