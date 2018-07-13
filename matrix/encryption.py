@@ -649,13 +649,16 @@ class Olm():
     @encrypt_enabled
     def group_decrypt(self, room_id, session_id, ciphertext):
         if session_id not in self.inbound_group_sessions[room_id]:
-            return None
+            return None, None
 
         session = self.inbound_group_sessions[room_id][session_id]
+
         try:
             return session.decrypt(ciphertext)
         except OlmGroupSessionError:
-            return None, None
+            pass
+
+        return None, None
 
     def share_group_session(self, room_id, own_id, users):
         group_session = self.outbound_group_sessions[room_id]
