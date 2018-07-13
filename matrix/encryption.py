@@ -653,11 +653,9 @@ class Olm():
 
         session = self.inbound_group_sessions[room_id][session_id]
         try:
-            plaintext = session.decrypt(ciphertext)
+            return session.decrypt(ciphertext)
         except OlmGroupSessionError:
-            return None
-
-        return plaintext
+            return None, None
 
     def share_group_session(self, room_id, own_id, users):
         group_session = self.outbound_group_sessions[room_id]
