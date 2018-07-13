@@ -228,7 +228,7 @@ class WeechatChannelBuffer(object):
         @date.setter
         def date(self, new_date):
             # type: (int) -> None
-            new_data = {"date": new_date}
+            new_data = {"date": str(new_date)}
             W.hdata_update(self._hdata, self._ptr, new_data)
 
         @property
@@ -239,7 +239,7 @@ class WeechatChannelBuffer(object):
         @date_printed.setter
         def date_printed(self, new_date):
             # type: (int) -> None
-            new_data = {"date_printed": new_date}
+            new_data = {"date_printed": str(new_date)}
             W.hdata_update(self._hdata, self._ptr, new_data)
 
         @property
@@ -247,16 +247,32 @@ class WeechatChannelBuffer(object):
             # type: () -> bool
             return bool(W.hdata_char(self._hdata, self._ptr, "highlight"))
 
-        def update(self, date, date_printed, tags, prefix, message):
-            new_data = {
-                "date": date,
-                "date_printed": date_printed,
-                "tags_array": ','.join(tags),
-                "prefix": prefix,
-                "message": message,
-                # "highlight": highlight
-            }
-            W.hdata_update(self._hdata, self._ptr, new_data)
+        def update(
+            self,
+            date=None,
+            date_printed=None,
+            tags=None,
+            prefix=None,
+            message=None,
+            highlight=None
+        ):
+            new_data = {}
+
+            if date:
+                new_data["date"] = str(date)
+            if date_printed:
+                new_data["date_printed"] = str(date_printed)
+            if tags:
+                new_data["tags_array"] = ','.join(tags)
+            if prefix:
+                new_data["prefix"] = prefix
+            if message:
+                new_data["message"] = message
+            if highlight:
+                new_data["highlight"] = highlight
+
+            if new_data:
+                W.hdata_update(self._hdata, self._ptr, new_data)
 
     def __init__(self, name, server_name, user):
         # type: (str, str, str)
@@ -953,3 +969,86 @@ class RoomBuffer(object):
         nick = self.find_nick(self.room.own_user_id)
         date = server_ts_to_weechat(message.timestamp)
         self.weechat_buffer.self_action(nick, message.message, date)
+
+    def old_redacted(self, event):
+        tags = [
+            SCRIPT_NAME + "_message",
+            "notify_message",
+            "no_log",
+            "no_highlight"
+        ]
+        reason = (", reason: \"{reason}\"".format(reason=event.reason)
+                  if event.reason else "")
+
+        censor = self.find_nick(event.censor)
+
+        data = ("{del_color}<{log_color}Message redacted by: "
+                "{censor}{log_color}{reason}{del_color}>{ncolor}").format(
+                   del_color=W.color("chat_delimiters"),
+                   ncolor=W.color("reset"),
+                   log_color=W.color("logger.color.backlog_line"),
+                   censor=censor,
+                   reason=reason)
+
+        tags += self.get_event_tags(event)
+        nick = self.find_nick(event.sender)
+        user = self.weechat_buffer._get_user(nick)
+        date = server_ts_to_weechat(event.timestamp)
+        self.weechat_buffer._print_message(user, data, date, tags)
+
+    def old_message(self, event):
+        tags = [
+            SCRIPT_NAME + "_message",
+            "notify_message",
+            "no_log",
+            "no_highlight"
+        ]
+        tags += self.get_event_tags(event)
+        nick = self.find_nick(event.sender)
+        data = (event.formatted_message.to_weechat()
+                if event.formatted_message else event.message)
+        user = self.weechat_buffer._get_user(nick)
+        date = server_ts_to_weechat(event.timestamp)
+        self.weechat_buffer._print_message(user, data, date, tags)
+
+    def sort_messages(self):
+        class LineCopy(object):
+            def __init__(
+                self,
+                date,
+                date_printed,
+                tags,
+                prefix,
+                message,
+                highlight
+            ):
+                self.date = date
+                self.date_printed = date_printed
+                self.tags = tags
+                self.prefix = prefix
+                self.message = message
+                self.highlight = highlight
+
+            @classmethod
+            def from_line(cls, line):
+                return cls(line.date, line.date_printed, line.tags,
+                           line.prefix, line.message, line.highlight)
+
+        lines = [
+            LineCopy.from_line(line) for line in self.weechat_buffer.lines
+        ]
+        sorted_lines = sorted(lines, key=lambda line: line.date, reverse=True)
+
+        for n, line in enumerate(self.weechat_buffer.lines):
+            new = sorted_lines[n]
+            line.update(new.date, new.date_printed, new.tags, new.prefix,
+                        new.message)
+
+    def handle_backlog(self, events):
+        for event in events:
+            if isinstance(event, RoomMessageText):
+                self.old_message(event)
+            elif isinstance(event, RoomRedactedMessageEvent):
+                self.old_redacted(event)
+
+        self.sort_messages()

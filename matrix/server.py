@@ -52,7 +52,10 @@ from matrix.api import (
     MatrixKeyClaimMessage
 )
 
-from .events import MatrixSendEvent
+from .events import (
+    MatrixSendEvent,
+    MatrixBacklogEvent
+)
 
 from matrix.encryption import (
     Olm,
@@ -697,6 +700,14 @@ class MatrixServer:
         if isinstance(response, MatrixSendEvent):
             _, room_buffer = self.find_room_from_id(response.room_id)
             self.handle_own_messages(room_buffer, response.message)
+
+        elif isinstance(response, MatrixBacklogEvent):
+            room, room_buffer = self.find_room_from_id(response.room_id)
+            room_buffer.handle_backlog(response.events)
+            room.prev_batch = response.end_token
+            room.backlog_pending = False
+            W.bar_item_update("buffer_modes")
+
         else:
             response.execute()
 
