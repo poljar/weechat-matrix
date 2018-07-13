@@ -150,16 +150,6 @@ class MatrixSendEvent(MatrixEvent):
         self.message = message
         MatrixEvent.__init__(self, server)
 
-    def execute(self):
-        tags = [
-            "matrix_message", "notify_none", "no_highlight", "self_msg", "log1"
-        ]
-
-        buff = self.server.buffers[self.room_id]
-        room = self.server.rooms[self.room_id]
-
-        self.message.execute(self.server, room, buff, tags)
-
     @classmethod
     def from_dict(cls, server, room_id, message, parsed_dict):
         try:

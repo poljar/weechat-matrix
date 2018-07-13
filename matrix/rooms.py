@@ -428,12 +428,7 @@ class RoomMessageSimple(RoomMessageEvent):
 
 
 class RoomMessageUnknown(RoomMessageSimple):
-
-    def execute(self, server, room, buff, tags):
-        msg = ("Unknown message of type {t}, body: {body}").format(
-            t=self.message_type, body=self.message)
-
-        self._print_message(msg, room, buff, tags)
+    pass
 
 
 class RoomMessageText(RoomMessageEvent):
