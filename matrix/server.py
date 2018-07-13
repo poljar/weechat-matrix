@@ -572,7 +572,7 @@ class MatrixServer:
 
     @encrypt_enabled
     def upload_keys(self, device_keys=False, one_time_keys=False):
-        keys = self.olm.account.identity_keys() if device_keys else None
+        keys = self.olm.account.identity_keys if device_keys else None
 
         one_time_keys = (self.olm.account.one_time_keys["curve25519"] if
                          one_time_keys else None)
