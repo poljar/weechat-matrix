@@ -954,7 +954,8 @@ class RoomBuffer(object):
             self._handle_power_level(event)
 
         else:
-            W.prnt("", "Unhandled event of type {}.".format(type(event)))
+            W.prnt("", "Unhandled event of type {}.".format(
+                type(event).__name__))
 
     def self_message(self, message):
         nick = self.find_nick(self.room.own_user_id)

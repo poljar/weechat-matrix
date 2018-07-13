@@ -275,20 +275,22 @@ class RoomInfo():
     def _parse_events(olm, room_id, parsed_dict):
         events = []
 
-        try:
-            for event in parsed_dict:
+        for event in parsed_dict:
+            try:
                 e = RoomInfo.parse_event(olm, room_id, event)
+            except (ValueError, TypeError, KeyError) as error:
+                message = ("{prefix}matrix: Error parsing "
+                           "room event of type {type}: "
+                           "{error}\n{event}").format(
+                               prefix=W.prefix("error"),
+                               type=event["type"],
+                               error=pformat(error),
+                               event=pformat(event))
+                W.prnt("", message)
+                e = BadEvent.from_dict(event)
+
+            finally:
                 events.append(e)
-        except (ValueError, TypeError, KeyError) as error:
-            message = ("{prefix}matrix: Error parsing "
-                       "room event of type {type}: {error}\n{event}").format(
-                           prefix=W.prefix("error"),
-                           type=event["type"],
-                           error=pformat(error),
-                           event=pformat(event))
-            W.prnt("", message)
-            e = BadEvent.from_dict(event)
-            events.append(e)
 
         return events
 
@@ -318,7 +320,7 @@ class RoomInfo():
         )
 
 
-class RoomEvent():
+class RoomEvent(object):
 
     def __init__(self, event_id, sender, timestamp):
         self.event_id = event_id
@@ -328,14 +330,16 @@ class RoomEvent():
 
 class BadEvent(RoomEvent):
     def __init__(self, event_id, sender, timestamp, source):
+        RoomEvent.__init__(self, event_id, sender, timestamp)
         self.source = source
 
+    @classmethod
     def from_dict(cls, event):
         event_id = (sanitize_id(event["event_id"])
                     if "event_id" in event else None)
         sender = (sanitize_id(event["sender"])
                   if "sender" in event else None)
-        timestamp = (sanitize_id(event["origin_server_ts"])
+        timestamp = (sanitize_ts(event["origin_server_ts"])
                      if "origin_server_ts" in event else None)
         source = json.dumps(event)
 
