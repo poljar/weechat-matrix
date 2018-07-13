@@ -166,7 +166,7 @@ class MatrixRoom:
 
     def handle_event(self, event):
         if isinstance(event, RoomMembershipEvent):
-            self._handle_membership(event)
+            return self._handle_membership(event)
 
         elif isinstance(event, RoomNameEvent):
             self.name = event.name
@@ -176,6 +176,7 @@ class MatrixRoom:
 
         elif isinstance(event, RoomEncryptionEvent):
             self.encrypted = True
+            return True
 
         elif isinstance(event, RoomPowerLevels):
             self.power_levels = event.power_levels
