@@ -262,7 +262,7 @@ class RoomInfo():
         )
 
         if not plaintext:
-            return None
+            return UndecryptedEvent.from_dict(event_dict)
 
         parsed_plaintext = json.loads(plaintext, encoding="utf-8")
 
@@ -326,6 +326,24 @@ class RoomEvent(object):
         self.event_id = event_id
         self.sender = sender
         self.timestamp = timestamp
+
+
+class UndecryptedEvent(RoomEvent):
+    def __init__(self, event_id, sender, timestamp, session_id):
+        self.session_id = session_id
+        RoomEvent.__init__(self, event_id, sender, timestamp)
+
+    @classmethod
+    def from_dict(cls, event):
+        event_id = (sanitize_id(event["event_id"])
+                    if "event_id" in event else None)
+        sender = (sanitize_id(event["sender"])
+                  if "sender" in event else None)
+        timestamp = (sanitize_ts(event["origin_server_ts"])
+                     if "origin_server_ts" in event else None)
+        session_id = event["content"]["session_id"]
+
+        return cls(event_id, sender, timestamp, session_id)
 
 
 class BadEvent(RoomEvent):

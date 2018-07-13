@@ -46,7 +46,8 @@ from .rooms import (
     RoomRedactionEvent,
     RoomRedactedMessageEvent,
     RoomEncryptionEvent,
-    RoomPowerLevels
+    RoomPowerLevels,
+    UndecryptedEvent
 )
 
 
@@ -952,6 +953,18 @@ class RoomBuffer(object):
 
         elif isinstance(event, RoomPowerLevels):
             self._handle_power_level(event)
+
+        elif isinstance(event, UndecryptedEvent):
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.timestamp)
+            data = ("Error decrypting event session "
+                    "id: {}".format(event.session_id))
+            self.weechat_buffer.message(
+                nick,
+                data,
+                date,
+                self.get_event_tags(event)
+            )
 
         else:
             W.prnt("", "Unhandled event of type {}.".format(
