@@ -1066,3 +1066,7 @@ class RoomBuffer(object):
                 self.old_redacted(event)
 
         self.sort_messages()
+
+    def error(self, string):
+        # type: (str) -> None
+        self.weechat_buffer.error(string)
