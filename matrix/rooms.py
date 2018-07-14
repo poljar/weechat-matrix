@@ -290,8 +290,7 @@ class RoomInfo():
                 W.prnt("", message)
                 e = BadEvent.from_dict(event)
 
-            finally:
-                events.append(e)
+            events.append(e)
 
         return events
 
