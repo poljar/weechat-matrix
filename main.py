@@ -386,8 +386,8 @@ def room_close_cb(data, buffer):
 def matrix_unload_cb():
     matrix_config_free(matrix.globals.CONFIG)
 
-    for server in SERVERS.values():
-        server.store_olm()
+    # for server in SERVERS.values():
+    #     server.store_olm()
 
     W.prnt("", "unloading")
     return W.WEECHAT_RC_OK

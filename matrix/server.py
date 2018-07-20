@@ -329,7 +329,7 @@ class MatrixServer:
 
         self.send_buffer = b""
         self.current_message = None
-        self.reset_parser()
+        self.client.disconnect()
 
         self.lag = 0
         W.bar_item_update("lag")
