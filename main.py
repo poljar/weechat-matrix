@@ -145,14 +145,6 @@ def print_certificate_info(buff, sock, cert):
 
     W.prnt(buff, message)
 
-
-@utf8_decode
-def matrix_event_timer_cb(server_name, remaining_calls):
-    server = SERVERS[server_name]
-    server.handle_events()
-    return W.WEECHAT_RC_OK
-
-
 def wrap_socket(server, file_descriptor):
     # type: (MatrixServer, int) -> None
     sock = None  # type: socket.socket
@@ -396,32 +388,6 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
             'Unexpected error: {status}'.format(status=status_value))
 
     server.disconnect(reconnect=True)
-    return W.WEECHAT_RC_OK
-
-
-@utf8_decode
-def room_input_cb(server_name, buffer, input_data):
-    server = SERVERS[server_name]
-
-    if not server.connected:
-        message = "{prefix}matrix: you are not connected to the server".format(
-            prefix=W.prefix("error"))
-        W.prnt(buffer, message)
-        return W.WEECHAT_RC_ERROR
-
-    room_id = key_from_value(server.buffers, buffer)
-    room = server.rooms[room_id]
-
-    formatted_data = Formatted.from_input_line(input_data)
-
-    if room.encrypted:
-        server.send_room_message(room_id, formatted_data)
-        return W.WEECHAT_RC_OK
-
-    message = MatrixSendMessage(
-        server.client, room_id=room_id, formatted_message=formatted_data)
-
-    server.send_or_queue(message)
     return W.WEECHAT_RC_OK
 
 

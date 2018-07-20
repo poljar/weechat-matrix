@@ -67,23 +67,23 @@ def hook_commands():
         'matrix_command_cb',
         '')
 
-    W.hook_command(
-        # Command name and short description
-        'redact',
-        'redact messages',
-        # Synopsis
-        ('<message-number>[:"<message-part>"] [<reason>]'),
-        # Description
-        ("message-number: number of message to redact (starting from 1 for\n"
-         "                the last message received, counting up)\n"
-         "  message-part: an initial part of the message (ignored, only used\n"
-         "                as visual feedback when using completion)\n"
-         "        reason: the redaction reason\n"),
-        # Completions
-        ('%(matrix_messages)'),
-        # Function name
-        'matrix_redact_command_cb',
-        '')
+    # W.hook_command(
+    #     # Command name and short description
+    #     'redact',
+    #     'redact messages',
+    #     # Synopsis
+    #     ('<message-number>[:"<message-part>"] [<reason>]'),
+    #     # Description
+    #     ("message-number: number of message to redact (starting from 1 for\n"
+    #      "                the last message received, counting up)\n"
+    #      "  message-part: an initial part of the message (ignored, only used\n"
+    #      "                as visual feedback when using completion)\n"
+    #      "        reason: the redaction reason\n"),
+    #     # Completions
+    #     ('%(matrix_messages)'),
+    #     # Function name
+    #     'matrix_redact_command_cb',
+    #     '')
 
     W.hook_command(
         # Command name and short description
@@ -101,15 +101,15 @@ def hook_commands():
 
     matrix_hook_olm_command()
 
-    W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
+    # W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
     W.hook_command_run('/join', 'matrix_command_join_cb', '')
     W.hook_command_run('/part', 'matrix_command_part_cb', '')
     W.hook_command_run('/invite', 'matrix_command_invite_cb', '')
     W.hook_command_run('/kick', 'matrix_command_kick_cb', '')
 
-    if OPTIONS.enable_backlog:
-        hook_page_up()
+    # if OPTIONS.enable_backlog:
+        # hook_page_up()
 
 
 @utf8_decode
@@ -123,7 +123,7 @@ def matrix_me_command_cb(data, buffer, args):
                 W.prnt(server.server_buffer, message)
                 return W.WEECHAT_RC_ERROR
 
-            room_id = key_from_value(server.buffers, buffer)
+            room_buffer = server.find_room_from_ptr(buffer)
 
             if not args:
                 return W.WEECHAT_RC_OK
@@ -131,10 +131,10 @@ def matrix_me_command_cb(data, buffer, args):
             formatted_data = Formatted.from_input_line(args)
             message = MatrixEmoteMessage(
                 server.client,
-                room_id=room_id,
+                room_id=room_buffer.room.room_id,
                 formatted_message=formatted_data)
 
-            if server.rooms[room_id].encrypted:
+            if room_buffer.room.encrypted:
                 return W.WEECHAT_RC_OK
 
             server.send_or_queue(message)
@@ -144,15 +144,16 @@ def matrix_me_command_cb(data, buffer, args):
         elif buffer == server.server_buffer:
             message = ("{prefix}matrix: command \"me\" must be "
                        "executed on a Matrix channel buffer"
-                      ).format(prefix=W.prefix("error"))
+                       ).format(prefix=W.prefix("error"))
             W.prnt("", message)
             return W.WEECHAT_RC_OK
 
 
 def matrix_fetch_old_messages(server, room_id):
-    room = server.rooms[room_id]
+    room_buffer = server.find_room_from_id(room_id)
+    room = room_buffer.room
 
-    if room.backlog_pending:
+    if room_buffer.backlog_pending:
         return
 
     prev_batch = room.prev_batch
@@ -165,7 +166,7 @@ def matrix_fetch_old_messages(server, room_id):
         room_id=room_id,
         token=prev_batch,
         limit=OPTIONS.backlog_limit)
-    room.backlog_pending = True
+    room_buffer.backlog_pending = True
     W.bar_item_update("buffer_modes")
 
     server.send_or_queue(message)
@@ -913,14 +914,15 @@ def matrix_command_topic_cb(data, buffer, command):
     for server in SERVERS.values():
         if buffer in server.buffers.values():
             topic = None
-            room_id = key_from_value(server.buffers, buffer)
+            room_buffer = server.find_room_from_ptr(buffer)
             split_command = command.split(' ', 1)
 
             if len(split_command) == 2:
                 topic = split_command[1]
 
             if not topic:
-                room = server.rooms[room_id]
+                room_buffer = server.find_room_from_ptr(buffer)
+                room = room_buffer.room
                 if not room.topic:
                     return W.WEECHAT_RC_OK
 
@@ -938,8 +940,8 @@ def matrix_command_topic_cb(data, buffer, command):
                         topic=room.topic)
 
                 date = int(time.time())
-                topic_date = room.topic_date.strftime("%a, %d %b %Y "
-                                                      "%H:%M:%S")
+                topic_date = room_buffer.weechat_buffer.topic_date.strftime(
+                    "%a, %d %b %Y %H:%M:%S")
 
                 tags = "matrix_topic,log1"
                 W.prnt_date_tags(buffer, date, tags, message)
@@ -958,7 +960,7 @@ def matrix_command_topic_cb(data, buffer, command):
                 return W.WEECHAT_RC_OK_EAT
 
             message = MatrixTopicMessage(
-                server.client, room_id=room_id, topic=topic)
+                server.client, room_id=room.room_id, topic=topic)
             server.send_or_queue(message)
 
             return W.WEECHAT_RC_OK_EAT

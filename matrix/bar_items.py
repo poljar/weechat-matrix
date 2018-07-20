@@ -45,13 +45,12 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
             color = ("status_name_ssl"
                      if server.ssl_context.check_hostname else "status_name")
 
-            room_id = key_from_value(server.buffers, buffer)
-
-            room = server.rooms[room_id]
+            room_buffer = server.find_room_from_ptr(buffer)
+            room = room_buffer.room
 
             return "{color}{name}".format(
                 color=W.color(color),
-                name=room.display_name(server.user_id))
+                name=room.display_name())
 
         elif buffer == server.server_buffer:
             color = ("status_name_ssl"
@@ -92,14 +91,14 @@ def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
     # pylint: disable=unused-argument
     for server in SERVERS.values():
         if buffer in server.buffers.values():
-            room_id = key_from_value(server.buffers, buffer)
-            room = server.rooms[room_id]
+            room_buffer = server.find_room_from_ptr(buffer)
+            room = room_buffer.room
             modes = []
 
             if room.encrypted:
                 modes.append("🔐")
 
-            if room.backlog_pending:
+            if room_buffer.backlog_pending:
                 modes.append("⏳")
 
             return "".join(modes)

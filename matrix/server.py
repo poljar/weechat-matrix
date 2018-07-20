@@ -28,7 +28,7 @@ import json
 from collections import deque, defaultdict
 from http_parser.pyparser import HttpParser
 
-from nio import Client, LoginResponse
+from nio import Client, LoginResponse, SyncRepsponse
 
 from matrix.plugin_options import Option, DebugType
 from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
@@ -37,12 +37,7 @@ from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
 from matrix.utf import utf8_decode
 from matrix.globals import W, SERVERS, OPTIONS
 import matrix.api as API
-from .buffer import RoomBuffer
-from .rooms import (
-    MatrixRoom,
-    RoomMessageText,
-    RoomMessageEmote,
-)
+from .buffer import RoomBuffer, OwnMessage, OwnAction
 from matrix.api import (
     MatrixClient,
     MatrixSyncMessage,
@@ -56,8 +51,6 @@ from matrix.api import (
 )
 
 from .events import (
-    MatrixLoginEvent,
-    MatrixSyncEvent,
     MatrixSendEvent,
     MatrixBacklogEvent,
     MatrixErrorEvent,
@@ -97,7 +90,6 @@ class MatrixServer:
         self.user = ""                       # type: str
         self.password = ""                   # type: str
 
-        self.rooms = dict()                  # type: Dict[str, MatrixRoom]
         self.room_buffers = dict()  # type: Dict[str, WeechatChannelBuffer]
         self.buffers = dict()                # type: Dict[str, weechat.buffer]
         self.server_buffer = None            # type: weechat.buffer
@@ -610,10 +602,10 @@ class MatrixServer:
     def query_keys(self):
         users = []
 
-        for room in self.rooms.values():
-            if not room.encrypted:
+        for room_buffer in self.room_buffers.values():
+            if not room_buffer.room.encrypted:
                 continue
-            users += list(room.users)
+            users += list(room_buffer.room.users)
 
         if not users:
             return
@@ -642,67 +634,12 @@ class MatrixServer:
         server_buffer_prnt(self, pprint.pformat(message.request.payload))
         server_buffer_prnt(self, pprint.pformat(message.response.body))
 
-    def _loop_events(self, info, n):
-
-        for i in range(n+1):
-            is_state = False
-            try:
-                event = info.state.popleft()
-                is_state = True
-            except IndexError:
-                try:
-                    event = info.timeline.popleft()
-                except IndexError:
-                    return i
-
-            room, room_buffer = self.find_room_from_id(info.room_id)
-            # The room changed it's members, if the room is encrypted update
-            # the device list
-            if room.handle_event(event) and room.encrypted:
-                self.device_check_timestamp = None
-
-            if is_state:
-                room_buffer.handle_state_event(event)
-            else:
-                room_buffer.handle_timeline_event(event)
-
-        self.event_queue.appendleft(info)
-        return i
-
-    def handle_events(self):
-        n = 25
-
-        while True:
-            try:
-                info = self.event_queue.popleft()
-            except IndexError:
-                if self.event_queue_timer:
-                    W.unhook(self.event_queue_timer)
-                    self.event_queue_timer = None
-
-                self.sync()
-                return
-
-            ret = self._loop_events(info, n)
-
-            if ret < n:
-                n = n - ret
-            else:
-                self.event_queue.appendleft(info)
-
-                if not self.event_queue_timer:
-                    hook = W.hook_timer(1 * 100, 0, 0, "matrix_event_timer_cb",
-                                        self.name)
-                    self.event_queue_timer = hook
-
-                return
-
     def handle_own_messages(self, room_buffer, message):
-        if isinstance(message, RoomMessageText):
-            room_buffer.self_message(message)
-            return
-        elif isinstance(message, RoomMessageEmote):
+        if isinstance(message, OwnAction):
             room_buffer.self_action(message)
+            return
+        elif isinstance(message, OwnMessage):
+            room_buffer.self_message(message)
             return
 
         raise NotImplementedError("Unsupported message of type {}".format(
@@ -736,19 +673,18 @@ class MatrixServer:
 
         self.sync()
 
-    def _queue_joined_info(self, response):
-        while response.joined_room_infos:
-            info = response.joined_room_infos.pop()
+    def _handle_room_info(self, response):
+        for room_id, join_info in response.rooms.join.items():
+            if room_id not in self.buffers:
+                self.create_room_buffer(room_id)
 
-            if info.room_id not in self.buffers:
-                self.create_room_buffer(info.room_id)
+            room_buffer = self.find_room_from_id(room_id)
 
-            room = self.rooms[info.room_id]
+            for event in join_info.state:
+                room_buffer.handle_state_event(event)
 
-            if not room.prev_batch:
-                room.prev_batch = info.prev_batch
-
-            self.event_queue.append(info)
+            for event in join_info.timeline.events:
+                room_buffer.handle_timeline_event(event)
 
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
@@ -756,27 +692,20 @@ class MatrixServer:
             self.sync()
             return
 
-        self._queue_joined_info(response)
+        self._handle_room_info(response)
+        # self._queue_joined_info(response)
         self.next_batch = response.next_batch
         # self.check_one_time_keys(response.one_time_key_count)
-        self.handle_events()
+        # self.handle_events()
 
     def handle_matrix_response(self, response):
-        if isinstance(response, MatrixLoginEvent):
-            self._handle_login(response)
-
-        elif isinstance(response, MatrixSyncEvent):
-            self._handle_sync(response)
-
-        elif isinstance(response, MatrixSendEvent):
-            _, room_buffer = self.find_room_from_id(response.room_id)
+        if isinstance(response, MatrixSendEvent):
+            room_buffer = self.find_room_from_id(response.room_id)
             self.handle_own_messages(room_buffer, response.message)
 
         elif isinstance(response, MatrixBacklogEvent):
-            room, room_buffer = self.find_room_from_id(response.room_id)
+            room_buffer = self.find_room_from_id(response.room_id)
             room_buffer.handle_backlog(response.events)
-            room.prev_batch = response.end_token
-            room.backlog_pending = False
             W.bar_item_update("buffer_modes")
 
         elif isinstance(response, MatrixErrorEvent):
@@ -787,10 +716,14 @@ class MatrixServer:
 
         if isinstance(response, LoginResponse):
             self._handle_login(response)
+        elif isinstance(response, SyncRepsponse):
+            self._handle_sync(response)
 
     def nio_parse_response(self, response):
         if isinstance(response, MatrixLoginMessage):
             self.nio_client.receive("login", response.response.body)
+        elif isinstance(response, MatrixSyncMessage):
+            self.nio_client.receive("sync", response.response.body)
 
         self.nio_receive()
 
@@ -804,7 +737,7 @@ class MatrixServer:
         if ('content-type' in message.response.headers and
                 message.response.headers['content-type'] == 'application/json'):
 
-            if isinstance(message, MatrixLoginMessage):
+            if isinstance(message, (MatrixLoginMessage, MatrixSyncMessage)):
                 self.nio_parse_response(message)
 
             else:
@@ -850,24 +783,21 @@ class MatrixServer:
         return
 
     def create_room_buffer(self, room_id):
-        room = MatrixRoom(room_id, self.user_id)
+        room = self.nio_client.rooms[room_id]
         buf = RoomBuffer(room, self.name)
         # TODO this should turned into a propper class
         self.room_buffers[room_id] = buf
         self.buffers[room_id] = buf.weechat_buffer._ptr
-        self.rooms[room_id] = room
 
     def find_room_from_ptr(self, pointer):
         room_id = key_from_value(self.buffers, pointer)
-        room = self.rooms[room_id]
         room_buffer = self.room_buffers[room_id]
 
-        return room, room_buffer
+        return room_buffer
 
     def find_room_from_id(self, room_id):
-        room = self.rooms[room_id]
         room_buffer = self.room_buffers[room_id]
-        return room, room_buffer
+        return room_buffer
 
 
 @utf8_decode
