@@ -56,15 +56,6 @@ class MatrixErrorEvent(MatrixEvent):
         self.fatal = fatal
         MatrixEvent.__init__(self, server)
 
-    def execute(self):
-        message = ("{prefix}matrix: {error}").format(
-            prefix=W.prefix("error"), error=self.error_message)
-
-        W.prnt(self.server.server_buffer, message)
-
-        if self.fatal:
-            self.server.disconnect(reconnect=False)
-
     @classmethod
     def from_dict(cls, server, error_prefix, fatal, parsed_dict):
         try:
@@ -112,25 +103,6 @@ class MatrixLoginEvent(MatrixEvent):
         self.access_token = access_token
         self.device_id = device_id
         MatrixEvent.__init__(self, server)
-
-    def execute(self):
-        self.server.access_token = self.access_token
-        self.server.user_id = self.user_id
-        self.server.client.access_token = self.access_token
-        self.server.device_id = self.device_id
-        self.server.save_device_id()
-
-        message = "{prefix}matrix: Logged in as {user}".format(
-            prefix=W.prefix("network"), user=self.user_id)
-
-        W.prnt(self.server.server_buffer, message)
-
-        if not self.server.olm:
-            self.server.create_olm()
-            self.server.store_olm()
-            self.server.upload_keys(device_keys=True, one_time_keys=False)
-
-        self.server.sync()
 
     @classmethod
     def from_dict(cls, server, parsed_dict):
@@ -562,33 +534,3 @@ class MatrixSyncEvent(MatrixEvent):
         except (KeyError, ValueError, TypeError):
             return MatrixErrorEvent.from_dict(server, "Error syncing", False,
                                               parsed_dict)
-
-    def _queue_joined_info(self):
-        server = self.server
-
-        while self.joined_room_infos:
-            info = self.joined_room_infos.pop()
-
-            if info.room_id not in server.buffers:
-                server.create_room_buffer(info.room_id)
-
-            room = server.rooms[info.room_id]
-
-            if not room.prev_batch:
-                room.prev_batch = info.prev_batch
-
-            server.event_queue.append(info)
-
-    def execute(self):
-        server = self.server
-
-        # we got the same batch again, nothing to do
-        if self.next_batch == server.next_batch:
-            server.sync()
-            return
-
-        self._queue_joined_info()
-        server.next_batch = self.next_batch
-        server.check_one_time_keys(self.one_time_key_count)
-
-        server.handle_events()
