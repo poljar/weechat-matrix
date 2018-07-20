@@ -32,6 +32,8 @@ from future.utils import bytes_to_native_str as n
 # pylint: disable=unused-import
 from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
 
+from nio import TransportType
+
 from matrix.colors import Formatted
 from matrix.utf import utf8_decode
 from matrix.http import HttpResponse
@@ -288,49 +290,31 @@ def receive_cb(server_name, file_descriptor):
             server.disconnect()
             break
 
-        received = len(data)  # type: int
-        parsed_bytes = server.http_parser.execute(data, received)
+        server.client.receive(data)
 
-        assert parsed_bytes == received
+        response = server.client.next_response()
 
-        if server.http_parser.is_partial_body():
-            server.http_buffer.append(server.http_parser.recv_body())
-
-        if server.http_parser.is_message_complete():
-            status = server.http_parser.get_status_code()
-            headers = server.http_parser.get_headers()
-            body = b"".join(server.http_buffer)
-
-            message = server.receive_queue.popleft()
-            message.response = HttpResponse(status, headers, body)
-            receive_time = time.time()
-            server.lag = (receive_time - message.send_time) * 1000
-            server.lag_done = True
-            W.bar_item_update("lag")
-            message.receive_time = receive_time
-
-            prnt_debug(DebugType.MESSAGING, server,
-                       ("{prefix}Received message of type {t} and "
-                        "status {s}").format(
-                            prefix=W.prefix("error"),
-                            t=message.__class__.__name__,
-                            s=status))
-
-            # Message done, reset the parser state.
-            server.reset_parser()
-
-            server.handle_response(message)
+        if response:
+            server.handle_response(response)
             break
 
     return W.WEECHAT_RC_OK
 
 
 def finalize_connection(server):
-    hook = W.hook_fd(server.socket.fileno(), 1, 0, 0, "receive_cb", server.name)
+    hook = W.hook_fd(
+        server.socket.fileno(),
+        1,
+        0,
+        0,
+        "receive_cb",
+        server.name
+    )
 
     server.fd_hook = hook
     server.connected = True
     server.connecting = False
+    server.client.connect(TransportType.HTTP)
 
     server.login()
 

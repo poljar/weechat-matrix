@@ -15,55 +15,23 @@
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 from __future__ import unicode_literals
-from builtins import str, bytes
 
 import os
 import ssl
 import socket
 import time
-import datetime
 import pprint
-import json
 
 from collections import deque, defaultdict
-from http_parser.pyparser import HttpParser
 
-from nio import Client, LoginResponse, SyncRepsponse
+from nio import HttpClient, LoginResponse, SyncRepsponse
 
 from matrix.plugin_options import Option, DebugType
 from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
-                          create_server_buffer, tags_for_message,
-                          server_ts_to_weechat, shorten_sender)
+                          create_server_buffer)
 from matrix.utf import utf8_decode
-from matrix.globals import W, SERVERS, OPTIONS
-import matrix.api as API
+from matrix.globals import W, SERVERS
 from .buffer import RoomBuffer, OwnMessage, OwnAction
-from matrix.api import (
-    MatrixClient,
-    MatrixSyncMessage,
-    MatrixLoginMessage,
-    MatrixKeyUploadMessage,
-    MatrixKeyQueryMessage,
-    MatrixToDeviceMessage,
-    MatrixSendMessage,
-    MatrixEncryptedMessage,
-    MatrixKeyClaimMessage
-)
-
-from .events import (
-    MatrixSendEvent,
-    MatrixBacklogEvent,
-    MatrixErrorEvent,
-    MatrixEmoteEvent,
-    MatrixJoinEvent
-)
-
-from matrix.encryption import (
-    Olm,
-    EncryptionError,
-    OlmTrustError,
-    encrypt_enabled
-)
 
 try:
     FileNotFoundError
@@ -108,7 +76,6 @@ class MatrixServer:
         self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
 
         self.client = None
-        self.nio_client = Client()                       # type: Option[Client]
         self.access_token = None                         # type: str
         self.next_batch = None                           # type: str
         self.transaction_id = 0                          # type: int
@@ -117,17 +84,7 @@ class MatrixServer:
 
         self.send_fd_hook = None                         # type: weechat.hook
         self.send_buffer = b""                           # type: bytes
-        self.current_message = None                      # type: MatrixMessage
         self.device_check_timestamp = None
-
-        self.http_parser = HttpParser()                  # type: HttpParser
-        self.http_buffer = []                            # type: List[bytes]
-
-        # Queue of messages we need to send off.
-        self.send_queue = deque()     # type: Deque[MatrixMessage]
-
-        # Queue of messages we send off and are waiting a response for
-        self.receive_queue = deque()  # type: Deque[MatrixMessage]
 
         self.event_queue_timer = None
         self.event_queue = deque()  # type: Deque[RoomInfo]
@@ -166,48 +123,6 @@ class MatrixServer:
         with open(path, 'w') as f:
             f.write(self.device_id)
 
-    def _load_olm(self):
-        try:
-            self.olm = Olm.from_session_dir(
-                self.user,
-                self.device_id,
-                self.get_session_path()
-            )
-            message = ("{prefix}matrix: Loaded Olm account for {user} (device:"
-                       "{device})").format(prefix=W.prefix("network"),
-                                           user=self.user,
-                                           device=self.device_id)
-            W.prnt("", message)
-
-        except FileNotFoundError:
-            pass
-        except EncryptionError as error:
-            message = ("{prefix}matrix: Error loading Olm"
-                       "account: {error}.").format(
-                           prefix=W.prefix("error"), error=error)
-            W.prnt("", message)
-
-    @encrypt_enabled
-    def create_olm(self):
-        message = ("{prefix}matrix: Creating new Olm identity for "
-                   "{self_color}{user}{ncolor}"
-                   " on {server_color}{server}{ncolor} for device "
-                   "{device}.").format(
-                       prefix=W.prefix("network"),
-                       self_color=W.color("chat_nick_self"),
-                       ncolor=W.color("reset"),
-                       user=self.user_id,
-                       server_color=W.color("chat_server"),
-                       server=self.name,
-                       device=self.device_id)
-        W.prnt(self.server_buffer, message)
-        self.olm = Olm(self.user, self.device_id, self.get_session_path())
-
-    @encrypt_enabled
-    def store_olm(self):
-        if self.olm:
-            self.olm.to_session_dir()
-
     def _create_options(self, config_file):
         options = [
             Option('autoconnect', 'boolean', '', 0, 0, 'off',
@@ -243,15 +158,9 @@ class MatrixServer:
                 option.max, option.value, option.value, 0, "", "",
                 "matrix_config_server_change_cb", self.name, "", "")
 
-    def reset_parser(self):
-        self.http_parser = HttpParser()
-        self.http_buffer = []
-
     def _change_client(self):
         host = ':'.join([self.address, str(self.port)])
-        user_agent = 'weechat-matrix/{version}'.format(version="0.1")
-        self.client = MatrixClient(host, user_agent=user_agent)
-        # self.nio_client = Client()
+        self.client = HttpClient(host, self.user)
 
     def update_option(self, option, option_name):
         if option_name == "address":
@@ -280,13 +189,9 @@ class MatrixServer:
             value = W.config_string(option)
             self.user = value
             self.access_token = ""
-            self.nio_client.user = value
-            self.nio_client.access_token = ""
 
-            self._load_device_id()
-
-            # if self.device_id:
-            #     self._load_olm()
+            if self.client:
+                self.client.user = value
 
         elif option_name == "password":
             value = W.config_string(option)
@@ -305,7 +210,6 @@ class MatrixServer:
                         "Adding to queue").format(
                             prefix=W.prefix("error"),
                             t=message.__class__.__name__))
-            self.send_queue.append(message)
 
     def try_send(self, message):
         # type: (MatrixServer, bytes) -> bool
@@ -362,37 +266,22 @@ class MatrixServer:
         return True
 
     def _abort_send(self):
-        self.send_queue.appendleft(self.current_message)
         self.current_message = None
         self.send_buffer = ""
 
     def _finalize_send(self):
         # type: (MatrixServer) -> None
-        self.current_message.send_time = time.time()
-        self.receive_queue.append(self.current_message)
-
         self.send_buffer = b""
-        self.current_message = None
 
-    def send(self, message):
-        # type: (MatrixServer, MatrixMessage) -> bool
-        if self.current_message:
-            return False
-
-        self.current_message = message
-
-        request = message.request.request
-        payload = message.request.payload
-
-        bytes_message = bytes(request, 'utf-8') + bytes(payload, 'utf-8')
-
-        self.try_send(bytes_message)
+    def send(self, data):
+        # type: (bytes) -> bool
+        self.try_send(data)
 
         return True
 
     def reconnect(self):
         message = ("{prefix}matrix: reconnecting to server..."
-                  ).format(prefix=W.prefix("network"))
+                   ).format(prefix=W.prefix("network"))
 
         server_buffer_prnt(self, message)
 
@@ -437,8 +326,6 @@ class MatrixServer:
         self.socket = None
         self.connected = False
         self.access_token = ""
-        self.send_queue.clear()
-        self.receive_queue.clear()
 
         self.send_buffer = b""
         self.current_message = None
@@ -500,124 +387,13 @@ class MatrixServer:
         return True
 
     def sync(self):
-        limit = None if self.next_batch else OPTIONS.sync_limit
-        message = MatrixSyncMessage(self.client, self.next_batch, limit)
-        self.send_queue.append(message)
-
-    def _send_unencrypted_message(self, room_id, formatted_data):
-        message = MatrixSendMessage(
-            self.client, room_id=room_id, formatted_message=formatted_data)
-        self.send_or_queue(message)
-
-    def send_room_message(
-        self,
-        room,
-        formatted_data,
-        already_claimed=False
-    ):
-        # type: (str, Formatted) -> None
-        if not room.encrypted:
-            self._send_unencrypted_message(room.room_id, formatted_data)
-            return
-
-        # TODO don't send messages unless all the devices are verified
-        missing = self.olm.get_missing_sessions(room.users.keys())
-
-        if missing and not already_claimed:
-            W.prnt("", "{prefix}matrix: Olm session missing for room, can't"
-                       " encrypt message.")
-            W.prnt("", pprint.pformat(missing))
-            self.encryption_queue[room.room_id].append(formatted_data)
-            message = MatrixKeyClaimMessage(self.client, room.room_id, missing)
-            self.send_or_queue(message)
-            return
-
-        body = {"msgtype": "m.text", "body": formatted_data.to_plain()}
-
-        if formatted_data.is_formatted():
-            body["format"] = "org.matrix.custom.html"
-            body["formatted_body"] = formatted_data.to_html()
-
-        plaintext_dict = {
-            "type": "m.room.message",
-            "content": body
-        }
-
-        W.prnt("", "matrix: Encrypting message")
-
-        try:
-            payload_dict, to_device_dict = self.olm.group_encrypt(
-                room.room_id,
-                plaintext_dict,
-                self.user_id,
-                room.users.keys()
-            )
-
-            if to_device_dict:
-                W.prnt("", "matrix: Megolm session missing for room.")
-                message = MatrixToDeviceMessage(self.client, to_device_dict)
-                self.send_queue.append(message)
-
-            message = MatrixEncryptedMessage(
-                self.client,
-                room.room_id,
-                formatted_data,
-                payload_dict
-            )
-
-            self.send_queue.append(message)
-
-        except OlmTrustError:
-            m = ("{prefix}matrix: Untrusted devices found in room, "
-                 "verification is needed before sending a message").format(
-                    prefix=W.prefix("error"))
-            W.prnt(self.server_buffer, m)
-            return
-
-    @encrypt_enabled
-    def upload_keys(self, device_keys=False, one_time_keys=False):
-        keys = self.olm.account.identity_keys if device_keys else None
-
-        one_time_keys = (self.olm.account.one_time_keys["curve25519"] if
-                         one_time_keys else None)
-
-        message = MatrixKeyUploadMessage(self.client, self.user_id,
-                                         self.device_id, self.olm,
-                                         keys, one_time_keys)
-        self.send_queue.append(message)
-
-    @encrypt_enabled
-    def check_one_time_keys(self, key_count):
-        max_keys = self.olm.account.max_one_time_keys
-
-        key_count = (max_keys / 2) - key_count
-
-        if key_count <= 0:
-            return
-
-        self.olm.account.generate_one_time_keys(key_count)
-        self.upload_keys(device_keys=False, one_time_keys=True)
-
-    @encrypt_enabled
-    def query_keys(self):
-        users = []
-
-        for room_buffer in self.room_buffers.values():
-            if not room_buffer.room.encrypted:
-                continue
-            users += list(room_buffer.room.users)
-
-        if not users:
-            return
-
-        message = MatrixKeyQueryMessage(self.client, users)
-        self.send_queue.append(message)
+        request = self.client.sync()
+        self.send_or_queue(request)
 
     def login(self):
-        # type: (MatrixServer) -> None
-        message = MatrixLoginMessage(self.client, self.user, self.password,
-                                     self.device_name, self.device_id)
-        self.send_or_queue(message)
+        # type: () -> None
+        request = self.client.login(self.password)
+        self.send_or_queue(request)
 
         msg = "{prefix}matrix: Logging in...".format(prefix=W.prefix("network"))
 
@@ -698,92 +474,18 @@ class MatrixServer:
         # self.check_one_time_keys(response.one_time_key_count)
         # self.handle_events()
 
-    def handle_matrix_response(self, response):
-        if isinstance(response, MatrixSendEvent):
-            room_buffer = self.find_room_from_id(response.room_id)
-            self.handle_own_messages(room_buffer, response.message)
-
-        elif isinstance(response, MatrixBacklogEvent):
-            room_buffer = self.find_room_from_id(response.room_id)
-            room_buffer.handle_backlog(response.events)
-            W.bar_item_update("buffer_modes")
-
-        elif isinstance(response, MatrixErrorEvent):
-            self._handle_erorr_response(response)
-
-    def nio_receive(self):
-        response = self.nio_client.next_response()
+    def handle_response(self, response):
+        # type: (MatrixMessage) -> None
 
         if isinstance(response, LoginResponse):
             self._handle_login(response)
         elif isinstance(response, SyncRepsponse):
             self._handle_sync(response)
 
-    def nio_parse_response(self, response):
-        if isinstance(response, MatrixLoginMessage):
-            self.nio_client.receive("login", response.response.body)
-        elif isinstance(response, MatrixSyncMessage):
-            self.nio_client.receive("sync", response.response.body)
-
-        self.nio_receive()
-
-        return
-
-    def handle_response(self, message):
-        # type: (MatrixMessage) -> None
-
-        assert message.response
-
-        if ('content-type' in message.response.headers and
-                message.response.headers['content-type'] == 'application/json'):
-
-            if isinstance(message, (MatrixLoginMessage, MatrixSyncMessage)):
-                self.nio_parse_response(message)
-
-            else:
-                ret, error = message.decode_body(self)
-
-                if not ret:
-                    message = ("{prefix}matrix: Error decoding json response"
-                               " from server: {error}").format(
-                                   prefix=W.prefix("error"), error=error)
-                    W.prnt(self.server_buffer, message)
-                    return
-
-                event = message.event
-                self.handle_matrix_response(event)
-        else:
-            status_code = message.response.status
-            if status_code == 504:
-                if isinstance(message, API.MatrixSyncMessage):
-                    self.sync()
-                else:
-                    self._print_message_error(message)
-            else:
-                self._print_message_error(message)
-
-        creation_date = datetime.datetime.fromtimestamp(message.creation_time)
-        done_time = time.time()
-        info_message = (
-            "Message of type {t} created at {c}."
-            "\nMessage lifetime information:"
-            "\n    Send delay: {s} ms"
-            "\n    Receive delay: {r} ms"
-            "\n    Handling time: {h} ms"
-            "\n    Total time: {total} ms").format(
-                t=message.__class__.__name__,
-                c=creation_date,
-                s=(message.send_time - message.creation_time) * 1000,
-                r=(message.receive_time - message.send_time) * 1000,
-                h=(done_time - message.receive_time) * 1000,
-                total=(done_time - message.creation_time) * 1000,
-            )
-        prnt_debug(DebugType.TIMING, self, info_message)
-
         return
 
     def create_room_buffer(self, room_id):
-        room = self.nio_client.rooms[room_id]
+        room = self.client.rooms[room_id]
         buf = RoomBuffer(room, self.name)
         # TODO this should turned into a propper class
         self.room_buffers[room_id] = buf
@@ -867,31 +569,31 @@ def matrix_timer_cb(server_name, remaining_calls):
     if not server.connected:
         return W.WEECHAT_RC_OK
 
-    # check lag, disconnect if it's too big
-    if server.receive_queue:
-        message = server.receive_queue.popleft()
-        server.lag = (current_time - message.send_time) * 1000
-        server.receive_queue.appendleft(message)
-        server.lag_done = False
-        W.bar_item_update("lag")
+    # # check lag, disconnect if it's too big
+    # if server.receive_queue:
+    #     message = server.receive_queue.popleft()
+    #     server.lag = (current_time - message.send_time) * 1000
+    #     server.receive_queue.appendleft(message)
+    #     server.lag_done = False
+    #     W.bar_item_update("lag")
 
-        # TODO print out message, make timeout configurable
-        if server.lag > 300000:
-            server.disconnect()
-            return W.WEECHAT_RC_OK
+    #     # TODO print out message, make timeout configurable
+    #     if server.lag > 300000:
+    #         server.disconnect()
+    #         return W.WEECHAT_RC_OK
 
-    while server.send_queue:
-        message = server.send_queue.popleft()
-        prnt_debug(
-            DebugType.MESSAGING,
-            server, ("Timer hook found message of type {t} in queue. Sending "
-                     "out.".format(t=message.__class__.__name__)))
+    # while server.send_queue:
+    #     message = server.send_queue.popleft()
+    #     prnt_debug(
+    #         DebugType.MESSAGING,
+    #         server, ("Timer hook found message of type {t} in queue. Sending "
+    #                  "out.".format(t=message.__class__.__name__)))
 
-        if not server.send(message):
-            # We got an error while sending the last message return the message
-            # to the queue and exit the loop
-            server.send_queue.appendleft(message)
-            break
+    #     if not server.send(message):
+    #         # We got an error while sending the last message return the message
+    #         # to the queue and exit the loop
+    #         server.send_queue.appendleft(message)
+    #         break
 
     if not server.next_batch:
         return W.WEECHAT_RC_OK
@@ -904,7 +606,6 @@ def matrix_timer_cb(server_name, remaining_calls):
                "{prefix}matrix: Querying user devices.".format(
                    prefix=W.prefix("networ")))
 
-        server.query_keys()
         server.device_check_timestamp = current_time
 
     return W.WEECHAT_RC_OK
