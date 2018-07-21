@@ -272,7 +272,7 @@ def receive_cb(server_name, file_descriptor):
 
             server_buffer_prnt(
                 server, ("{prefix}matrix: disconnecting from server..."
-                        ).format(prefix=W.prefix("network")))
+                         ).format(prefix=W.prefix("network")))
 
             server.disconnect()
 
@@ -285,7 +285,7 @@ def receive_cb(server_name, file_descriptor):
                     prefix=W.prefix("network")))
             server_buffer_prnt(
                 server, ("{prefix}matrix: disconnecting from server..."
-                        ).format(prefix=W.prefix("network")))
+                         ).format(prefix=W.prefix("network")))
 
             server.disconnect()
             break
@@ -293,6 +293,12 @@ def receive_cb(server_name, file_descriptor):
         server.client.receive(data)
 
         response = server.client.next_response()
+
+        # Check if we need to send some data back
+        data_to_send = server.client.data_to_send()
+
+        if data_to_send:
+            server.send(data_to_send)
 
         if response:
             server.handle_response(response)
@@ -314,7 +320,21 @@ def finalize_connection(server):
     server.fd_hook = hook
     server.connected = True
     server.connecting = False
-    server.client.connect(TransportType.HTTP)
+
+    negotiated_protocol = server.socket.selected_alpn_protocol()
+
+    if negotiated_protocol is None:
+        negotiated_protocol = server.socket.selected_npn_protocol()
+
+    transport_type = None
+
+    if negotiated_protocol == "http/1.1":
+        transport_type = TransportType.HTTP
+    elif negotiated_protocol == "h2":
+        transport_type = TransportType.HTTP2
+
+    data = server.client.connect(transport_type)
+    server.send(data)
 
     server.login()
 

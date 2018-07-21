@@ -75,6 +75,14 @@ class MatrixServer:
         self.socket = None                               # type: ssl.SSLSocket
         self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
 
+        # Enable http2 negotiation on the ssl context.
+        self.ssl_context.set_alpn_protocols(["h2", "http/1.1"])
+
+        try:
+            self.ssl_context.set_npn_protocols(["h2", "http/1.1"])
+        except NotImplementedError:
+            pass
+
         self.client = None
         self.access_token = None                         # type: str
         self.next_batch = None                           # type: str
@@ -85,6 +93,8 @@ class MatrixServer:
         self.send_fd_hook = None                         # type: weechat.hook
         self.send_buffer = b""                           # type: bytes
         self.device_check_timestamp = None
+
+        self.send_queue = deque()
 
         self.event_queue_timer = None
         self.event_queue = deque()  # type: Deque[RoomInfo]
@@ -202,14 +212,10 @@ class MatrixServer:
         else:
             pass
 
-    def send_or_queue(self, message):
-        # type: (MatrixServer, MatrixMessage) -> None
-        if not self.send(message):
-            prnt_debug(DebugType.MESSAGING, self,
-                       ("{prefix} Failed sending message of type {t}. "
-                        "Adding to queue").format(
-                            prefix=W.prefix("error"),
-                            t=message.__class__.__name__))
+    def send_or_queue(self, request):
+        # type: (bytes) -> None
+        if not self.send(request):
+            self.send_queue.append(request)
 
     def try_send(self, message):
         # type: (MatrixServer, bytes) -> bool
@@ -365,7 +371,7 @@ class MatrixServer:
             create_server_buffer(self)
 
         if not self.timer_hook:
-            self.timer_hook = W.hook_timer(1 * 1000, 0, 0, "matrix_timer_cb",
+            self.timer_hook = W.hook_timer(2 * 1000, 0, 0, "matrix_timer_cb",
                                            self.name)
 
         ssl_message = " (SSL)" if self.ssl_context.check_hostname else ""
@@ -388,7 +394,7 @@ class MatrixServer:
 
     def sync(self):
         request = self.client.sync()
-        self.send_or_queue(request)
+        self.send_queue.append(request)
 
     def login(self):
         # type: () -> None
@@ -473,6 +479,7 @@ class MatrixServer:
         self.next_batch = response.next_batch
         # self.check_one_time_keys(response.one_time_key_count)
         # self.handle_events()
+        self.sync()
 
     def handle_response(self, response):
         # type: (MatrixMessage) -> None
@@ -582,31 +589,31 @@ def matrix_timer_cb(server_name, remaining_calls):
     #         server.disconnect()
     #         return W.WEECHAT_RC_OK
 
-    # while server.send_queue:
-    #     message = server.send_queue.popleft()
-    #     prnt_debug(
-    #         DebugType.MESSAGING,
-    #         server, ("Timer hook found message of type {t} in queue. Sending "
-    #                  "out.".format(t=message.__class__.__name__)))
+    while server.send_queue:
+        message = server.send_queue.popleft()
+        prnt_debug(
+            DebugType.MESSAGING,
+            server, ("Timer hook found message of type {t} in queue. Sending "
+                     "out.".format(t=message.__class__.__name__)))
 
-    #     if not server.send(message):
-    #         # We got an error while sending the last message return the message
-    #         # to the queue and exit the loop
-    #         server.send_queue.appendleft(message)
-    #         break
+        if not server.send(message):
+            # We got an error while sending the last message return the message
+            # to the queue and exit the loop
+            server.send_queue.appendleft(message)
+            break
 
     if not server.next_batch:
         return W.WEECHAT_RC_OK
 
     # check for new devices by users in encrypted rooms periodically
-    if (not server.device_check_timestamp or
-            current_time - server.device_check_timestamp > 600):
+    # if (not server.device_check_timestamp or
+    #         current_time - server.device_check_timestamp > 600):
 
-        W.prnt(server.server_buffer,
-               "{prefix}matrix: Querying user devices.".format(
-                   prefix=W.prefix("networ")))
+    #     W.prnt(server.server_buffer,
+    #            "{prefix}matrix: Querying user devices.".format(
+    #                prefix=W.prefix("networ")))
 
-        server.device_check_timestamp = current_time
+    #     server.device_check_timestamp = current_time
 
     return W.WEECHAT_RC_OK
 
