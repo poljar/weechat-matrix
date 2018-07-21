@@ -708,7 +708,7 @@ class RoomBuffer(object):
             short_name = shorten_sender(user.user_id)
 
             # TODO make this configurable
-            if short_name in self.displayed_nicks.values():
+            if not short_name or short_name in self.displayed_nicks.values():
                 # Use the full user id, but don't include the @
                 nick = event.sender[1:]
             else:
