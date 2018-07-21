@@ -31,7 +31,10 @@ from future.utils import bytes_to_native_str as n
 
 # pylint: disable=unused-import
 from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
+import logbook
+from logbook import Logger, StderrHandler, StreamHandler
 
+import nio
 from nio import TransportType
 
 from matrix.colors import Formatted
@@ -90,6 +93,9 @@ WEECHAT_SCRIPT_AUTHOR = "Damir Jelić <poljar@termina.org.uk>"  # type: str
 WEECHAT_SCRIPT_VERSION = "0.1"                                 # type: str
 WEECHAT_SCRIPT_LICENSE = "ISC"                                 # type: str
 # yapf: enable
+
+
+logger = Logger("matrix-cli")
 
 
 def print_certificate_info(buff, sock, cert):
@@ -419,6 +425,23 @@ def autoconnect(servers):
             server.connect()
 
 
+class WeechatHandler(StreamHandler):
+    def __init__(self, level=logbook.NOTSET, format_string=None, filter=None,
+                 bubble=False):
+        StreamHandler.__init__(
+            self,
+            object(),
+            level,
+            format_string,
+            None,
+            filter,
+            bubble
+        )
+
+    def write(self, item):
+        W.prnt("", item)
+
+
 if __name__ == "__main__":
     if W.register(WEECHAT_SCRIPT_NAME, WEECHAT_SCRIPT_AUTHOR,
                   WEECHAT_SCRIPT_VERSION, WEECHAT_SCRIPT_LICENSE,
@@ -428,6 +451,11 @@ if __name__ == "__main__":
             message = ("{prefix}matrix: Error creating session "
                        "directory").format(prefix=W.prefix("error"))
             W.prnt("", message)
+
+        handler = WeechatHandler()
+        handler.format_string = "{record.channel}: {record.message}"
+        handler.push_application()
+        nio.http.logger.level = logbook.DEBUG
 
         # TODO if this fails we should abort and unload the script.
         matrix.globals.CONFIG = W.config_new("matrix",
