@@ -698,7 +698,12 @@ class RoomBuffer(object):
 
     def handle_membership_events(self, event, is_state):
         def join(event, date, is_state):
-            user = self.room.users[event.sender]
+            try:
+                user = self.room.users[event.sender]
+            except KeyError:
+                # No user found, he must have left already in an event that is
+                # yet to come, so do nothing
+                return
 
             short_name = shorten_sender(user.user_id)
 
