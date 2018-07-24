@@ -35,7 +35,7 @@ import logbook
 from logbook import Logger, StderrHandler, StreamHandler
 
 import nio
-from nio import TransportType
+from nio import TransportType, RemoteTransportError
 
 from matrix.colors import Formatted
 from matrix.utf import utf8_decode
@@ -296,7 +296,11 @@ def receive_cb(server_name, file_descriptor):
             server.disconnect()
             break
 
-        server.client.receive(data)
+        try:
+            server.client.receive(data)
+        except RemoteTransportError as e:
+            server.error(str(e))
+            server.disconnect()
 
         response = server.client.next_response()
 

@@ -30,7 +30,7 @@ from matrix.plugin_options import Option, DebugType
 from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
                           create_server_buffer)
 from matrix.utf import utf8_decode
-from matrix.globals import W, SERVERS
+from matrix.globals import W, SERVERS, SCRIPT_NAME
 from .buffer import RoomBuffer, OwnMessage, OwnAction
 
 try:
@@ -278,6 +278,14 @@ class MatrixServer:
     def _finalize_send(self):
         # type: (MatrixServer) -> None
         self.send_buffer = b""
+
+    def error(self, message):
+        buf = ""
+        if self.server_buffer:
+            buf = self.server_buffer
+
+        msg = "{prefix}{}: {}".format(SCRIPT_NAME, message)
+        W.prnt(buf, msg)
 
     def send(self, data):
         # type: (bytes) -> bool
