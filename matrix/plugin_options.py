@@ -66,3 +66,5 @@ class PluginOptions:
         self.debug = []
         self.debug_level = logbook.ERROR
         self.debug_category = "all"
+        self.debug_buffer = False
+        self.debug_buffer_ptr = ""

@@ -84,7 +84,7 @@ from matrix.config import (matrix_config_init, matrix_config_read,
 
 import matrix.globals
 
-from matrix.globals import W, SERVERS, SCRIPT_NAME
+from matrix.globals import W, SERVERS, SCRIPT_NAME, OPTIONS
 
 # yapf: disable
 WEECHAT_SCRIPT_NAME = SCRIPT_NAME
@@ -429,6 +429,11 @@ def autoconnect(servers):
             server.connect()
 
 
+def debug_buffer_close_cb(data, buffer):
+    OPTIONS.debug_buffer_ptr = ""
+    return W.WEECHAT_RC_OK
+
+
 class WeechatHandler(StreamHandler):
     def __init__(self, level=logbook.NOTSET, format_string=None, filter=None,
                  bubble=False):
@@ -443,7 +448,16 @@ class WeechatHandler(StreamHandler):
         )
 
     def write(self, item):
-        W.prnt("", item)
+        buf = ""
+
+        if OPTIONS.debug_buffer:
+            if not OPTIONS.debug_buffer_ptr:
+                OPTIONS.debug_buffer_ptr = W.buffer_new(
+                    "Matrix Debug", "", "", "debug_buffer_close_cb", "")
+
+            buf = OPTIONS.debug_buffer_ptr
+
+        W.prnt(buf, item)
 
 
 if __name__ == "__main__":

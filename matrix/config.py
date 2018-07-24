@@ -95,6 +95,9 @@ def matrix_config_change_cb(data, option):
 
         change_log_level(OPTIONS.debug_category, OPTIONS.debug_level)
 
+    elif option_name == "debug_buffer":
+        OPTIONS.debug_buffer = W.config_boolean(option)
+
     elif option_name == "fetch_backlog_on_pgup":
         OPTIONS.enable_backlog = W.config_boolean(option)
 
@@ -130,7 +133,9 @@ def matrix_config_init(config_file):
         Option("debug_level", "integer", "error|warn|info|debug", 0, 0,
                "off", "Enable network protocol debugging."),
         Option("debug_category", "integer", "all|http|client|events|responses",
-               0, 0, "all", "Debugging category")
+               0, 0, "all", "Debugging category"),
+        Option("debug_buffer", "boolean", "", 0, 0, "off",
+               ("Use a separate buffer for debug logs.")),
     ]
 
     def add_global_options(section, options):
