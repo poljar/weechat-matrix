@@ -15,6 +15,9 @@
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 from __future__ import unicode_literals
+
+import logbook
+
 from collections import namedtuple
 from enum import Enum, unique
 
@@ -49,7 +52,8 @@ class PluginOptions:
 
     def __init__(self):
         self.redaction_type = RedactType.STRIKETHROUGH  # type: RedactType
-        self.look_server_buf = ServerBufferType.MERGE_CORE  # type: ServerBufferType
+        self.look_server_buf = ServerBufferType.MERGE_CORE  \
+            # type: ServerBufferType
 
         self.sync_limit = 30  # type: int
         self.backlog_limit = 10  # type: int
@@ -59,4 +63,6 @@ class PluginOptions:
         self.redaction_comp_len = 50  # type: int
 
         self.options = dict()  # type: Dict[str, weechat.config_option]
-        self.debug = []  # type: List[DebugType]
+        self.debug = []
+        self.debug_level = logbook.ERROR
+        self.debug_category = "all"

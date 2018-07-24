@@ -16,6 +16,9 @@
 
 from __future__ import unicode_literals
 
+import nio
+import logbook
+
 from matrix.plugin_options import (Option, RedactType, ServerBufferType)
 
 import matrix.globals
@@ -28,6 +31,19 @@ from matrix.commands import hook_page_up
 @utf8_decode
 def matrix_config_reload_cb(data, config_file):
     return W.WEECHAT_RC_OK
+
+
+def change_log_level(category, level):
+    if category == "all":
+        nio.logger_group.level = level
+    elif category == "http":
+        nio.http.logger.level = level
+    elif category == "client":
+        nio.client.logger.level = level
+    elif category == "events":
+        nio.events.logger.level = level
+    elif category == "responses":
+        nio.responses.logger.level = level
 
 
 @utf8_decode
@@ -48,6 +64,36 @@ def matrix_config_change_cb(data, option):
 
     elif option_name == "max_backlog_sync_events":
         OPTIONS.backlog_limit = W.config_integer(option)
+
+    elif option_name == "debug_level":
+        value = W.config_integer(option)
+        if value == 0:
+            OPTIONS.debug_level = logbook.ERROR
+        elif value == 1:
+            OPTIONS.debug_level = logbook.WARNING
+        elif value == 2:
+            OPTIONS.debug_level = logbook.INFO
+        elif value == 3:
+            OPTIONS.debug_level = logbook.DEBUG
+
+        change_log_level(OPTIONS.debug_category, OPTIONS.debug_level)
+
+    elif option_name == "debug_category":
+        value = W.config_integer(option)
+        change_log_level(OPTIONS.debug_category, logbook.ERROR)
+
+        if value == 0:
+            OPTIONS.debug_category = "all"
+        elif value == 1:
+            OPTIONS.debug_category = "http"
+        elif value == 2:
+            OPTIONS.debug_category = "client"
+        elif value == 3:
+            OPTIONS.debug_category = "events"
+        elif value == 4:
+            OPTIONS.debug_category = "responses"
+
+        change_log_level(OPTIONS.debug_category, OPTIONS.debug_level)
 
     elif option_name == "fetch_backlog_on_pgup":
         OPTIONS.enable_backlog = W.config_boolean(option)
@@ -80,7 +126,11 @@ def matrix_config_init(config_file):
         Option("max_backlog_sync_events", "integer", "", 1, 100, "10",
                ("How many events to fetch during backlog fetching")),
         Option("fetch_backlog_on_pgup", "boolean", "", 0, 0, "on",
-               ("Fetch messages in the backlog on a window page up event"))
+               ("Fetch messages in the backlog on a window page up event")),
+        Option("debug_level", "integer", "error|warn|info|debug", 0, 0,
+               "off", "Enable network protocol debugging."),
+        Option("debug_category", "integer", "all|http|client|events|responses",
+               0, 0, "all", "Debugging category")
     ]
 
     def add_global_options(section, options):
@@ -101,8 +151,8 @@ def matrix_config_init(config_file):
 
     add_global_options(section, look_options)
 
-    section = W.config_new_section(config_file, "network", 0, 0, "", "", "", "",
-                                   "", "", "", "", "", "")
+    section = W.config_new_section(config_file, "network", 0, 0, "", "", "",
+                                   "", "", "", "", "", "", "")
 
     add_global_options(section, network_options)
 

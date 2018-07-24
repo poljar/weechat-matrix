@@ -455,7 +455,6 @@ if __name__ == "__main__":
         handler = WeechatHandler()
         handler.format_string = "{record.channel}: {record.message}"
         handler.push_application()
-        nio.http.logger.level = logbook.DEBUG
 
         # TODO if this fails we should abort and unload the script.
         matrix.globals.CONFIG = W.config_new("matrix",
