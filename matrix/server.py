@@ -24,7 +24,13 @@ import pprint
 
 from collections import deque, defaultdict
 
-from nio import HttpClient, LoginResponse, SyncRepsponse
+from nio import (
+    HttpClient,
+    LoginResponse,
+    SyncRepsponse,
+    TransportResponse,
+    LocalProtocolError
+)
 
 from matrix.plugin_options import Option, DebugType
 from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
@@ -284,7 +290,7 @@ class MatrixServer:
         if self.server_buffer:
             buf = self.server_buffer
 
-        msg = "{prefix}{}: {}".format(SCRIPT_NAME, message)
+        msg = "{}{}: {}".format(W.prefix("network"), SCRIPT_NAME, message)
         W.prnt(buf, msg)
 
     def send(self, data):
@@ -343,7 +349,11 @@ class MatrixServer:
 
         self.send_buffer = b""
         self.current_message = None
-        self.client.disconnect()
+
+        try:
+            self.client.disconnect()
+        except LocalProtocolError:
+            pass
 
         self.lag = 0
         W.bar_item_update("lag")
@@ -491,8 +501,12 @@ class MatrixServer:
 
     def handle_response(self, response):
         # type: (MatrixMessage) -> None
+        if isinstance(response, TransportResponse):
+            self.error("Error in response, code: {}".format(
+                response.status_code))
+            self.disconnect()
 
-        if isinstance(response, LoginResponse):
+        elif isinstance(response, LoginResponse):
             self._handle_login(response)
         elif isinstance(response, SyncRepsponse):
             self._handle_sync(response)
