@@ -28,6 +28,7 @@ from nio import (
     HttpClient,
     LoginResponse,
     SyncRepsponse,
+    RoomSendResponse,
     TransportResponse,
     LocalProtocolError
 )
@@ -72,13 +73,14 @@ class MatrixServer:
         self.timer_hook = None               # type: weechat.hook
         self.numeric_address = ""            # type: str
 
-        self.autoconnect = False                         # type: bool
-        self.connected = False                           # type: bool
-        self.connecting = False                          # type: bool
-        self.proxy = None                                # type: str
-        self.reconnect_delay = 0                         # type: int
-        self.reconnect_time = None                       # type: float
-        self.socket = None                               # type: ssl.SSLSocket
+        self.autoconnect = False    # type: bool
+        self.connected = False      # type: bool
+        self.connecting = False     # type: bool
+        self.proxy = None           # type: str
+        self.reconnect_delay = 0    # type: int
+        self.reconnect_time = None  # type: float
+        self.sync_time = None       # type: Optional[float]
+        self.socket = None          # type: ssl.SSLSocket
         self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
 
         # Enable http2 negotiation on the ssl context.
@@ -101,6 +103,7 @@ class MatrixServer:
         self.device_check_timestamp = None
 
         self.send_queue = deque()
+        self.own_message_queue = dict()  # type: Dict[OwnMessage]
 
         self.event_queue_timer = None
         self.event_queue = deque()  # type: Deque[RoomInfo]
@@ -254,7 +257,7 @@ class MatrixServer:
                 server_buffer_prnt(self, error_message)
                 server_buffer_prnt(
                     self, ("{prefix}matrix: disconnecting from server..."
-                          ).format(prefix=W.prefix("network")))
+                           ).format(prefix=W.prefix("network")))
 
                 self.disconnect()
                 return False
@@ -410,18 +413,49 @@ class MatrixServer:
 
         return True
 
+    def schedule_sync(self):
+        self.sync_time = time.time()
+
     def sync(self):
-        request = self.client.sync()
-        self.send_queue.append(request)
+        self.sync_time = None
+        _, request = self.client.sync()
+        self.send_or_queue(request)
 
     def login(self):
         # type: () -> None
-        request = self.client.login(self.password)
+        _, request = self.client.login(self.password)
         self.send_or_queue(request)
 
-        msg = "{prefix}matrix: Logging in...".format(prefix=W.prefix("network"))
+        msg = "{prefix}matrix: Logging in...".format(
+            prefix=W.prefix("network")
+        )
 
         W.prnt(self.server_buffer, msg)
+
+    def room_send_text(self, room_buffer, formatted):
+        # type: (RoomBuffer, Formatted) -> None
+        own_message = OwnMessage(
+            self.user_id,
+            0,
+            "",
+            room_buffer.room.room_id,
+            formatted
+        )
+
+        body = {"msgtype": "m.text", "body": formatted.to_plain()}
+
+        if formatted.is_formatted():
+            body["format"] = "org.matrix.custom.html"
+            body["formatted_body"] = formatted.to_html()
+
+        uuid, request = self.client.room_send(
+            room_buffer.room.room_id,
+            "m.room.message",
+            body
+        )
+
+        self.own_message_queue[uuid] = own_message
+        self.send_or_queue(request)
 
     def _print_message_error(self, message):
         server_buffer_prnt(self,
@@ -434,7 +468,10 @@ class MatrixServer:
         server_buffer_prnt(self, pprint.pformat(message.request.payload))
         server_buffer_prnt(self, pprint.pformat(message.response.body))
 
-    def handle_own_messages(self, room_buffer, message):
+    def handle_own_messages(self, response):
+        message = self.own_message_queue.pop(response.uuid)
+        room_buffer = self.room_buffers[message.room_id]
+
         if isinstance(message, OwnAction):
             room_buffer.self_action(message)
             return
@@ -510,6 +547,8 @@ class MatrixServer:
             self._handle_login(response)
         elif isinstance(response, SyncRepsponse):
             self._handle_sync(response)
+        elif isinstance(response, RoomSendResponse):
+            self.handle_own_messages(response)
 
         return
 

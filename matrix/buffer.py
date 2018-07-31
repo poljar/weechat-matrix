@@ -50,6 +50,7 @@ OwnMessage = NamedTuple("OwnMessage", [
     ("sender", str),
     ("age", int),
     ("event_id", str),
+    ("room_id", str),
     ("formatted_message", Formatted)
 ])
 
@@ -73,7 +74,7 @@ def room_buffer_input_cb(server_name, buffer, input_data):
 
     formatted_data = Formatted.from_input_line(input_data)
 
-    server.send_room_message(room_buffer.room, formatted_data)
+    server.room_send_text(room_buffer, formatted_data)
 
     return W.WEECHAT_RC_OK
 
@@ -398,9 +399,9 @@ class WeechatChannelBuffer(object):
         # type: (str) -> None
         """ Print an error to the room buffer """
         message = "{prefix}{script}: {message}".format(
-            W.prefix("error"),
-            SCRIPT_NAME,
-            string
+            prefix=W.prefix("error"),
+            script=SCRIPT_NAME,
+            message=string
         )
 
         self._print(message)
