@@ -526,15 +526,12 @@ class MatrixServer:
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
         if self.next_batch == response.next_batch:
-            self.sync()
+            self.schedule_sync()
             return
 
         self._handle_room_info(response)
-        # self._queue_joined_info(response)
         self.next_batch = response.next_batch
-        # self.check_one_time_keys(response.one_time_key_count)
-        # self.handle_events()
-        self.sync()
+        self.schedule_sync()
 
     def handle_response(self, response):
         # type: (MatrixMessage) -> None
@@ -649,6 +646,9 @@ def matrix_timer_cb(server_name, remaining_calls):
     #     if server.lag > 300000:
     #         server.disconnect()
     #         return W.WEECHAT_RC_OK
+
+    if server.sync_time and current_time > (server.sync_time + 2):
+        server.sync()
 
     while server.send_queue:
         message = server.send_queue.popleft()
