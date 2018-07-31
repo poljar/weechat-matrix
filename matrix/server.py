@@ -392,7 +392,7 @@ class MatrixServer:
             create_server_buffer(self)
 
         if not self.timer_hook:
-            self.timer_hook = W.hook_timer(2 * 1000, 0, 0, "matrix_timer_cb",
+            self.timer_hook = W.hook_timer(1 * 1000, 0, 0, "matrix_timer_cb",
                                            self.name)
 
         ssl_message = " (SSL)" if self.ssl_context.check_hostname else ""
@@ -535,6 +535,10 @@ class MatrixServer:
 
     def handle_response(self, response):
         # type: (MatrixMessage) -> None
+        self.lag = response.elapsed * 1000
+        self.lag_done = True
+        W.bar_item_update("lag")
+
         if isinstance(response, TransportResponse):
             self.error("Error in response, code: {}".format(
                 response.status_code))
@@ -634,18 +638,15 @@ def matrix_timer_cb(server_name, remaining_calls):
     if not server.connected:
         return W.WEECHAT_RC_OK
 
-    # # check lag, disconnect if it's too big
-    # if server.receive_queue:
-    #     message = server.receive_queue.popleft()
-    #     server.lag = (current_time - message.send_time) * 1000
-    #     server.receive_queue.appendleft(message)
-    #     server.lag_done = False
-    #     W.bar_item_update("lag")
+    # check lag, disconnect if it's too big
+    server.lag = server.client.lag * 1000
+    server.lag_done = False
+    W.bar_item_update("lag")
 
-    #     # TODO print out message, make timeout configurable
-    #     if server.lag > 300000:
-    #         server.disconnect()
-    #         return W.WEECHAT_RC_OK
+    # TODO print out message, make timeout configurable
+    if server.lag > 300000:
+        server.disconnect()
+        return W.WEECHAT_RC_OK
 
     if server.sync_time and current_time > (server.sync_time + 2):
         server.sync()
