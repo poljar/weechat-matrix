@@ -700,7 +700,7 @@ class RoomBuffer(object):
     def handle_membership_events(self, event, is_state):
         def join(event, date, is_state):
             try:
-                user = self.room.users[event.sender]
+                user = self.room.users[event.state_key]
             except KeyError:
                 # No user found, he must have left already in an event that is
                 # yet to come, so do nothing
@@ -731,16 +731,11 @@ class RoomBuffer(object):
         date = server_ts_to_weechat(event.server_timestamp)
 
         if event.content["membership"] == "join":
-            if event.prev_content and "membership" in event.prev_content:
-                if (event.prev_content["membership"] != "join"):
-                    join(event, date, is_state)
-                else:
-                    # TODO print out profile changes
-                    return
-            else:
-                # No previous content for this user in this room, so he just
-                # joined.
+            if event.state_key not in self.displayed_nicks:
                 join(event, date, is_state)
+            else:
+                # TODO print out profile changes
+                return
 
         elif event.content["membership"] == "leave":
             nick = self.find_nick(event.state_key)
