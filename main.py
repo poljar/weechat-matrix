@@ -239,8 +239,11 @@ def try_ssl_handshake(server):
 
             return False
 
-        except ssl.SSLError as error:
-            str_error = error.reason if error.reason else "Unknown error"
+        except (ssl.SSLError, socket.error) as error:
+            try:
+                str_error = error.reason if error.reason else "Unknown error"
+            except AttributeError:
+                str_error = str(error)
 
             message = ("{prefix}Error while doing SSL handshake"
                        ": {error}").format(
@@ -250,7 +253,7 @@ def try_ssl_handshake(server):
 
             server_buffer_prnt(
                 server, ("{prefix}matrix: disconnecting from server..."
-                        ).format(prefix=W.prefix("network")))
+                         ).format(prefix=W.prefix("network")))
 
             server.disconnect()
             return False
