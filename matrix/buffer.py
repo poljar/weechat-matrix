@@ -647,14 +647,14 @@ class WeechatChannelBuffer(object):
         self.topic_author = nick
         self.topic_date = date
 
-    def self_message(self, nick, message, date):
+    def self_message(self, nick, message, date, tags=None):
         user = self._get_user(nick)
-        tags = self._message_tags(user, "self_message")
+        tags = self._message_tags(user, "self_message") + (tags or [])
         self._print_message(user, message, date, tags)
 
-    def self_action(self, nick, message, date):
+    def self_action(self, nick, message, date, tags=None):
         user = self._get_user(nick)
-        tags = self._message_tags(user, "self_message")
+        tags = self._message_tags(user, "self_message") + (tags or [])
         tags.append(SCRIPT_NAME + "_action")
         self._print_action(user, message, date, tags)
 
@@ -994,20 +994,22 @@ class RoomBuffer(object):
         # type: (OwnMessage) -> None
         nick = self.find_nick(self.room.own_user_id)
         data = message.formatted_message.to_weechat()
-
-        # TODO event_id tag is missing
+        tags = self.get_event_tags(message)
         date = message.age
-        self.weechat_buffer.self_message(nick, data, date)
+
+        self.weechat_buffer.self_message(nick, data, date, tags)
 
     def self_action(self, message):
         # type: (OwnMessage) -> None
         nick = self.find_nick(self.room.own_user_id)
         date = message.age
-        # TODO event_id tag is missing
+        tags = self.get_event_tags(message)
+
         self.weechat_buffer.self_action(
             nick,
             message.formatted_message.to_weechat(),
-            date
+            date,
+            tags
         )
 
     def old_redacted(self, event):

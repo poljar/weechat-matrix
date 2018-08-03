@@ -472,6 +472,7 @@ class MatrixServer:
     def handle_own_messages(self, response):
         message = self.own_message_queue.pop(response.uuid)
         room_buffer = self.room_buffers[message.room_id]
+        message = message._replace(event_id=response.event_id)
 
         if isinstance(message, OwnAction):
             room_buffer.self_action(message)
