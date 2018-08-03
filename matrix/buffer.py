@@ -42,7 +42,8 @@ from nio import (
     RoomAliasEvent,
     RoomTopicEvent,
     RoomMessageEmote,
-    RoomNameEvent
+    RoomNameEvent,
+    RoomMessageUnknown
 )
 
 
@@ -896,7 +897,6 @@ class RoomBuffer(object):
                 self.get_event_tags(event)
             )
 
-
         elif isinstance(event, RoomMessageText):
             nick = self.find_nick(event.sender)
             formatted = None
@@ -942,19 +942,19 @@ class RoomBuffer(object):
         #         self.get_event_tags(event)
         #     )
 
-        # elif isinstance(event, RoomMessageUnknown):
-        #     nick = self.find_nick(event.sender)
-        #     date = server_ts_to_weechat(event.server_timestamp)
-        #     data = ("Unknown message of type {t}, body: {body}").format(
-        #         t=event.message_type,
-        #         body=event.message
-        #     )
-        #     self.weechat_buffer.message(
-        #         nick,
-        #         data,
-        #         date,
-        #         self.get_event_tags(event)
-        #     )
+        elif isinstance(event, RoomMessageUnknown):
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.server_timestamp)
+            data = ("Unknown message of type {t}, body: {body}").format(
+                t=event.message_type,
+                body=event.message
+            )
+            self.weechat_buffer.message(
+                nick,
+                data,
+                date,
+                self.get_event_tags(event)
+            )
 
         # elif isinstance(event, RoomRedactionEvent):
         #     self._redact_line(event)
