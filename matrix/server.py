@@ -46,24 +46,117 @@ except NameError:
     FileNotFoundError = IOError
 
 
-class MatrixServer:
+class ServerConfig(object):
+    _section_name = "{}.{}".format(SCRIPT_NAME, "server")
+
+    def __init__(self, server_name, config_ptr):
+        # type: (str, str) -> None
+        self._server_name = server_name
+        self._ptr = config_ptr
+        self.options = {}
+
+        options = [
+            Option('autoconnect', 'boolean', '', 0, 0, 'off',
+                   ("automatically connect to the matrix server when weechat "
+                    "is starting")),
+            Option('address', 'string', '', 0, 0, '',
+                   "Hostname or IP address for the server"),
+            Option('port', 'integer', '', 0, 65535, '443',
+                   "Port for the server"),
+            Option('proxy', 'string', '', 0, 0, '',
+                   ("Name of weechat proxy to use (see /help proxy)")),
+            Option('ssl_verify', 'boolean', '', 0, 0, 'on',
+                   ("Check that the SSL connection is fully trusted")),
+            Option('username', 'string', '', 0, 0, '',
+                   "Username to use on server"),
+            Option(
+                'password', 'string', '', 0, 0, '',
+                ("Password for server (note: content is evaluated, see /help "
+                 "eval)")),
+            Option('device_name', 'string', '', 0, 0, 'Weechat Matrix',
+                   "Device name to use while logging in to the matrix server"),
+        ]
+
+        section = W.config_search_section(config_ptr, 'server')
+
+        for option in options:
+            option_name = "{server}.{option}".format(
+                server=self._server_name, option=option.name)
+
+            self.options[option.name] = W.config_new_option(
+                config_ptr, section, option_name, option.type,
+                option.description, option.string_values, option.min,
+                option.max, option.value, option.value, 0, "", "",
+                "matrix_config_server_change_cb", self._server_name, "", "")
+
+    def _get_str_option(self, option_name):
+        return W.config_string(self.options[option_name])
+
+    def _get_bool_option(self, option_name):
+        return bool(W.config_boolean(self.options[option_name]))
+
+    @property
+    def config_section(self):
+        # type: () -> str
+        return "{}.{}".format(self._server_name, self._server_name)
+
+    @property
+    def autoconnect(self):
+        # type: () -> bool
+        return self._get_bool_option("autoconnect")
+
+    @property
+    def address(self):
+        # type: () -> str
+        return self._get_str_option("address")
+
+    @property
+    def port(self):
+        # type: () -> int
+        return W.config_integer(self.options["port"])
+
+    @property
+    def proxy(self):
+        # type: () -> str
+        return self._get_str_option("proxy")
+
+    @property
+    def ssl_verify(self):
+        # type: () -> bool
+        return self._get_bool_option("ssl_verify")
+
+    @property
+    def username(self):
+        # type: () -> str
+        return self._get_str_option("username")
+
+    @property
+    def password(self):
+        # type: () -> str
+        return W.string_eval_expression(
+            self._get_str_option("password"),
+            {},
+            {},
+            {}
+        )
+
+    @property
+    def device_name(self):
+        # type: () -> str
+        return self._get_str_option("device_name")
+
+
+class MatrixServer(object):
     # pylint: disable=too-many-instance-attributes
     def __init__(self, name, config_file):
         # type: (str, weechat.config) -> None
         # yapf: disable
         self.name = name                     # type: str
         self.user_id = ""
-        self.address = ""                    # type: str
-        self.port = 8448                     # type: int
-        self.options = dict()                # type: Dict[str, weechat.config]
-        self.device_name = "Weechat Matrix"  # type: str
         self.device_id = ""                  # type: str
 
         self.olm = None                      # type: Olm
         self.encryption_queue = defaultdict(deque)
-
-        self.user = ""                       # type: str
-        self.password = ""                   # type: str
 
         self.room_buffers = dict()  # type: Dict[str, WeechatChannelBuffer]
         self.buffers = dict()                # type: Dict[str, weechat.buffer]
@@ -73,10 +166,8 @@ class MatrixServer:
         self.timer_hook = None               # type: weechat.hook
         self.numeric_address = ""            # type: str
 
-        self.autoconnect = False    # type: bool
         self.connected = False      # type: bool
         self.connecting = False     # type: bool
-        self.proxy = None           # type: str
         self.reconnect_delay = 0    # type: int
         self.reconnect_time = None  # type: float
         self.sync_time = None       # type: Optional[float]
@@ -108,7 +199,8 @@ class MatrixServer:
         self.event_queue_timer = None
         self.event_queue = deque()  # type: Deque[RoomInfo]
 
-        self._create_options(config_file)
+        # self._create_options(config_file)
+        self.config = ServerConfig(self.name, config_file)
         self._create_session_dir()
         # yapf: enable
 
@@ -124,7 +216,7 @@ class MatrixServer:
         return os.path.join(home_dir, "matrix", self.name)
 
     def _load_device_id(self):
-        file_name = "{}{}".format(self.user, ".device_id")
+        file_name = "{}{}".format(self.config.username, ".device_id")
         path = os.path.join(self.get_session_path(), file_name)
 
         if not os.path.isfile(path):
@@ -136,66 +228,21 @@ class MatrixServer:
                 self.device_id = device_id
 
     def save_device_id(self):
-        file_name = "{}{}".format(self.user, ".device_id")
+        file_name = "{}{}".format(self.config.username, ".device_id")
         path = os.path.join(self.get_session_path(), file_name)
 
         with open(path, 'w') as f:
             f.write(self.device_id)
 
-    def _create_options(self, config_file):
-        options = [
-            Option('autoconnect', 'boolean', '', 0, 0, 'off',
-                   ("automatically connect to the matrix server when weechat "
-                    "is starting")),
-            Option('address', 'string', '', 0, 0, '',
-                   "Hostname or IP address for the server"),
-            Option('port', 'integer', '', 0, 65535, '8448',
-                   "Port for the server"),
-            Option('proxy', 'string', '', 0, 0, '',
-                   ("Name of weechat proxy to use (see /help proxy)")),
-            Option('ssl_verify', 'boolean', '', 0, 0, 'on',
-                   ("Check that the SSL connection is fully trusted")),
-            Option('username', 'string', '', 0, 0, '',
-                   "Username to use on server"),
-            Option(
-                'password', 'string', '', 0, 0, '',
-                ("Password for server (note: content is evaluated, see /help "
-                 "eval)")),
-            Option('device_name', 'string', '', 0, 0, 'Weechat Matrix',
-                   "Device name to use while logging in to the matrix server"),
-        ]
-
-        section = W.config_search_section(config_file, 'server')
-
-        for option in options:
-            option_name = "{server}.{option}".format(
-                server=self.name, option=option.name)
-
-            self.options[option.name] = W.config_new_option(
-                config_file, section, option_name, option.type,
-                option.description, option.string_values, option.min,
-                option.max, option.value, option.value, 0, "", "",
-                "matrix_config_server_change_cb", self.name, "", "")
-
     def _change_client(self):
-        host = ':'.join([self.address, str(self.port)])
-        self.client = HttpClient(host, self.user)
+        host = ':'.join([self.config.address, str(self.config.port)])
+        self.client = HttpClient(host, self.config.username)
 
     def update_option(self, option, option_name):
         if option_name == "address":
-            value = W.config_string(option)
-            self.address = value
             self._change_client()
-        elif option_name == "autoconnect":
-            value = W.config_boolean(option)
-            self.autoconnect = value
         elif option_name == "port":
-            value = W.config_integer(option)
-            self.port = value
             self._change_client()
-        elif option_name == "proxy":
-            value = W.config_string(option)
-            self.proxy = value
         elif option_name == "ssl_verify":
             value = W.config_boolean(option)
             if value:
@@ -206,18 +253,10 @@ class MatrixServer:
                 self.ssl_context.verify_mode = ssl.CERT_NONE
         elif option_name == "username":
             value = W.config_string(option)
-            self.user = value
             self.access_token = ""
 
             if self.client:
                 self.client.user = value
-
-        elif option_name == "password":
-            value = W.config_string(option)
-            self.password = W.string_eval_expression(value, {}, {}, {})
-        elif option_name == "device_name":
-            value = W.config_string(option)
-            self.device_name = value
         else:
             pass
 
@@ -271,7 +310,7 @@ class MatrixServer:
                         prefix=W.prefix("network")))
                 server_buffer_prnt(
                     self, ("{prefix}matrix: disconnecting from server..."
-                          ).format(prefix=W.prefix("network")))
+                           ).format(prefix=W.prefix("network")))
                 self.disconnect()
                 return False
 
@@ -373,13 +412,14 @@ class MatrixServer:
 
     def connect(self):
         # type: (MatrixServer) -> int
-        if not self.address or not self.port:
+        if not self.config.address or not self.config.port:
+            W.prnt("", self.config.address)
             message = "{prefix}Server address or port not set".format(
                 prefix=W.prefix("error"))
             W.prnt("", message)
             return False
 
-        if not self.user or not self.password:
+        if not self.config.username or not self.config.password:
             message = "{prefix}User or password not set".format(
                 prefix=W.prefix("error"))
             W.prnt("", message)
@@ -400,14 +440,14 @@ class MatrixServer:
         message = ("{prefix}matrix: Connecting to "
                    "{server}:{port}{ssl}...").format(
                        prefix=W.prefix("network"),
-                       server=self.address,
-                       port=self.port,
+                       server=self.config.address,
+                       port=self.config.port,
                        ssl=ssl_message)
 
         W.prnt(self.server_buffer, message)
 
-        W.hook_connect(self.proxy if self.proxy else "",
-                       self.address, self.port,
+        W.hook_connect(self.config.proxy,
+                       self.config.address, self.config.port,
                        1, 0, "", "connect_cb",
                        self.name)
 
@@ -424,7 +464,7 @@ class MatrixServer:
 
     def login(self):
         # type: () -> None
-        _, request = self.client.login(self.password)
+        _, request = self.client.login(self.config.password)
         self.send_or_queue(request)
 
         msg = "{prefix}matrix: Logging in...".format(
@@ -597,8 +637,12 @@ def matrix_config_server_read_cb(data, config_file, section, option_name,
             SERVERS[server.name] = server
 
         # Ignore invalid options
-        if option in server.options:
-            return_code = W.config_option_set(server.options[option], value, 1)
+        if option in server.config.options:
+            return_code = W.config_option_set(
+                server.config.options[option],
+                value,
+                1
+            )
 
     # TODO print out error message in case of erroneous return_code
 
@@ -611,7 +655,7 @@ def matrix_config_server_write_cb(data, config_file, section_name):
         return W.WECHAT_CONFIG_WRITE_ERROR
 
     for server in SERVERS.values():
-        for option in server.options.values():
+        for option in server.config.options.values():
             if not W.config_write_option(config_file, option):
                 return W.WECHAT_CONFIG_WRITE_ERROR
 
@@ -627,7 +671,7 @@ def matrix_config_server_change_cb(server_name, option):
     # The function config_option_get_string() is used to get differing
     # properties from a config option, sadly it's only available in the plugin
     # API of weechat.
-    option_name = key_from_value(server.options, option)
+    option_name = key_from_value(server.config.options, option)
     server.update_option(option, option_name)
 
     return 1
@@ -690,10 +734,11 @@ def matrix_timer_cb(server_name, remaining_calls):
 
 
 def create_default_server(config_file):
-    server = MatrixServer('matrix.org', config_file)
+    server = MatrixServer('matrix_org', config_file)
     SERVERS[server.name] = server
 
-    W.config_option_set(server.options["address"], "matrix.org", 1)
+    option = W.config_get(SCRIPT_NAME + ".server." + server.name + ".address")
+    W.config_option_set(option, "matrix.org", 1)
 
     return True
 

@@ -69,7 +69,11 @@ def create_server_buffer(server):
 
     server_buffer_set_title(server)
     W.buffer_set(server.server_buffer, "localvar_set_type", 'server')
-    W.buffer_set(server.server_buffer, "localvar_set_nick", server.user)
+    W.buffer_set(
+        server.server_buffer,
+        "localvar_set_nick",
+        server.config.username
+    )
     W.buffer_set(server.server_buffer, "localvar_set_server", server.name)
     W.buffer_set(server.server_buffer, "localvar_set_channel", server.name)
 
@@ -106,7 +110,7 @@ def server_buffer_set_title(server):
         ip_string = ""
 
     title = ("Matrix: {address}:{port}{ip}").format(
-        address=server.address, port=server.port, ip=ip_string)
+        address=server.config.address, port=server.config.port, ip=ip_string)
 
     W.buffer_set(server.server_buffer, "title", title)
 

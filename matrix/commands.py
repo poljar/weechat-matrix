@@ -620,7 +620,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.options["autoconnect"]
+        option = server.config.options["autoconnect"]
         default_value = W.config_string_default(option)
         value = W.config_string(option)
 
@@ -629,7 +629,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.options["address"]
+        option = server.config.options["address"]
         default_value = W.config_string_default(option)
         value = W.config_string(option)
 
@@ -638,7 +638,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.options["port"]
+        option = server.config.options["port"]
         default_value = str(W.config_integer_default(option))
         value = str(W.config_integer(option))
 
@@ -647,7 +647,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.options["username"]
+        option = server.config.options["username"]
         default_value = W.config_string_default(option)
         value = W.config_string(option)
 
@@ -656,7 +656,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.options["password"]
+        option = server.config.options["password"]
         value = W.config_string(option)
 
         if value:
@@ -691,7 +691,7 @@ def matrix_server_command_delete(args):
             if server.server_buffer:
                 W.buffer_close(server.server_buffer)
 
-            for option in server.options.values():
+            for option in server.config.options.values():
                 W.config_option_free(option)
 
             message = ("matrix: server {color}{server}{ncolor} has been "
@@ -721,7 +721,7 @@ def matrix_server_command_add(args):
         return
 
     def remove_server(server):
-        for option in server.options.values():
+        for option in server.config.options.values():
             W.config_option_free(option)
         del SERVERS[server.name]
 
@@ -746,7 +746,11 @@ def matrix_server_command_add(args):
         except ValueError:
             host, port = args[1], None
 
-        return_code = W.config_option_set(server.options["address"], host, 1)
+        return_code = W.config_option_set(
+            server.config.options["address"],
+            host,
+            1
+        )
 
         if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
             remove_server(server)
@@ -763,7 +767,11 @@ def matrix_server_command_add(args):
             return
 
         if port:
-            return_code = W.config_option_set(server.options["port"], port, 1)
+            return_code = W.config_option_set(
+                server.config.options["port"],
+                port,
+                1
+            )
             if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
                 remove_server(server)
                 message = ("{prefix}Failed to set port for server "
@@ -780,7 +788,11 @@ def matrix_server_command_add(args):
 
     if len(args) >= 3:
         user = args[2]
-        return_code = W.config_option_set(server.options["username"], user, 1)
+        return_code = W.config_option_set(
+            server.config.options["username"],
+            user,
+            1
+        )
 
         if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
             remove_server(server)
@@ -799,8 +811,11 @@ def matrix_server_command_add(args):
     if len(args) == 4:
         password = args[3]
 
-        return_code = W.config_option_set(server.options["password"], password,
-                                          1)
+        return_code = W.config_option_set(
+            server.config.options["password"],
+            password,
+            1
+        )
         if return_code == W.WEECHAT_CONFIG_OPTION_SET_ERROR:
             remove_server(server)
             message = ("{prefix}Failed to set password for server "
