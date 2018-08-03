@@ -416,9 +416,10 @@ class MatrixServer:
     def schedule_sync(self):
         self.sync_time = time.time()
 
-    def sync(self):
+    def sync(self, timeout=None):
+        # type: Optional[int] -> None
         self.sync_time = None
-        _, request = self.client.sync()
+        _, request = self.client.sync(timeout)
         self.send_or_queue(request)
 
     def login(self):
@@ -536,6 +537,13 @@ class MatrixServer:
     def handle_response(self, response):
         # type: (MatrixMessage) -> None
         self.lag = response.elapsed * 1000
+
+        # If the response was a sync response and contained a timeout the
+        # timeout is expected and should be removed from the lag.
+        # TODO the timeout isn't a constant
+        if isinstance(response, SyncRepsponse):
+            self.lag = max(0, self.lag - (30000))
+
         self.lag_done = True
         W.bar_item_update("lag")
 
@@ -649,7 +657,7 @@ def matrix_timer_cb(server_name, remaining_calls):
         return W.WEECHAT_RC_OK
 
     if server.sync_time and current_time > (server.sync_time + 2):
-        server.sync()
+        server.sync(30000)
 
     while server.send_queue:
         message = server.send_queue.popleft()
