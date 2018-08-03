@@ -29,7 +29,6 @@ from .utils import (
     shorten_sender,
     server_ts_to_weechat,
     string_strikethrough,
-    mxc_to_http
 )
 from .plugin_options import RedactType
 
@@ -43,7 +42,8 @@ from nio import (
     RoomTopicEvent,
     RoomMessageEmote,
     RoomNameEvent,
-    RoomMessageUnknown
+    RoomMessageUnknown,
+    RedactionEvent
 )
 
 
@@ -774,7 +774,7 @@ class RoomBuffer(object):
             return False
 
         lines = self.weechat_buffer.find_lines(
-            partial(predicate, event.redaction_id)
+            partial(predicate, event.redacts)
         )
 
         # No line to redact, return early
@@ -956,8 +956,8 @@ class RoomBuffer(object):
                 self.get_event_tags(event)
             )
 
-        # elif isinstance(event, RoomRedactionEvent):
-        #     self._redact_line(event)
+        elif isinstance(event, RedactionEvent):
+            self._redact_line(event)
 
         elif isinstance(event, RedactedEvent):
             self._handle_redacted_message(event)
