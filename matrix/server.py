@@ -38,7 +38,7 @@ from matrix.plugin_options import Option, DebugType
 from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
                           create_server_buffer)
 from matrix.utf import utf8_decode
-from matrix.globals import W, SERVERS, SCRIPT_NAME
+from matrix.globals import W, SERVERS, SCRIPT_NAME, OPTIONS
 from .buffer import RoomBuffer, OwnMessage, OwnAction
 
 try:
@@ -459,10 +459,10 @@ class MatrixServer(object):
     def schedule_sync(self):
         self.sync_time = time.time()
 
-    def sync(self, timeout=None):
+    def sync(self, timeout=None, filter=None):
         # type: Optional[int] -> None
         self.sync_time = None
-        _, request = self.client.sync(timeout)
+        _, request = self.client.sync(timeout, filter)
         self.send_or_queue(request)
 
     def login(self):
@@ -553,7 +553,8 @@ class MatrixServer(object):
         #     self.store_olm()
         #     self.upload_keys(device_keys=True, one_time_keys=False)
 
-        self.sync()
+        sync_filter = {"room": {"timeline": {"limit": OPTIONS.sync_limit}}}
+        self.sync(timeout=0, filter=sync_filter)
 
     def _handle_room_info(self, response):
         for room_id, join_info in response.rooms.join.items():
@@ -706,7 +707,8 @@ def matrix_timer_cb(server_name, remaining_calls):
 
     if server.sync_time and current_time > (server.sync_time + 2):
         timeout = 0 if server.transport_type == TransportType.HTTP else 30000
-        server.sync(timeout)
+        sync_filter = {"room": {"timeline": {"limit": 5000}}}
+        server.sync(timeout, sync_filter)
 
     while server.send_queue:
         message = server.send_queue.popleft()
