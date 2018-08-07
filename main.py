@@ -340,14 +340,12 @@ def finalize_connection(server):
     if negotiated_protocol is None:
         negotiated_protocol = server.socket.selected_npn_protocol()
 
-    transport_type = None
-
     if negotiated_protocol == "http/1.1":
-        transport_type = TransportType.HTTP
+        server.transport_type = TransportType.HTTP
     elif negotiated_protocol == "h2":
-        transport_type = TransportType.HTTP2
+        server.transport_type = TransportType.HTTP2
 
-    data = server.client.connect(transport_type)
+    data = server.client.connect(server.transport_type)
     server.send(data)
 
     server.login()

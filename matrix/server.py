@@ -30,6 +30,7 @@ from nio import (
     SyncRepsponse,
     RoomSendResponse,
     TransportResponse,
+    TransportType,
     LocalProtocolError
 )
 
@@ -173,6 +174,7 @@ class MatrixServer(object):
         self.sync_time = None       # type: Optional[float]
         self.socket = None          # type: ssl.SSLSocket
         self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
+        self.transport_type = None  # type: Optional[nio.TransportType]
 
         # Enable http2 negotiation on the ssl context.
         self.ssl_context.set_alpn_protocols(["h2", "http/1.1"])
@@ -391,6 +393,7 @@ class MatrixServer(object):
 
         self.send_buffer = b""
         self.current_message = None
+        self.transport_type = None
 
         try:
             self.client.disconnect()
@@ -702,7 +705,8 @@ def matrix_timer_cb(server_name, remaining_calls):
         return W.WEECHAT_RC_OK
 
     if server.sync_time and current_time > (server.sync_time + 2):
-        server.sync(30000)
+        timeout = 0 if server.transport_type == TransportType.HTTP else 30000
+        server.sync(timeout)
 
     while server.send_queue:
         message = server.send_queue.popleft()
