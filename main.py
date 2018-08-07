@@ -304,6 +304,7 @@ def receive_cb(server_name, file_descriptor):
         except (RemoteTransportError, RemoteProtocolError) as e:
             server.error(str(e))
             server.disconnect()
+            break
 
         response = server.client.next_response()
 
