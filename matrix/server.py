@@ -476,9 +476,14 @@ class MatrixServer(object):
 
         W.prnt(self.server_buffer, msg)
 
-    def room_send_text(self, room_buffer, formatted):
+    def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
         # type: (RoomBuffer, Formatted) -> None
-        own_message = OwnMessage(
+        if msgtype == "m.emote":
+            message_class = OwnAction
+        else:
+            message_class = OwnMessage
+
+        own_message = message_class(
             self.user_id,
             0,
             "",
@@ -486,7 +491,7 @@ class MatrixServer(object):
             formatted
         )
 
-        body = {"msgtype": "m.text", "body": formatted.to_plain()}
+        body = {"msgtype": msgtype, "body": formatted.to_plain()}
 
         if formatted.is_formatted():
             body["format"] = "org.matrix.custom.html"
@@ -614,10 +619,13 @@ class MatrixServer(object):
         self.buffers[room_id] = buf.weechat_buffer._ptr
 
     def find_room_from_ptr(self, pointer):
-        room_id = key_from_value(self.buffers, pointer)
-        room_buffer = self.room_buffers[room_id]
+        try:
+            room_id = key_from_value(self.buffers, pointer)
+            room_buffer = self.room_buffers[room_id]
 
-        return room_buffer
+            return room_buffer
+        except (ValueError, KeyError):
+            return None
 
     def find_room_from_id(self, room_id):
         room_buffer = self.room_buffers[room_id]

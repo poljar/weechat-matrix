@@ -19,20 +19,47 @@ from builtins import str
 
 import re
 import time
+import argparse
 
 import matrix.globals
 from matrix.globals import W, OPTIONS, SERVERS
 
 from matrix.utf import utf8_decode
-from matrix.api import (MatrixTopicMessage, MatrixRedactMessage,
-                        MatrixBacklogMessage, MatrixJoinMessage,
-                        MatrixPartMessage, MatrixInviteMessage,
-                        MatrixEmoteMessage, MatrixKickMessage)
 from matrix.utils import key_from_value, tags_from_line_data
-from matrix.plugin_options import DebugType
 from matrix.server import MatrixServer
 from matrix.colors import Formatted
-from matrix.encryption import matrix_hook_olm_command
+
+
+class ParseError(Exception):
+    pass
+
+
+class WeechatArgParse(argparse.ArgumentParser):
+    def print_usage(self, file):
+        pass
+
+    def error(self, message):
+        m = ("{prefix}Error: {message} for command {command} "
+             "(see /help {command})").format(prefix=W.prefix("error"),
+                                             message=message,
+                                             command=self.prog)
+        W.prnt("", m)
+        raise ParseError
+
+
+class WeechatCommandParser(object):
+    @staticmethod
+    def topic(args):
+        parser = WeechatArgParse(prog="topic")
+
+        parser.add_argument("-delete", action="store_true")
+        parser.add_argument("topic", nargs="*")
+
+        try:
+            parsed_args = parser.parse_args(args.split())
+            return parsed_args
+        except ParseError:
+            return None
 
 
 def hook_commands():
@@ -46,7 +73,6 @@ def hook_commands():
          'connect <server-name> ||'
          'disconnect <server-name> ||'
          'reconnect <server-name> ||'
-         'debug <debug-type> ||'
          'help <matrix-command>'),
         # Description
         ('    server: list, add, or remove Matrix servers\n'
@@ -54,14 +80,12 @@ def hook_commands():
          'disconnect: disconnect from one or all Matrix servers\n'
          ' reconnect: reconnect to server(s)\n\n'
          '      help: show detailed command help\n\n'
-         '     debug: enable or disable debugging\n\n'
          'Use /matrix help [command] to find out more.\n'),
         # Completions
         ('server %(matrix_server_commands)|%* ||'
          'connect %(matrix_servers) ||'
          'disconnect %(matrix_servers) ||'
          'reconnect %(matrix_servers) ||'
-         'debug %(matrix_debug_types) ||'
          'help %(matrix_commands)'),
         # Function name
         'matrix_command_cb',
@@ -87,6 +111,21 @@ def hook_commands():
 
     W.hook_command(
         # Command name and short description
+        "topic",
+        "get/set the room topic",
+        # Synopsis
+        ("[<topic>|-delete]"),
+        # Description
+        ("  topic: topic to set\n"
+         "-delete: delete room topic"),
+        # Completions
+        "",
+        # Callback
+        "matrix_topic_command_cb",
+        "")
+
+    W.hook_command(
+        # Command name and short description
         "me",
         "send an emote message to the current room",
         # Synopsis
@@ -95,18 +134,17 @@ def hook_commands():
         ("message: message to send"),
         # Completions
         "",
-        # Function name
+        # Callback
         "matrix_me_command_cb",
         "")
 
-    matrix_hook_olm_command()
-
-    # W.hook_command_run('/topic', 'matrix_command_topic_cb', '')
-    W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
+    # TODO those should be hook_command() calls
     W.hook_command_run('/join', 'matrix_command_join_cb', '')
     W.hook_command_run('/part', 'matrix_command_part_cb', '')
     W.hook_command_run('/invite', 'matrix_command_invite_cb', '')
     W.hook_command_run('/kick', 'matrix_command_kick_cb', '')
+
+    W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
 
     # if OPTIONS.enable_backlog:
         # hook_page_up()
@@ -129,16 +167,8 @@ def matrix_me_command_cb(data, buffer, args):
                 return W.WEECHAT_RC_OK
 
             formatted_data = Formatted.from_input_line(args)
-            message = MatrixEmoteMessage(
-                server.client,
-                room_id=room_buffer.room.room_id,
-                formatted_message=formatted_data)
 
-            if room_buffer.room.encrypted:
-                return W.WEECHAT_RC_OK
-
-            server.send_or_queue(message)
-
+            server.room_send_message(room_buffer, formatted_data, "m.emote")
             return W.WEECHAT_RC_OK
 
         elif buffer == server.server_buffer:
@@ -147,6 +177,36 @@ def matrix_me_command_cb(data, buffer, args):
                        ).format(prefix=W.prefix("error"))
             W.prnt("", message)
             return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_topic_command_cb(data, buffer, args):
+    parsed_args = WeechatCommandParser.topic(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
+
+    for server in SERVERS.values():
+        if buffer == server.server_buffer:
+            server.error("command \"topic\" must be "
+                         "executed on a Matrix room buffer")
+            return W.WEECHAT_RC_OK
+
+        room = server.find_room_from_ptr(buffer)
+        if not room:
+            continue
+
+        if not parsed_args.topic and not parsed_args.delete:
+            # TODO print the current topic
+            return W.WEECHAT_RC_OK
+
+        if parsed_args.delete and parsed_args.topic:
+            # TODO error message
+            return W.WEECHAT_RC_OK
+
+        topic = "" if parsed_args.delete else " ".join(parsed_args.topic)
+
+        # TODO set the new topic
+        return W.WEECHAT_RC_OK
 
 
 def matrix_fetch_old_messages(server, room_id):
@@ -161,17 +221,7 @@ def matrix_fetch_old_messages(server, room_id):
     if not prev_batch:
         return
 
-    message = MatrixBacklogMessage(
-        server.client,
-        room_id=room_id,
-        token=prev_batch,
-        limit=OPTIONS.backlog_limit)
-    room_buffer.backlog_pending = True
-    W.bar_item_update("buffer_modes")
-
-    server.send_or_queue(message)
-
-    return
+    raise NotImplementedError
 
 
 def check_server_existence(server_name, servers):
@@ -237,8 +287,8 @@ def matrix_command_join_cb(data, buffer, command):
             return
 
         _, room_id = split_args
-        message = MatrixJoinMessage(server.client, room_id=room_id)
-        server.send_or_queue(message)
+
+        raise NotImplementedError
 
     for server in SERVERS.values():
         if buffer in server.buffers.values():
@@ -273,9 +323,7 @@ def matrix_command_part_cb(data, buffer, command):
             _, rooms = split_args
             rooms = rooms.split(" ")
 
-        for room_id in rooms:
-            message = MatrixPartMessage(server.client, room_id=room_id)
-            server.send_or_queue(message)
+        raise NotImplementedError
 
     for server in SERVERS.values():
         if buffer in server.buffers.values():
@@ -305,9 +353,7 @@ def matrix_command_invite_cb(data, buffer, command):
         _, invitee = split_args
         room_id = key_from_value(server.buffers, buf)
 
-        message = MatrixInviteMessage(
-            server.client, room_id=room_id, user_id=invitee)
-        server.send_or_queue(message)
+        raise NotImplementedError
 
     for server in SERVERS.values():
         if buffer in server.buffers.values():
@@ -341,9 +387,7 @@ def matrix_command_kick_cb(data, buffer, command):
             kicked_user = split_args[0]
             reason = split_args[1:] or None
 
-        message = MatrixKickMessage(
-            server.client, room_id=room_id, user_id=kicked_user, reason=reason)
-        server.send_or_queue(message)
+        raise NotImplementedError
 
     for server in SERVERS.values():
         if buffer in server.buffers.values():
@@ -411,66 +455,25 @@ def matrix_redact_command_cb(data, buffer, args):
                 W.prnt("", message)
                 return W.WEECHAT_RC_OK
 
-            message = MatrixRedactMessage(
-                server.client,
-                room_id=room_id,
-                event_id=event_id,
-                reason=reason)
-            server.send_or_queue(message)
+            raise NotImplementedError
 
             return W.WEECHAT_RC_OK
 
         elif buffer == server.server_buffer:
             message = ("{prefix}matrix: command \"redact\" must be "
                        "executed on a Matrix channel buffer"
-                      ).format(prefix=W.prefix("error"))
+                       ).format(prefix=W.prefix("error"))
             W.prnt("", message)
             return W.WEECHAT_RC_OK
 
     return W.WEECHAT_RC_OK
 
 
-def matrix_command_debug(args):
-    if not args:
-        message = ("{prefix}matrix: Too few arguments for command "
-                   "\"/matrix debug\" (see /matrix help debug)"
-                  ).format(prefix=W.prefix("error"))
-        W.prnt("", message)
-        return
-
-    def toggle_debug(debug_type):
-        if debug_type in OPTIONS.debug:
-            message = ("{prefix}matrix: Disabling matrix {t} "
-                       "debugging.").format(
-                           prefix=W.prefix("error"), t=debug_type)
-            W.prnt("", message)
-            OPTIONS.debug.remove(debug_type)
-        else:
-            message = ("{prefix}matrix: Enabling matrix {t} "
-                       "debugging.").format(
-                           prefix=W.prefix("error"), t=debug_type)
-            W.prnt("", message)
-            OPTIONS.debug.append(debug_type)
-
-    for command in args:
-        if command == "network":
-            toggle_debug(DebugType.NETWORK)
-        elif command == "messaging":
-            toggle_debug(DebugType.MESSAGING)
-        elif command == "timing":
-            toggle_debug(DebugType.TIMING)
-        else:
-            message = ("{prefix}matrix: Unknown matrix debug "
-                       "type \"{t}\".").format(
-                           prefix=W.prefix("error"), t=command)
-            W.prnt("", message)
-
-
 def matrix_command_help(args):
     if not args:
         message = ("{prefix}matrix: Too few arguments for command "
                    "\"/matrix help\" (see /matrix help help)"
-                  ).format(prefix=W.prefix("error"))
+                   ).format(prefix=W.prefix("error"))
         W.prnt("", message)
         return
 
@@ -552,19 +555,6 @@ def matrix_command_help(args):
                        "\n\n"
                        "matrix-command: a Matrix command name"
                        "(internal name)").format(
-                           delimiter_color=W.color("chat_delimiters"),
-                           cmd_color=W.color("chat_buffer"),
-                           ncolor=W.color("reset"))
-
-        elif command == "debug":
-            message = ("{delimiter_color}[{ncolor}matrix{delimiter_color}]  "
-                       "{ncolor}{cmd_color}/debug{ncolor} "
-                       "<debug-type> [<debug-type>...]"
-                       "\n\n"
-                       "enable/disable degugging for a Matrix subsystem"
-                       "\n\n"
-                       "debug-type: a Matrix debug type, one of messaging, "
-                       "timing, network").format(
                            delimiter_color=W.color("chat_delimiters"),
                            cmd_color=W.color("chat_buffer"),
                            ncolor=W.color("reset"))
@@ -912,79 +902,10 @@ def matrix_command_cb(data, buffer, args):
     elif command == 'help':
         matrix_command_help(args)
 
-    elif command == 'debug':
-        matrix_command_debug(args)
-
     else:
         message = ("{prefix}matrix: Error: unknown matrix command, "
                    "\"{command}\" (type /help matrix for help)").format(
                        prefix=W.prefix("error"), command=command)
         W.prnt("", message)
-
-    return W.WEECHAT_RC_OK
-
-
-@utf8_decode
-def matrix_command_topic_cb(data, buffer, command):
-    for server in SERVERS.values():
-        if buffer in server.buffers.values():
-            topic = None
-            room_buffer = server.find_room_from_ptr(buffer)
-            split_command = command.split(' ', 1)
-
-            if len(split_command) == 2:
-                topic = split_command[1]
-
-            if not topic:
-                room_buffer = server.find_room_from_ptr(buffer)
-                room = room_buffer.room
-                if not room.topic:
-                    return W.WEECHAT_RC_OK
-
-                if room.is_named():
-                    message = ('{prefix}Topic for {color}{room}{ncolor} is '
-                               '"{topic}"').format(
-                                   prefix=W.prefix("network"),
-                                   color=W.color("chat_buffer"),
-                                   ncolor=W.color("reset"),
-                                   room=room.named_room_name(),
-                                   topic=room.topic)
-                else:
-                    message = ('{prefix}Topic is "{topic}"').format(
-                        prefix=W.prefix("network"),
-                        topic=room.topic)
-
-                date = int(time.time())
-                topic_date = room_buffer.weechat_buffer.topic_date.strftime(
-                    "%a, %d %b %Y %H:%M:%S")
-
-                tags = "matrix_topic,log1"
-                W.prnt_date_tags(buffer, date, tags, message)
-
-                # TODO the nick should be colored
-
-                # TODO we should use the display name as well as
-                # the user name here
-                message = ("{prefix}Topic set by {author} on "
-                           "{date}").format(
-                               prefix=W.prefix("network"),
-                               author=room.topic_author,
-                               date=topic_date)
-                W.prnt_date_tags(buffer, date, tags, message)
-
-                return W.WEECHAT_RC_OK_EAT
-
-            message = MatrixTopicMessage(
-                server.client, room_id=room.room_id, topic=topic)
-            server.send_or_queue(message)
-
-            return W.WEECHAT_RC_OK_EAT
-
-        elif buffer == server.server_buffer:
-            message = ("{prefix}matrix: command \"topic\" must be "
-                       "executed on a Matrix channel buffer"
-                       ).format(prefix=W.prefix("error"))
-            W.prnt(buffer, message)
-            return W.WEECHAT_RC_OK_EAT
 
     return W.WEECHAT_RC_OK

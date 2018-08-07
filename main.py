@@ -39,15 +39,12 @@ from nio import TransportType, RemoteTransportError, RemoteProtocolError
 
 from matrix.colors import Formatted
 from matrix.utf import utf8_decode
-from matrix.http import HttpResponse
-from matrix.api import MatrixSendMessage
-from matrix.encryption import matrix_olm_command_cb
 
 # Weechat searches for the registered callbacks in the scope of the main script
 # file, import the callbacks here so weechat can find them.
 from matrix.commands import (hook_commands, hook_page_up, matrix_command_cb,
-                             matrix_command_join_cb, matrix_command_part_cb,
-                             matrix_command_invite_cb, matrix_command_topic_cb,
+                             matrix_topic_command_cb, matrix_command_join_cb,
+                             matrix_command_part_cb, matrix_command_invite_cb,
                              matrix_command_pgup_cb, matrix_redact_command_cb,
                              matrix_command_buf_clear_cb, matrix_me_command_cb,
                              matrix_command_kick_cb)
@@ -421,7 +418,6 @@ def matrix_unload_cb():
     # for server in SERVERS.values():
     #     server.store_olm()
 
-    W.prnt("", "unloading")
     return W.WEECHAT_RC_OK
 
 

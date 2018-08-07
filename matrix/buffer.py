@@ -75,7 +75,7 @@ def room_buffer_input_cb(server_name, buffer, input_data):
 
     formatted_data = Formatted.from_input_line(input_data)
 
-    server.room_send_text(room_buffer, formatted_data)
+    server.room_send_message(room_buffer, formatted_data, "m.text")
 
     return W.WEECHAT_RC_OK
 
