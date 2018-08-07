@@ -945,10 +945,7 @@ class RoomBuffer(object):
         elif isinstance(event, RoomMessageUnknown):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
-            data = ("Unknown message of type {t}, body: {body}").format(
-                t=event.type,
-                body=event.message
-            )
+            data = ("Unknown message of type {t}").format(t=event.type)
             self.weechat_buffer.message(
                 nick,
                 data,
