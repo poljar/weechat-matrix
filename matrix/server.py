@@ -29,6 +29,7 @@ from nio import (
     LoginResponse,
     SyncRepsponse,
     RoomSendResponse,
+    RoomPutStateResponse,
     TransportResponse,
     TransportType,
     LocalProtocolError
@@ -476,6 +477,14 @@ class MatrixServer(object):
 
         W.prnt(self.server_buffer, msg)
 
+    def room_send_state(self, room_buffer, body, event_type):
+        _, request = self.client.room_put_state(
+            room_buffer.room.room_id,
+            event_type,
+            body
+        )
+        self.send_or_queue(request)
+
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
         # type: (RoomBuffer, Formatted) -> None
         if msgtype == "m.emote":
@@ -584,6 +593,15 @@ class MatrixServer(object):
         self.next_batch = response.next_batch
         self.schedule_sync()
 
+    def handle_transport_response(self, response):
+        self.error(("Error with response of type type: {}, "
+                    "error code {}").format(
+            response.request_info.type, response.status_code))
+
+        # TODO better error handling.
+        if response.request_info.type == "sync":
+            self.disconnect()
+
     def handle_response(self, response):
         # type: (MatrixMessage) -> None
         self.lag = response.elapsed * 1000
@@ -598,16 +616,19 @@ class MatrixServer(object):
         W.bar_item_update("lag")
 
         if isinstance(response, TransportResponse):
-            self.error("Error in response, code: {}".format(
-                response.status_code))
-            self.disconnect()
+            self.handle_transport_response(response)
 
         elif isinstance(response, LoginResponse):
             self._handle_login(response)
+
         elif isinstance(response, SyncRepsponse):
             self._handle_sync(response)
+
         elif isinstance(response, RoomSendResponse):
             self.handle_own_messages(response)
+
+        elif isinstance(response, RoomPutStateResponse):
+            pass
 
         return
 

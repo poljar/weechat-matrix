@@ -204,8 +204,9 @@ def matrix_topic_command_cb(data, buffer, args):
             return W.WEECHAT_RC_OK
 
         topic = "" if parsed_args.delete else " ".join(parsed_args.topic)
+        content = {"topic": topic}
+        server.room_send_state(room, content, "m.room.topic")
 
-        # TODO set the new topic
         return W.WEECHAT_RC_OK
 
 
