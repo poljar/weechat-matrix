@@ -33,6 +33,7 @@ from .utils import (
 from .plugin_options import RedactType
 
 from nio import (
+    Api,
     RoomMessageText,
     RoomMemberEvent,
     PowerLevelsEvent,
@@ -42,6 +43,7 @@ from nio import (
     RoomTopicEvent,
     RoomMessageEmote,
     RoomNameEvent,
+    RoomMessageMedia,
     RoomMessageUnknown,
     RedactionEvent
 )
@@ -925,22 +927,22 @@ class RoomBuffer(object):
         #         self.get_event_tags(event)
         #     )
 
-        # elif isinstance(event, RoomMessageMedia):
-        #     nick = self.find_nick(event.sender)
-        #     date = server_ts_to_weechat(event.server_timestamp)
-        #     http_url = mxc_to_http(event.url)
-        #     url = http_url if http_url else event.url
+        elif isinstance(event, RoomMessageMedia):
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.server_timestamp)
+            http_url = Api.mxc_to_http(event.url)
+            url = http_url if http_url else event.url
 
-        #     description = ("/{}".format(event.description)
-        #                    if event.description else "")
-        #     data = "{url}{desc}".format(url=url, desc=description)
+            description = ("/{}".format(event.body)
+                           if event.body else "")
+            data = "{url}{desc}".format(url=url, desc=description)
 
-        #     self.weechat_buffer.message(
-        #         nick,
-        #         data,
-        #         date,
-        #         self.get_event_tags(event)
-        #     )
+            self.weechat_buffer.message(
+                nick,
+                data,
+                date,
+                self.get_event_tags(event)
+            )
 
         elif isinstance(event, RoomMessageUnknown):
             nick = self.find_nick(event.sender)
