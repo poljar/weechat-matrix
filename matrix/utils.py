@@ -64,10 +64,12 @@ def tags_from_line_data(line_data):
 
 def create_server_buffer(server):
     # type: (MatrixServer) -> None
-    server.server_buffer = W.buffer_new(server.name, "server_buffer_cb",
+    buffer_name = "server.{}".format(server.name)
+    server.server_buffer = W.buffer_new(buffer_name, "server_buffer_cb",
                                         server.name, "", "")
 
     server_buffer_set_title(server)
+    W.buffer_set(server.server_buffer, "short_name", server.name)
     W.buffer_set(server.server_buffer, "localvar_set_type", 'server')
     W.buffer_set(
         server.server_buffer,

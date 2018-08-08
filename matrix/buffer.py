@@ -683,12 +683,14 @@ class RoomBuffer(object):
         self.room = room
         self.backlog_pending = False
 
+        buffer_name = "{}.{}".format(room.room_id, server_name)
+
         # This dict remembers the connection from a user_id to the name we
         # displayed in the buffer
         self.displayed_nicks = {}
         user = shorten_sender(self.room.own_user_id)
         self.weechat_buffer = WeechatChannelBuffer(
-            room.room_id,
+            buffer_name,
             server_name,
             user
         )
