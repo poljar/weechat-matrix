@@ -472,7 +472,23 @@ class MatrixServer(object):
 
     def login(self):
         # type: () -> None
-        _, request = self.client.login(self.config.password)
+        if self.client.logged_in:
+            msg = ("{prefix}{script_name}: Already logged in, "
+                   "syncing...").format(
+                      prefix=W.prefix("network"),
+                      script_name=SCRIPT_NAME
+                  )
+            W.prnt(self.server_buffer, msg)
+            timeout = (0 if self.transport_type == TransportType.HTTP
+                       else 30000)
+            sync_filter = {"room": {"timeline": {"limit": 5000}}}
+            self.sync(timeout, sync_filter)
+            return
+
+        _, request = self.client.login(
+            self.config.password,
+            self.config.device_name
+        )
         self.send_or_queue(request)
 
         msg = "{prefix}matrix: Logging in...".format(
