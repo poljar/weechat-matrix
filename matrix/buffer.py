@@ -456,20 +456,20 @@ class WeechatChannelBuffer(object):
 
         self.print_date_tags(data, date, tags)
 
-    def message(self, nick, message, date, extra_tags=[]):
+    def message(self, nick, message, date, extra_tags=None):
         # type: (str, str, int, str) -> None
         user = self._get_user(nick)
-        tags = self._message_tags(user, "message") + extra_tags
+        tags = self._message_tags(user, "message") + (extra_tags or [])
         self._print_message(user, message, date, tags)
 
-    def notice(self, nick, message, date):
+    def notice(self, nick, message, date, extra_tags=None):
         # type: (str, str, int) -> None
         data = "{color}{message}{ncolor}".format(
             color=W.color("irc.color.notice"),
             message=message,
             ncolor=W.color("reset"))
 
-        self.message(nick, data, date)
+        self.message(nick, data, date, extra_tags)
 
     def _print_action(self, user, message, date, tags):
         nick_prefix = ("" if not user.prefix else "{}{}{}".format(
