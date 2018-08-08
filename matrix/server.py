@@ -478,6 +478,9 @@ class MatrixServer(object):
         W.prnt(self.server_buffer, msg)
 
     def room_send_state(self, room_buffer, body, event_type):
+        if room_buffer.room.encrypted:
+            return
+
         _, request = self.client.room_put_state(
             room_buffer.room.room_id,
             event_type,
@@ -487,6 +490,9 @@ class MatrixServer(object):
 
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
         # type: (RoomBuffer, Formatted) -> None
+        if room_buffer.room.encrypted:
+            return
+
         if msgtype == "m.emote":
             message_class = OwnAction
         else:

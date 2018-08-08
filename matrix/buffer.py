@@ -22,7 +22,7 @@ from builtins import super
 from functools import partial
 from typing import NamedTuple
 
-from .globals import W, SERVERS, OPTIONS, SCRIPT_NAME, ENCRYPTION
+from .globals import W, SERVERS, OPTIONS, SCRIPT_NAME
 from .utf import utf8_decode
 from .colors import Formatted
 from .utils import (
@@ -875,6 +875,11 @@ class RoomBuffer(object):
             self._handle_topic(event, True)
         elif isinstance(event, PowerLevelsEvent):
             self._handle_power_level(event)
+        elif isinstance(event, RoomEncryptionEvent):
+            message = ("This room is encrypted, encryption is "
+                       "currently unsuported. Message sending is disabled for "
+                       "this room.")
+            self.weechat_buffer.error(message)
 
     def handle_timeline_event(self, event):
         if isinstance(event, RoomMemberEvent):
@@ -962,9 +967,6 @@ class RoomBuffer(object):
             self._handle_redacted_message(event)
 
         elif isinstance(event, RoomEncryptionEvent):
-            if ENCRYPTION:
-                return
-
             message = ("This room is encrypted, encryption is "
                        "currently unsuported. Message sending is disabled for "
                        "this room.")
