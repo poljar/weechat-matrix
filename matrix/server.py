@@ -239,7 +239,7 @@ class MatrixServer(object):
 
     def _change_client(self):
         host = ':'.join([self.config.address, str(self.config.port)])
-        self.client = HttpClient(host, self.config.username)
+        self.client = HttpClient(host, self.config.username, self.device_id)
 
     def update_option(self, option, option_name):
         if option_name == "address":
@@ -258,8 +258,12 @@ class MatrixServer(object):
             value = W.config_string(option)
             self.access_token = ""
 
+            self._load_device_id()
+
             if self.client:
                 self.client.user = value
+                if self.device_id:
+                    self.client.device_id = self.device_id
         else:
             pass
 
