@@ -389,6 +389,12 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("strikethrough")
         elif tag == "blockquote":
             self._toggle_attribute("quote")
+        elif tag == "p":
+            if self.text:
+                self.add_substring(self.text, self.attributes.copy())
+            self.text = "\n"
+            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.text = ""
         elif tag == "font":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
