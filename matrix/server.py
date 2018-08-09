@@ -625,7 +625,8 @@ class MatrixServer(object):
             response.request_info.type, response.status_code))
 
         # TODO better error handling.
-        if response.request_info.type == "sync":
+        if (response.request_info.type == "sync" or
+                response.request_info.type == "login"):
             self.disconnect()
 
     def handle_response(self, response):
