@@ -151,6 +151,11 @@ class WeechatChannelBuffer(object):
             "notify_message",
             "log1",
         ],
+        "notice": [
+            SCRIPT_NAME + "_notice",
+            "notify_message",
+            "log1",
+        ],
         "old_message": [
             SCRIPT_NAME + "_message",
             "notify_message",
@@ -288,7 +293,7 @@ class WeechatChannelBuffer(object):
                 W.hdata_update(self._hdata, self._ptr, new_data)
 
     def __init__(self, name, server_name, user):
-        # type: (str, str, str)
+        # type: (str, str, str) -> None
         self._ptr = W.buffer_new(
             name,
             "room_buffer_input_cb",
@@ -427,7 +432,7 @@ class WeechatChannelBuffer(object):
 
         color = self._color_for_tags(user.color)
 
-        if message_type != "action":
+        if message_type != "action" and message_type != "notice":
             tags.append("prefix_nick_{color}".format(color=color))
 
         return tags
@@ -463,13 +468,32 @@ class WeechatChannelBuffer(object):
         self._print_message(user, message, date, tags)
 
     def notice(self, nick, message, date, extra_tags=None):
-        # type: (str, str, int) -> None
-        data = "{color}{message}{ncolor}".format(
-            color=W.color("irc.color.notice"),
-            message=message,
-            ncolor=W.color("reset"))
+        # type: (str, str, int, Optional[List[str]]) -> None
+        user = self._get_user(nick)
+        user_prefix = ("" if not user.prefix else "{}{}{}".format(
+            W.color(self._get_prefix_color(user.prefix)),
+            user.prefix,
+            W.color("reset")
+        ))
 
-        self.message(nick, data, date, extra_tags)
+        user_string = "{}{}{}{}".format(
+            user_prefix,
+            user.color,
+            user.nick,
+            W.color("reset")
+        )
+
+        data = ("{prefix}\t{color}Notice"
+                "{del_color}({ncolor}{user}{del_color}){ncolor}"
+                ": {message}").format(prefix=W.prefix("network"),
+                                      color=W.color("irc.color.notice"),
+                                      del_color=W.color("chat_delimiters"),
+                                      ncolor=W.color("reset"),
+                                      user=user_string,
+                                      message=message)
+
+        tags = self._message_tags(user, "notice") + (extra_tags or [])
+        self.print_date_tags(data, date, tags)
 
     def _print_action(self, user, message, date, tags):
         nick_prefix = ("" if not user.prefix else "{}{}{}".format(
@@ -490,7 +514,7 @@ class WeechatChannelBuffer(object):
         self.print_date_tags(data, date, tags)
 
     def action(self, nick, message, date, extra_tags=[]):
-        # type: (str, str, int) -> None
+        # type: (str, str, int, Optional[List[str]]) -> None
         user = self._get_user(nick)
         tags = self._message_tags(user, "action") + extra_tags
         self._print_action(user, message, date, tags)
