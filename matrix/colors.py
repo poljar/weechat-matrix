@@ -301,7 +301,7 @@ class Formatted():
             return text
 
         weechat_strings = map(format_string, self.substrings)
-        return "".join(weechat_strings).rstrip("\n")
+        return "".join(weechat_strings).rstrip("\n").replace("\n\n", "\n")
 
 
 # TODO this should be a typed dict.
@@ -357,6 +357,12 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("strikethrough")
         elif tag == "blockquote":
             self._toggle_attribute("quote")
+        elif tag == "p":
+            if self.text:
+                self.add_substring(self.text, self.attributes.copy())
+            self.text = "\n"
+            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.text = ""
         elif tag == "br":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
@@ -389,9 +395,6 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("strikethrough")
         elif tag == "blockquote":
             self._toggle_attribute("quote")
-        elif tag == "p":
-            if self.text:
-                self.add_substring(self.text, self.attributes.copy())
             self.text = "\n"
             self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
             self.text = ""
