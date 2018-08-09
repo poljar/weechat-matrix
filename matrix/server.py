@@ -465,7 +465,7 @@ class MatrixServer(object):
         self.sync_time = time.time()
 
     def sync(self, timeout=None, filter=None):
-        # type: Optional[int] -> None
+        # type: (Optional[int], Optional[Dict[Any, Any]]) -> None
         self.sync_time = None
         _, request = self.client.sync(timeout, filter)
         self.send_or_queue(request)
@@ -509,7 +509,7 @@ class MatrixServer(object):
         self.send_or_queue(request)
 
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
-        # type: (RoomBuffer, Formatted) -> None
+        # type: (RoomBuffer, Formatted, str) -> None
         if room_buffer.room.encrypted:
             return
 

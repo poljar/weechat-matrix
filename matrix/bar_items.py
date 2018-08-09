@@ -15,10 +15,8 @@
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 from __future__ import unicode_literals
-from builtins import str
 
 from matrix.utf import utf8_decode
-from matrix.utils import key_from_value
 
 from matrix.globals import W, SERVERS
 
