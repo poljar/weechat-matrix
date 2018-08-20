@@ -138,6 +138,11 @@ def matrix_config_init(config_file):
                ("Use a separate buffer for debug logs.")),
     ]
 
+    color_options = [
+        Option("quote", "color", "", 0, 0, "lightgreen",
+               ("Color for matrix style blockquotes"))
+    ]
+
     def add_global_options(section, options):
         for option in options:
             OPTIONS.options[option.name] = W.config_new_option(
@@ -149,7 +154,7 @@ def matrix_config_init(config_file):
     section = W.config_new_section(config_file, "color", 0, 0, "", "", "", "",
                                    "", "", "", "", "", "")
 
-    # TODO color options
+    add_global_options(section, color_options)
 
     section = W.config_new_section(config_file, "look", 0, 0, "", "", "", "",
                                    "", "", "", "", "", "")

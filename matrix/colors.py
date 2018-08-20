@@ -21,7 +21,7 @@ from __future__ import unicode_literals
 # pylint: disable=redefined-builtin
 from builtins import str
 from collections import namedtuple
-from matrix.globals import W
+from matrix.globals import W, OPTIONS
 from matrix.utils import string_strikethrough
 
 import textwrap
@@ -33,12 +33,8 @@ except ImportError:
     from html.parser import HTMLParser
 
 import html
-from html.entities import name2codepoint
 
 FormattedString = namedtuple('FormattedString', ['text', 'attributes'])
-
-quote_wrapper = textwrap.TextWrapper(
-    initial_indent="> ", subsequent_indent="> ")
 
 
 class Formatted():
@@ -46,6 +42,17 @@ class Formatted():
     def __init__(self, substrings):
         # type: (List[FormattedString]) -> None
         self.substrings = substrings
+
+    @property
+    def textwrapper(self):
+        return textwrap.TextWrapper(
+            width=67,
+            initial_indent="{}> ".format(
+                W.color(W.config_string(OPTIONS.options["quote"]))
+            ),
+            subsequent_indent="{}> ".format(
+                W.color(W.config_string(OPTIONS.options["quote"]))
+            ))
 
     def is_formatted(self):
         # type: (Formatted) -> bool
@@ -268,7 +275,8 @@ class Formatted():
                 return string_strikethrough(string)
 
             elif name == "quote" and value:
-                return quote_wrapper.fill(string.replace("\n", ""))
+                return self.textwrapper.fill(
+                    W.string_remove_color(string.replace("\n", ""), ""))
 
             elif name == "fgcolor" and value:
                 return "{color_on}{text}{color_off}".format(
