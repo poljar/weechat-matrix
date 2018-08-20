@@ -27,6 +27,11 @@ from matrix.utils import string_strikethrough
 import textwrap
 import webcolors
 
+from pygments import highlight
+from pygments.lexers import guess_lexer, get_lexer_by_name
+from pygments.formatter import Formatter
+from pygments.util import ClassNotFound
+
 try:
     from HTMLParser import HTMLParser
 except ImportError:
@@ -278,6 +283,14 @@ class Formatted():
                 return self.textwrapper.fill(
                     W.string_remove_color(string.replace("\n", ""), ""))
 
+            elif name == "code" and value:
+                try:
+                    lexer = get_lexer_by_name(value)
+                except ClassNotFound:
+                    lexer = guess_lexer(string)
+
+                return highlight(string, lexer, WeechatFormatter())
+
             elif name == "fgcolor" and value:
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color(value),
@@ -319,6 +332,7 @@ DEFAULT_ATRIBUTES = {
     "underline": False,
     "strikethrough": False,
     "quote": False,
+    "code": None,
     "fgcolor": None,
     "bgcolor": None
 }
@@ -365,6 +379,20 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("strikethrough")
         elif tag == "blockquote":
             self._toggle_attribute("quote")
+        elif tag == "code":
+            lang = None
+
+            for key, value in attrs:
+                if key == "class":
+                    if value.startswith("language-"):
+                        lang = value.split("-", 1)[1]
+
+            lang = lang or "unknown"
+
+            if self.text:
+                self.add_substring(self.text, self.attributes.copy())
+            self.text = ""
+            self.attributes["code"] = lang
         elif tag == "p":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
@@ -401,6 +429,13 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("underline")
         elif tag == "del":
             self._toggle_attribute("strikethrough")
+        elif tag == "code":
+            if self.text:
+                self.add_substring(self.text, self.attributes.copy())
+            self.text = "\n"
+            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.text = ""
+            self.attributes["code"] = None
         elif tag == "blockquote":
             self._toggle_attribute("quote")
             self.text = "\n"
@@ -932,3 +967,48 @@ def color_weechat_to_html(color):
         return hex_colors[weechat_basic_colors[color]]
     else:
         return hex_colors[color]
+
+
+class WeechatFormatter(Formatter):
+    def __init__(self, **options):
+        Formatter.__init__(self, **options)
+        self.styles = {}
+
+        for token, style in self.style:
+            start = end = ""
+            if style["color"]:
+                start += "{}".format(
+                    W.color(color_html_to_weechat(str(style["color"]))))
+                end = "{}".format(W.color("resetcolor")) + end
+            if style["bold"]:
+                start += W.color("bold")
+                end = W.color("-bold") + end
+            if style["italic"]:
+                start += W.color("italic")
+                end = W.color("-italic") + end
+            if style['underline']:
+                start += W.color("underline")
+                end = W.color("-underline") + end
+            self.styles[token] = (start, end)
+
+    def format(self, tokensource, outfile):
+        lastval = ''
+        lasttype = None
+
+        for ttype, value in tokensource:
+            while ttype not in self.styles:
+                ttype = ttype.parent
+
+            if ttype == lasttype:
+                lastval += value
+            else:
+                if lastval:
+                    stylebegin, styleend = self.styles[lasttype]
+                    outfile.write(stylebegin + lastval + styleend)
+                # set lastval/lasttype to current values
+                lastval = value
+                lasttype = ttype
+
+        if lastval:
+            stylebegin, styleend = self.styles[lasttype]
+            outfile.write(stylebegin + lastval + styleend)
