@@ -322,7 +322,7 @@ class Formatted():
             return text
 
         weechat_strings = map(format_string, self.substrings)
-        return "".join(weechat_strings).rstrip("\n").replace("\n\n", "\n")
+        return "".join(weechat_strings).replace("\n\n", "\n").strip()
 
 
 # TODO this should be a typed dict.
