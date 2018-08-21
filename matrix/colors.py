@@ -24,6 +24,7 @@ from collections import namedtuple
 from matrix.globals import W, OPTIONS
 from matrix.utils import string_strikethrough
 
+import re
 import textwrap
 import webcolors
 
@@ -322,7 +323,7 @@ class Formatted():
             return text
 
         weechat_strings = map(format_string, self.substrings)
-        return "".join(weechat_strings).replace("\n\n", "\n").strip()
+        return re.sub(r'\n+', '\n', "".join(weechat_strings)).strip()
 
 
 # TODO this should be a typed dict.
