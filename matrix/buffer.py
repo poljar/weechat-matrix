@@ -89,19 +89,41 @@ def room_buffer_close_cb(data, buffer):
 
 
 class WeechatUser(object):
-    def __init__(self, nick, host=None, prefix=""):
+    def __init__(self, nick, host=None, prefix="", join_time=None):
         # type: (str, str, str) -> None
         self.nick = nick
         self.host = host
         self.prefix = prefix
         self.color = W.info_get("nick_color_name", nick)
+        self.join_time = join_time or time.time()
+        self.speaking_time = None  # type: int
+
+    def update_speaking_time(self, new_time=None):
+        self.speaking_time = new_time or time.time()
+
+    @property
+    def joined_recently(self):
+        # TODO make the delay configurable
+        delay = 30
+        limit = time.time() - (delay * 60)
+        return self.join_time < limit
+
+    @property
+    def spoken_recently(self):
+        if not self.speaking_time:
+            return False
+
+        # TODO make the delay configurable
+        delay = 5
+        limit = time.time() - (delay * 60)
+        return self.speaking_time < limit
 
 
 class RoomUser(WeechatUser):
-    def __init__(self, nick, user_id=None, power_level=0):
+    def __init__(self, nick, user_id=None, power_level=0, join_time=None):
         # type: (str, str, int) -> None
         prefix = self._get_prefix(power_level)
-        return super().__init__(nick, user_id, prefix)
+        return super().__init__(nick, user_id, prefix, join_time)
 
     @property
     def power_level(self):
@@ -303,7 +325,8 @@ class WeechatChannelBuffer(object):
         )
 
         self.name = ""
-        self.users = {}  # type: Dict[str, RoomUser]
+        self.users = {}  # type: Dict[str, WeechatUser]
+        self.smart_filtered_nicks = set()  # type: Set[str]
 
         self.topic_author = ""
         self.topic_date = None
@@ -364,6 +387,38 @@ class WeechatChannelBuffer(object):
     @property
     def _hdata(self):
         return W.hdata_get("buffer")
+
+    def add_smart_filtered_nick(self, nick):
+        self.smart_filtered_nicks.add(nick)
+
+    def remove_smart_filtered_nick(self, nick):
+        self.smart_filtered_nicks.discard(nick)
+
+    def unmask_smart_filtered_nick(self, nick):
+        if nick not in self.smart_filtered_nicks:
+            return
+
+        for line in self.lines:
+            filtered = False
+            join = False
+            tags = line.tags
+
+            if "nick_{}".format(nick) not in tags:
+                continue
+
+            if SCRIPT_NAME + "_smart_filter" in tags:
+                filtered = True
+            elif SCRIPT_NAME + "_join" in tags:
+                join = True
+
+            if filtered:
+                tags.remove(SCRIPT_NAME + "_smart_filter")
+                line.tags = tags
+
+            if join:
+                break
+
+        self.remove_smart_filtered_nick(nick)
 
     @property
     def lines(self):
@@ -438,12 +493,12 @@ class WeechatChannelBuffer(object):
         return tags
 
     def _get_user(self, nick):
-        # type: (str) -> RoomUser
+        # type: (str) -> WeechatUser
         if nick in self.users:
             return self.users[nick]
 
         # A message from a non joined user
-        return RoomUser(nick)
+        return WeechatUser(nick)
 
     def _print_message(self, user, message, date, tags):
         prefix_string = ("" if not user.prefix else "{}{}{}".format(
@@ -466,6 +521,9 @@ class WeechatChannelBuffer(object):
         user = self._get_user(nick)
         tags = self._message_tags(user, "message") + (extra_tags or [])
         self._print_message(user, message, date, tags)
+
+        user.update_speaking_time(date)
+        self.unmask_smart_filtered_nick(nick)
 
     def notice(self, nick, message, date, extra_tags=None):
         # type: (str, str, int, Optional[List[str]]) -> None
@@ -495,6 +553,9 @@ class WeechatChannelBuffer(object):
         tags = self._message_tags(user, "notice") + (extra_tags or [])
         self.print_date_tags(data, date, tags)
 
+        user.update_speaking_time(date)
+        self.unmask_smart_filtered_nick(nick)
+
     def _print_action(self, user, message, date, tags):
         nick_prefix = ("" if not user.prefix else "{}{}{}".format(
             W.color(self._get_prefix_color(user.prefix)),
@@ -518,6 +579,9 @@ class WeechatChannelBuffer(object):
         user = self._get_user(nick)
         tags = self._message_tags(user, "action") + extra_tags
         self._print_action(user, message, date, tags)
+
+        user.update_speaking_time(date)
+        self.unmask_smart_filtered_nick(nick)
 
     @staticmethod
     def _get_nicklist_group(user):
@@ -604,7 +668,12 @@ class WeechatChannelBuffer(object):
         if message:
             tags = self._message_tags(user, "join")
             message = self._membership_message(user, "join")
+
+            # TODO add a option to disable smart filters
+            tags.append(SCRIPT_NAME + "_smart_filter")
+
             self.print_date_tags(message, date, tags)
+            self.add_smart_filtered_nick(user.nick)
 
     def invite(self, nick, date, extra_tags=[]):
         # type: (str, int, Optional[bool], Optional[List[str]]) -> None
@@ -627,8 +696,14 @@ class WeechatChannelBuffer(object):
 
         if message:
             tags = self._message_tags(user, leave_type)
+
+            # TODO make this configurable
+            if not user.spoken_recently:
+                tags.append(SCRIPT_NAME + "_smart_filter")
+
             message = self._membership_message(user, leave_type)
             self.print_date_tags(message, date, tags + extra_tags)
+            self.remove_smart_filtered_nick(user.nick)
 
         if user.nick in self.users:
             del self.users[user.nick]
@@ -657,6 +732,8 @@ class WeechatChannelBuffer(object):
                 )
 
         self.print_date_tags(data, date, tags)
+        user.update_speaking_time(date)
+        self.unmask_smart_filtered_nick(nick)
 
     @property
     def topic(self):
@@ -745,7 +822,7 @@ class RoomBuffer(object):
             else:
                 nick = short_name
 
-            buffer_user = RoomUser(nick, event.sender, user.power_level)
+            buffer_user = RoomUser(nick, event.sender, user.power_level, date)
             self.displayed_nicks[event.sender] = nick
 
             if self.room.own_user_id == event.sender:
@@ -754,7 +831,7 @@ class RoomBuffer(object):
 
             self.weechat_buffer.join(
                 buffer_user,
-                server_ts_to_weechat(event.server_timestamp),
+                date,
                 not is_state
             )
 
