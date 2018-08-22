@@ -508,6 +508,13 @@ class MatrixServer(object):
         )
         self.send_or_queue(request)
 
+    def room_send_redaction(self, room_buffer, event_id, reason=None):
+        _, request = self.client.room_redact(
+            room_buffer.room.room_id,
+            event_id,
+            reason)
+        self.send_or_queue(request)
+
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
         # type: (RoomBuffer, Formatted, str) -> None
         if room_buffer.room.encrypted:
@@ -653,9 +660,6 @@ class MatrixServer(object):
 
         elif isinstance(response, RoomSendResponse):
             self.handle_own_messages(response)
-
-        elif isinstance(response, RoomPutStateResponse):
-            pass
 
         return
 

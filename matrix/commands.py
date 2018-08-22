@@ -91,23 +91,23 @@ def hook_commands():
         'matrix_command_cb',
         '')
 
-    # W.hook_command(
-    #     # Command name and short description
-    #     'redact',
-    #     'redact messages',
-    #     # Synopsis
-    #     ('<message-number>[:"<message-part>"] [<reason>]'),
-    #     # Description
-    #     ("message-number: number of message to redact (starting from 1 for\n"
-    #      "                the last message received, counting up)\n"
-    #      "  message-part: an initial part of the message (ignored, only used\n"
-    #      "                as visual feedback when using completion)\n"
-    #      "        reason: the redaction reason\n"),
-    #     # Completions
-    #     ('%(matrix_messages)'),
-    #     # Function name
-    #     'matrix_redact_command_cb',
-    #     '')
+    W.hook_command(
+        # Command name and short description
+        'redact',
+        'redact messages',
+        # Synopsis
+        ('<message-number>[:"<message-part>"] [<reason>]'),
+        # Description
+        ("message-number: number of message to redact (starting from 1 for\n"
+         "                the last message received, counting up)\n"
+         "  message-part: an initial part of the message (ignored, only used\n"
+         "                as visual feedback when using completion)\n"
+         "        reason: the redaction reason\n"),
+        # Completions
+        ('%(matrix_messages)'),
+        # Function name
+        'matrix_redact_command_cb',
+        '')
 
     W.hook_command(
         # Command name and short description
@@ -434,13 +434,14 @@ def event_id_from_line(buf, target_number):
 def matrix_redact_command_cb(data, buffer, args):
     for server in SERVERS.values():
         if buffer in server.buffers.values():
-            room_id = key_from_value(server.buffers, buffer)
+            room_buffer = server.find_room_from_ptr(buffer)
 
             matches = re.match(r"(\d+)(:\".*\")? ?(.*)?", args)
 
             if not matches:
-                message = ("{prefix}matrix: Invalid command arguments (see /help redact)"
-                          ).format(prefix=W.prefix("error"))
+                message = ("{prefix}matrix: Invalid command "
+                           "arguments (see /help redact)"
+                           ).format(prefix=W.prefix("error"))
                 W.prnt("", message)
                 return W.WEECHAT_RC_ERROR
 
@@ -456,7 +457,7 @@ def matrix_redact_command_cb(data, buffer, args):
                 W.prnt("", message)
                 return W.WEECHAT_RC_OK
 
-            raise NotImplementedError
+            server.room_send_redaction(room_buffer, event_id, reason)
 
             return W.WEECHAT_RC_OK
 
