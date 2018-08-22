@@ -72,6 +72,13 @@ class WeechatCommandParser(object):
 
         return WeechatCommandParser._run_parser(parser, args)
 
+    @staticmethod
+    def invite(args):
+        parser = WeechatArgParse(prog="invite")
+        parser.add_argument("user_id")
+
+        return WeechatCommandParser._run_parser(parser, args)
+
 
 def hook_commands():
     W.hook_command(
@@ -164,10 +171,23 @@ def hook_commands():
         "matrix_kick_command_cb",
         "")
 
+    W.hook_command(
+        # Command name and short description
+        "invite",
+        "invite a user to the current room",
+        # Synopsis
+        ("<user-id>"),
+        # Description
+        ("user-id: user-id to invite"),
+        # Completions
+        ("%(matrix_users)"),
+        # Callback
+        "matrix_invite_command_cb",
+        "")
+
     # TODO those should be hook_command() calls
     # W.hook_command_run('/join', 'matrix_command_join_cb', '')
     # W.hook_command_run('/part', 'matrix_command_part_cb', '')
-    # W.hook_command_run('/invite', 'matrix_command_invite_cb', '')
 
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
 
@@ -363,28 +383,26 @@ def matrix_command_part_cb(data, buffer, command):
 
 
 @utf8_decode
-def matrix_command_invite_cb(data, buffer, command):
-
-    def invite(server, buf, args):
-        split_args = args.split(" ", 1)
-
-        # TODO handle join for non public rooms
-        if len(split_args) != 2:
-            message = (
-                "{prefix}Error with command \"/invite\" (help on "
-                "command: /help invite)").format(prefix=W.prefix("error"))
-            W.prnt("", message)
-            return
-
-        _, invitee = split_args
-        room_id = key_from_value(server.buffers, buf)
-
-        raise NotImplementedError
+def matrix_invite_command_cb(data, buffer, args):
+    parsed_args = WeechatCommandParser.invite(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
 
     for server in SERVERS.values():
-        if buffer in server.buffers.values():
-            invite(server, buffer, command)
-            return W.WEECHAT_RC_OK_EAT
+        if buffer == server.server_buffer:
+            server.error("command \"invite\" must be "
+                         "executed on a Matrix room buffer")
+            return W.WEECHAT_RC_OK
+
+        room = server.find_room_from_ptr(buffer)
+        if not room:
+            continue
+
+        user_id = parsed_args.user_id
+        user_id = user_id if user_id.startswith("@") else "@" + user_id
+
+        server.room_invite(room, user_id)
+        break
 
     return W.WEECHAT_RC_OK
 
