@@ -18,7 +18,6 @@ from __future__ import unicode_literals
 from builtins import str
 
 import re
-import time
 import argparse
 
 import matrix.globals
@@ -49,17 +48,29 @@ class WeechatArgParse(argparse.ArgumentParser):
 
 class WeechatCommandParser(object):
     @staticmethod
+    def _run_parser(parser, args):
+        try:
+            parsed_args = parser.parse_args(args.split())
+            return parsed_args
+        except ParseError:
+            return None
+
+    @staticmethod
     def topic(args):
         parser = WeechatArgParse(prog="topic")
 
         parser.add_argument("-delete", action="store_true")
         parser.add_argument("topic", nargs="*")
 
-        try:
-            parsed_args = parser.parse_args(args.split())
-            return parsed_args
-        except ParseError:
-            return None
+        return WeechatCommandParser._run_parser(parser, args)
+
+    @staticmethod
+    def kick(args):
+        parser = WeechatArgParse(prog="kick")
+        parser.add_argument("user_id")
+        parser.add_argument("reason", nargs="*")
+
+        return WeechatCommandParser._run_parser(parser, args)
 
 
 def hook_commands():
@@ -138,11 +149,25 @@ def hook_commands():
         "matrix_me_command_cb",
         "")
 
+    W.hook_command(
+        # Command name and short description
+        "kick",
+        "kick a user from the current room",
+        # Synopsis
+        ("<user-id> [<reason>]"),
+        # Description
+        ("user-id: user-id to kick\n"
+         " reason: reason why the user was kicked"),
+        # Completions
+        ("%(matrix_users)"),
+        # Callback
+        "matrix_kick_command_cb",
+        "")
+
     # TODO those should be hook_command() calls
-    W.hook_command_run('/join', 'matrix_command_join_cb', '')
-    W.hook_command_run('/part', 'matrix_command_part_cb', '')
-    W.hook_command_run('/invite', 'matrix_command_invite_cb', '')
-    W.hook_command_run('/kick', 'matrix_command_kick_cb', '')
+    # W.hook_command_run('/join', 'matrix_command_join_cb', '')
+    # W.hook_command_run('/part', 'matrix_command_part_cb', '')
+    # W.hook_command_run('/invite', 'matrix_command_invite_cb', '')
 
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
 
@@ -365,35 +390,27 @@ def matrix_command_invite_cb(data, buffer, command):
 
 
 @utf8_decode
-def matrix_command_kick_cb(data, buffer, command):
-
-    def kick(server, buf, args):
-        split_args = args.split(" ", 1)[1:]
-
-        if (len(split_args) < 1 or
-                split_args[0].startswith("#") and len(split_args) < 2):
-            error_msg = (
-                '{prefix}Error with command "/kick" (help on '
-                'command: /help kick)').format(prefix=W.prefix("error"))
-            W.prnt("", error_msg)
-            return
-
-        if split_args[0].startswith("#"):
-            assert len(split_args) >= 2
-            room_id = split_args[0]
-            kicked_user = split_args[1]
-            reason = split_args[2:] or None
-        else:
-            room_id = key_from_value(server.buffers, buf)
-            kicked_user = split_args[0]
-            reason = split_args[1:] or None
-
-        raise NotImplementedError
+def matrix_kick_command_cb(data, buffer, args):
+    parsed_args = WeechatCommandParser.kick(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
 
     for server in SERVERS.values():
-        if buffer in server.buffers.values():
-            kick(server, buffer, command)
-            return W.WEECHAT_RC_OK_EAT
+        if buffer == server.server_buffer:
+            server.error("command \"kick\" must be "
+                         "executed on a Matrix room buffer")
+            return W.WEECHAT_RC_OK
+
+        room = server.find_room_from_ptr(buffer)
+        if not room:
+            continue
+
+        user_id = parsed_args.user_id
+        user_id = user_id if user_id.startswith("@") else "@" + user_id
+        reason = " ".join(parsed_args.reason) if parsed_args.reason else None
+
+        server.room_kick(room, user_id, reason)
+        break
 
     return W.WEECHAT_RC_OK
 

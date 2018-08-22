@@ -47,7 +47,7 @@ from matrix.commands import (hook_commands, hook_page_up, matrix_command_cb,
                              matrix_command_part_cb, matrix_command_invite_cb,
                              matrix_command_pgup_cb, matrix_redact_command_cb,
                              matrix_command_buf_clear_cb, matrix_me_command_cb,
-                             matrix_command_kick_cb)
+                             matrix_kick_command_cb)
 from matrix.buffer import room_buffer_input_cb, room_buffer_close_cb
 
 from matrix.server import (
@@ -68,7 +68,8 @@ from matrix.completion import (
     init_completion, matrix_command_completion_cb,
     matrix_server_command_completion_cb, matrix_debug_completion_cb,
     matrix_message_completion_cb, matrix_server_completion_cb,
-    matrix_olm_user_completion_cb, matrix_olm_device_completion_cb)
+    matrix_olm_user_completion_cb, matrix_olm_device_completion_cb,
+    matrix_user_completion_cb)
 
 from matrix.utils import (key_from_value, server_buffer_prnt, prnt_debug,
                           server_buffer_set_title)

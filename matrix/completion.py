@@ -171,6 +171,31 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
     return W.WEECHAT_RC_OK
 
 
+@utf8_decode
+def matrix_user_completion_cb(data, completion_item, buffer, completion):
+    def add_user(completion, user):
+        W.hook_completion_list_add(completion, user, 0,
+                                   W.WEECHAT_LIST_POS_SORT)
+
+    for server in SERVERS.values():
+        if buffer == server.server_buffer:
+            return W.WEECHAT_RC_OK
+
+        room_buffer = server.find_room_from_ptr(buffer)
+
+        if not room_buffer:
+            continue
+
+        users = room_buffer.room.users
+
+        users = [user[1:] for user in users]
+
+        for user in users:
+            add_user(completion, user)
+
+    return W.WEECHAT_RC_OK
+
+
 def init_completion():
     W.hook_completion("matrix_server_commands", "Matrix server completion",
                       "matrix_server_command_completion_cb", "")
@@ -192,3 +217,6 @@ def init_completion():
 
     W.hook_completion("olm_devices", "Matrix olm device id completion",
                       "matrix_olm_device_completion_cb", "")
+
+    W.hook_completion("matrix_users", "Matrix user id completion",
+                      "matrix_user_completion_cb", "")

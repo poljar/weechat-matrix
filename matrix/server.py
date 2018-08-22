@@ -515,6 +515,13 @@ class MatrixServer(object):
             reason)
         self.send_or_queue(request)
 
+    def room_kick(self, room_buffer, user_id, reason=None):
+        _, request = self.client.room_kick(
+            room_buffer.room.room_id,
+            user_id,
+            reason)
+        self.send_or_queue(request)
+
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
         # type: (RoomBuffer, Formatted, str) -> None
         if room_buffer.room.encrypted:
