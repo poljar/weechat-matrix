@@ -786,7 +786,7 @@ class RoomBuffer(object):
         self.joined = True
         self.leave_event_id = None  # type: Optional[str]
 
-        buffer_name = "{}.{}".format(room.room_id, server_name)
+        buffer_name = "{}.{}".format(server_name, room.room_id)
 
         # This dict remembers the connection from a user_id to the name we
         # displayed in the buffer
