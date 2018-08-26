@@ -528,6 +528,14 @@ class MatrixServer(object):
             user_id)
         self.send_or_queue(request)
 
+    def room_join(self, room_id):
+        _, request = self.client.join(room_id)
+        self.send_or_queue(request)
+
+    def room_leave(self, room_id):
+        _, request = self.client.room_leave(room_id)
+        self.send_or_queue(request)
+
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
         # type: (RoomBuffer, Formatted, str) -> None
         if room_buffer.room.encrypted:
@@ -617,17 +625,19 @@ class MatrixServer(object):
         self.sync(timeout=0, filter=sync_filter)
 
     def _handle_room_info(self, response):
-        for room_id, join_info in response.rooms.join.items():
+        for room_id, info in response.rooms.leave.items():
+            if room_id not in self.buffers:
+                continue
+
+            room_buffer = self.find_room_from_id(room_id)
+            room_buffer.handle_left_room(info)
+
+        for room_id, info in response.rooms.join.items():
             if room_id not in self.buffers:
                 self.create_room_buffer(room_id)
 
             room_buffer = self.find_room_from_id(room_id)
-
-            for event in join_info.state:
-                room_buffer.handle_state_event(event)
-
-            for event in join_info.timeline.events:
-                room_buffer.handle_timeline_event(event)
+            room_buffer.handle_joined_room(info)
 
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do

@@ -79,6 +79,18 @@ class WeechatCommandParser(object):
 
         return WeechatCommandParser._run_parser(parser, args)
 
+    @staticmethod
+    def join(args):
+        parser = WeechatArgParse(prog="join")
+        parser.add_argument("room_id")
+        return WeechatCommandParser._run_parser(parser, args)
+
+    @staticmethod
+    def part(args):
+        parser = WeechatArgParse(prog="part")
+        parser.add_argument("room_id", nargs="?")
+        return WeechatCommandParser._run_parser(parser, args)
+
 
 def hook_commands():
     W.hook_command(
@@ -185,9 +197,34 @@ def hook_commands():
         "matrix_invite_command_cb",
         "")
 
-    # TODO those should be hook_command() calls
-    # W.hook_command_run('/join', 'matrix_command_join_cb', '')
-    # W.hook_command_run('/part', 'matrix_command_part_cb', '')
+    W.hook_command(
+        # Command name and short description
+        "join",
+        "join a room",
+        # Synopsis
+        ("<room-id>|<room-alias>"),
+        # Description
+        ("   room-id: room-id of the room to join\n"
+         "room-alias: room alias of the room to join"),
+        # Completions
+        "",
+        # Callback
+        "matrix_join_command_cb",
+        "")
+
+    W.hook_command(
+        # Command name and short description
+        "part",
+        "leave a room",
+        # Synopsis
+        ("[<room-name>]"),
+        # Description
+        ("   room-name: room name of the room to leave"),
+        # Completions
+        "",
+        # Callback
+        "matrix_part_command_cb",
+        "")
 
     W.hook_command_run('/buffer clear', 'matrix_command_buf_clear_cb', '')
 
@@ -320,64 +357,41 @@ def matrix_command_pgup_cb(data, buffer, command):
 
 
 @utf8_decode
-def matrix_command_join_cb(data, buffer, command):
-
-    def join(server, args):
-        split_args = args.split(" ", 1)
-
-        # TODO handle join for non public rooms
-        if len(split_args) != 2:
-            message = ("{prefix}Error with command \"/join\" (help on "
-                       "command: /help join)").format(prefix=W.prefix("error"))
-            W.prnt("", message)
-            return
-
-        _, room_id = split_args
-
-        raise NotImplementedError
+def matrix_join_command_cb(data, buffer, args):
+    parsed_args = WeechatCommandParser.join(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
 
     for server in SERVERS.values():
-        if buffer in server.buffers.values():
-            join(server, command)
-            return W.WEECHAT_RC_OK_EAT
-        elif buffer == server.server_buffer:
-            join(server, command)
-            return W.WEECHAT_RC_OK_EAT
+        if buffer in server.buffers.values() or buffer == server.server_buffer:
+            server.room_join(parsed_args.room_id)
+            break
 
     return W.WEECHAT_RC_OK
 
 
 @utf8_decode
-def matrix_command_part_cb(data, buffer, command):
-
-    def part(server, buffer, args):
-        rooms = []
-
-        split_args = args.split(" ", 1)
-
-        if len(split_args) == 1:
-            if buffer == server.server_buffer:
-                message = (
-                    "{prefix}Error with command \"/part\" (help on "
-                    "command: /help part)").format(prefix=W.prefix("error"))
-                W.prnt("", message)
-                return
-
-            rooms = [key_from_value(server.buffers, buffer)]
-
-        else:
-            _, rooms = split_args
-            rooms = rooms.split(" ")
-
-        raise NotImplementedError
+def matrix_part_command_cb(data, buffer, args):
+    parsed_args = WeechatCommandParser.part(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
 
     for server in SERVERS.values():
-        if buffer in server.buffers.values():
-            part(server, buffer, command)
-            return W.WEECHAT_RC_OK_EAT
-        elif buffer == server.server_buffer:
-            part(server, buffer, command)
-            return W.WEECHAT_RC_OK_EAT
+        if buffer in server.buffers.values() or buffer == server.server_buffer:
+            room_id = parsed_args.room_id
+
+            if not room_id:
+                if buffer == server.server_buffer:
+                    server.error("command \"part\" must be "
+                                 "executed on a Matrix room buffer or a room "
+                                 "name needs to be given")
+                    return W.WEECHAT_RC_OK
+
+                room_buffer = server.find_room_from_ptr(buffer)
+                room_id = room_buffer.room.room_id
+
+            server.room_leave(room_id)
+            break
 
     return W.WEECHAT_RC_OK
 
@@ -736,14 +750,14 @@ def matrix_server_command_delete(args):
 def matrix_server_command_add(args):
     if len(args) < 2:
         message = ("{prefix}matrix: Too few arguments for command "
-                   "\"/matrix server add\" (see /matrix help server)"
-                  ).format(prefix=W.prefix("error"))
+                   "\"/matrix server add\" (see /matrix help server)").format(
+            prefix=W.prefix("error"))
         W.prnt("", message)
         return
     elif len(args) > 4:
         message = ("{prefix}matrix: Too many arguments for command "
                    "\"/matrix server add\" (see /matrix help server)"
-                  ).format(prefix=W.prefix("error"))
+                   ).format(prefix=W.prefix("error"))
         W.prnt("", message)
         return
 
@@ -865,7 +879,6 @@ def matrix_server_command_add(args):
 
 
 def matrix_server_command(command, args):
-
     def list_servers(_):
         if SERVERS:
             W.prnt("", "\nAll matrix servers:")
@@ -892,7 +905,6 @@ def matrix_server_command(command, args):
 
 @utf8_decode
 def matrix_command_cb(data, buffer, args):
-
     def connect_server(args):
         for server_name in args:
             if check_server_existence(server_name, SERVERS):
@@ -913,7 +925,8 @@ def matrix_command_cb(data, buffer, args):
 
     if len(split_args) < 1:
         message = ("{prefix}matrix: Too few arguments for command "
-                   "\"/matrix\" (see /help matrix)").format(prefix=W.prefix("error"))
+                   "\"/matrix\" "
+                   "(see /help matrix)").format(prefix=W.prefix("error"))
         W.prnt("", message)
         return W.WEECHAT_RC_ERROR
 

@@ -43,8 +43,8 @@ from matrix.utf import utf8_decode
 # Weechat searches for the registered callbacks in the scope of the main script
 # file, import the callbacks here so weechat can find them.
 from matrix.commands import (hook_commands, hook_page_up, matrix_command_cb,
-                             matrix_topic_command_cb, matrix_command_join_cb,
-                             matrix_command_part_cb, matrix_invite_command_cb,
+                             matrix_topic_command_cb, matrix_join_command_cb,
+                             matrix_part_command_cb, matrix_invite_command_cb,
                              matrix_command_pgup_cb, matrix_redact_command_cb,
                              matrix_command_buf_clear_cb, matrix_me_command_cb,
                              matrix_kick_command_cb)

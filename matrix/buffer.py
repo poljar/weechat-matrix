@@ -783,6 +783,8 @@ class RoomBuffer(object):
     def __init__(self, room, server_name):
         self.room = room
         self.backlog_pending = False
+        self.joined = True
+        self.leave_event_id = None  # type: Optional[str]
 
         buffer_name = "{}.{}".format(room.room_id, server_name)
 
@@ -853,6 +855,12 @@ class RoomBuffer(object):
 
             if event.state_key in self.displayed_nicks:
                 del self.displayed_nicks[event.state_key]
+
+            # We left the room, remember the event id of our leave, if we
+            # rejoin we get events that came before this event as well as
+            # after our leave, this way we know where to continue
+            if event.state_key == self.room.own_user_id:
+                self.leave_event_id = event.event_id
 
         elif event.content["membership"] == "invite":
             if is_state:
@@ -1199,6 +1207,44 @@ class RoomBuffer(object):
                 self.old_redacted(event)
 
         self.sort_messages()
+
+    def handle_joined_room(self, info):
+        for event in info.state:
+            self.handle_state_event(event)
+
+        timeline_events = None
+
+        # This is a rejoin, skip already handled events
+        if not self.joined:
+            leave_index = None
+
+            for i, event in enumerate(info.timeline.events):
+                if event.event_id == self.leave_event_id:
+                    leave_index = i
+                    break
+
+            if leave_index:
+                timeline_events = info.timeline.events[leave_index:]
+            else:
+                timeline_events = info.timeline.events
+
+            # mark that we are now joined
+            self.joined = True
+
+        else:
+            timeline_events = info.timeline.events
+
+        for event in timeline_events:
+            self.handle_timeline_event(event)
+
+    def handle_left_room(self, info):
+        self.joined = False
+
+        for event in info.state:
+            self.handle_state_event(event)
+
+        for event in info.timeline.events:
+            self.handle_timeline_event(event)
 
     def error(self, string):
         # type: (str) -> None
