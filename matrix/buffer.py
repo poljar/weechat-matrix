@@ -1224,7 +1224,10 @@ class RoomBuffer(object):
                     break
 
             if leave_index:
-                timeline_events = info.timeline.events[leave_index:]
+                timeline_events = info.timeline.events[leave_index+1:]
+                # Handle our leave as a state event since we're not in the
+                # nicklist anymore but we're already printed out our leave
+                self.handle_state_event(info.timeline.events[leave_index])
             else:
                 timeline_events = info.timeline.events
 
