@@ -334,12 +334,20 @@ class MatrixServer(object):
         # type: (MatrixServer) -> None
         self.send_buffer = b""
 
-    def error(self, message):
+    def info(self, message):
         buf = ""
         if self.server_buffer:
             buf = self.server_buffer
 
         msg = "{}{}: {}".format(W.prefix("network"), SCRIPT_NAME, message)
+        W.prnt(buf, msg)
+
+    def error(self, message):
+        buf = ""
+        if self.server_buffer:
+            buf = self.server_buffer
+
+        msg = "{}{}: {}".format(W.prefix("error"), SCRIPT_NAME, message)
         W.prnt(buf, msg)
 
     def send(self, data):
@@ -625,6 +633,30 @@ class MatrixServer(object):
         self.sync(timeout=0, filter=sync_filter)
 
     def _handle_room_info(self, response):
+        for room_id, info in response.rooms.invite.items():
+            room = self.client.invited_rooms.get(room_id, None)
+
+            if room:
+                if room.inviter:
+                    inviter_msg = " by {}{}".format(
+                        W.color("chat_nick_other"),
+                        room.inviter)
+                else:
+                    inviter_msg = ""
+
+                self.info("You have been invited to {} {}({}{}{}){}"
+                          "{}".format(
+                              room.display_name(),
+                              W.color("chat_delimiters"),
+                              W.color("chat_channel"),
+                              room_id,
+                              W.color("chat_delimiters"),
+                              W.color("reset"),
+                              inviter_msg
+                          ))
+            else:
+                self.info("You have been invited to {}.".format(room_id))
+
         for room_id, info in response.rooms.leave.items():
             if room_id not in self.buffers:
                 continue
