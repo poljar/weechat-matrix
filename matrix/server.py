@@ -49,7 +49,22 @@ except NameError:
 
 
 class ServerConfig(object):
-    _section_name = "{}.{}".format(SCRIPT_NAME, "server")
+    def option_property(name, option_type):
+        def bool_getter(self):
+            return bool(W.config_boolean(self.options[name]))
+
+        def str_getter(self):
+            return W.config_string(self.options[name])
+
+        def int_getter(self):
+            return W.config_integer(self.options[name])
+
+        if option_type == str:
+            return property(str_getter)
+        elif option_type == bool:
+            return property(bool_getter)
+        elif option_type == int:
+            return property(int_getter)
 
     def __init__(self, server_name, config_ptr):
         # type: (str, str) -> None
@@ -94,43 +109,13 @@ class ServerConfig(object):
     def _get_str_option(self, option_name):
         return W.config_string(self.options[option_name])
 
-    def _get_bool_option(self, option_name):
-        return bool(W.config_boolean(self.options[option_name]))
-
-    @property
-    def config_section(self):
-        # type: () -> str
-        return "{}.{}".format(self._server_name, self._server_name)
-
-    @property
-    def autoconnect(self):
-        # type: () -> bool
-        return self._get_bool_option("autoconnect")
-
-    @property
-    def address(self):
-        # type: () -> str
-        return self._get_str_option("address")
-
-    @property
-    def port(self):
-        # type: () -> int
-        return W.config_integer(self.options["port"])
-
-    @property
-    def proxy(self):
-        # type: () -> str
-        return self._get_str_option("proxy")
-
-    @property
-    def ssl_verify(self):
-        # type: () -> bool
-        return self._get_bool_option("ssl_verify")
-
-    @property
-    def username(self):
-        # type: () -> str
-        return self._get_str_option("username")
+    autoconnect = option_property("autoconnect", bool)
+    address = option_property("address", str)
+    port = option_property("port", int)
+    proxy = option_property("proxy", str)
+    ssl_verify = option_property("ssl_verify", bool)
+    username = option_property("username", str)
+    device_name = option_property("device_name", str)
 
     @property
     def password(self):
@@ -141,11 +126,6 @@ class ServerConfig(object):
             {},
             {}
         )
-
-    @property
-    def device_name(self):
-        # type: () -> str
-        return self._get_str_option("device_name")
 
 
 class MatrixServer(object):

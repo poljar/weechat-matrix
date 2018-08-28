@@ -151,6 +151,7 @@ def print_certificate_info(buff, sock, cert):
 
     W.prnt(buff, message)
 
+
 def wrap_socket(server, file_descriptor):
     # type: (MatrixServer, int) -> None
     sock = None  # type: socket.socket
