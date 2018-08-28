@@ -290,7 +290,9 @@ class Formatted():
                 except ClassNotFound:
                     lexer = guess_lexer(string)
 
-                return highlight(string, lexer, WeechatFormatter())
+                # highlight adds a newline to the end of the string, remove it
+                # from the output
+                return highlight(string, lexer, WeechatFormatter())[:-1]
 
             elif name == "fgcolor" and value:
                 return "{color_on}{text}{color_off}".format(
@@ -433,8 +435,6 @@ class MatrixHtmlParser(HTMLParser):
         elif tag == "code":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
-            self.text = "\n"
-            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
             self.text = ""
             self.attributes["code"] = None
         elif tag == "blockquote":
