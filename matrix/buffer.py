@@ -76,7 +76,12 @@ def room_buffer_input_cb(server_name, buffer, input_data):
         room_buffer.error("You are not connected to the server")
         return W.WEECHAT_RC_ERROR
 
-    formatted_data = Formatted.from_input_line(input_data)
+    data = W.string_input_for_buffer(input_data)
+
+    if not data:
+        data = input_data
+
+    formatted_data = Formatted.from_input_line(data)
 
     server.room_send_message(room_buffer, formatted_data, "m.text")
 
