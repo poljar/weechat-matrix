@@ -478,7 +478,7 @@ def matrix_kick_command_cb(data, buffer, args):
 
 
 def event_id_from_line(buf, target_number):
-    # type: (weechat.buffer, int) -> str
+    # type: (str, int) -> str
     own_lines = W.hdata_pointer(W.hdata_get("buffer"), buf, "own_lines")
     if own_lines:
         line = W.hdata_pointer(W.hdata_get("lines"), own_lines, "last_line")

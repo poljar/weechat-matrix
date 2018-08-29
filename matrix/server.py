@@ -22,6 +22,10 @@ import socket
 import ssl
 import time
 from collections import defaultdict, deque
+from typing import Any, Deque, Dict, Optional
+
+if False:
+    from .colors import Formatted
 
 from nio import (
     HttpClient,
@@ -31,6 +35,8 @@ from nio import (
     SyncRepsponse,
     TransportResponse,
     TransportType,
+    Rooms,
+    Response
 )
 
 from . import globals as G
@@ -41,7 +47,7 @@ from .utf import utf8_decode
 from .utils import create_server_buffer, key_from_value, server_buffer_prnt
 
 try:
-    FileNotFoundError
+    FileNotFoundError  # type: ignore
 except NameError:
     FileNotFoundError = IOError
 
@@ -51,7 +57,7 @@ class ServerConfig(ConfigSection):
         # type: (str, str) -> None
         self._server_name = server_name
         self._config_ptr = config_ptr
-        self._option_ptrs = {}
+        self._option_ptrs = {}  # type: Dict[str, str]
 
         options = [
             Option(
@@ -167,32 +173,29 @@ class ServerConfig(ConfigSection):
 
 class MatrixServer(object):
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, name, config_file):
-        # type: (str, weechat.config) -> None
+    def __init__(self, name, config_ptr):
+        # type: (str, str) -> None
         # yapf: disable
         self.name = name                     # type: str
         self.user_id = ""
         self.device_id = ""                  # type: str
 
-        self.olm = None                      # type: Olm
-        self.encryption_queue = defaultdict(deque)
-
-        self.room_buffers = dict()  # type: Dict[str, WeechatChannelBuffer]
-        self.buffers = dict()                # type: Dict[str, weechat.buffer]
-        self.server_buffer = None            # type: weechat.buffer
-        self.fd_hook = None                  # type: weechat.hook
-        self.ssl_hook = None                 # type: weechat.hook
-        self.timer_hook = None               # type: weechat.hook
-        self.numeric_address = ""            # type: str
+        self.room_buffers = dict()  # type: Dict[str, RoomBuffer]
+        self.buffers = dict()                # type: Dict[str, str]
+        self.server_buffer = None            # type: Optional[str]
+        self.fd_hook = None                  # type: Optional[str]
+        self.ssl_hook = None                 # type: Optional[str]
+        self.timer_hook = None               # type: Optional[str]
+        self.numeric_address = ""            # type: Optional[str]
 
         self.connected = False      # type: bool
         self.connecting = False     # type: bool
         self.reconnect_delay = 0    # type: int
-        self.reconnect_time = None  # type: float
+        self.reconnect_time = None  # type: Optional[float]
         self.sync_time = None       # type: Optional[float]
-        self.socket = None          # type: ssl.SSLSocket
+        self.socket = None          # type: Optional[ssl.SSLSocket]
         self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
-        self.transport_type = None  # type: Optional[nio.TransportType]
+        self.transport_type = None  # type: Optional[TransportType]
 
         # Enable http2 negotiation on the ssl context.
         self.ssl_context.set_alpn_protocols(["h2", "http/1.1"])
@@ -203,24 +206,19 @@ class MatrixServer(object):
             pass
 
         self.client = None
-        self.access_token = None                         # type: str
-        self.next_batch = None                           # type: str
+        self.access_token = None                         # type: Optional[str]
+        self.next_batch = None                           # type: Optional[str]
         self.transaction_id = 0                          # type: int
         self.lag = 0                                     # type: int
         self.lag_done = False                            # type: bool
 
-        self.send_fd_hook = None                         # type: weechat.hook
+        self.send_fd_hook = None                         # type: Optional[str]
         self.send_buffer = b""                           # type: bytes
-        self.device_check_timestamp = None
+        self.device_check_timestamp = None               # type: Optional[int]
 
-        self.send_queue = deque()
-        self.own_message_queue = dict()  # type: Dict[OwnMessage]
+        self.own_message_queue = dict()  # type: Dict[str, OwnMessage]
 
-        self.event_queue_timer = None
-        self.event_queue = deque()  # type: Deque[RoomInfo]
-
-        # self._create_options(config_file)
-        self.config = ServerConfig(self.name, config_file)
+        self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
         # yapf: enable
 
@@ -287,13 +285,16 @@ class MatrixServer(object):
 
     def send_or_queue(self, request):
         # type: (bytes) -> None
-        if not self.send(request):
-            self.send_queue.append(request)
+        self.send(request)
 
     def try_send(self, message):
         # type: (MatrixServer, bytes) -> bool
 
         sock = self.socket
+
+        if not sock:
+            return False
+
         total_sent = 0
         message_length = len(message)
 
@@ -353,7 +354,7 @@ class MatrixServer(object):
         return True
 
     def _abort_send(self):
-        self.send_buffer = ""
+        self.send_buffer = b""
 
     def _finalize_send(self):
         # type: (MatrixServer) -> None
@@ -433,10 +434,11 @@ class MatrixServer(object):
         self.send_buffer = b""
         self.transport_type = None
 
-        try:
-            self.client.disconnect()
-        except LocalProtocolError:
-            pass
+        if self.client:
+            try:
+                self.client.disconnect()
+            except LocalProtocolError:
+                pass
 
         self.lag = 0
         W.bar_item_update("lag")
@@ -511,12 +513,18 @@ class MatrixServer(object):
 
     def sync(self, timeout=None, sync_filter=None):
         # type: (Optional[int], Optional[Dict[Any, Any]]) -> None
+        if not self.client:
+            return
+
         self.sync_time = None
         _, request = self.client.sync(timeout, sync_filter)
         self.send_or_queue(request)
 
     def login(self):
         # type: () -> None
+        if not self.client:
+            return
+
         if self.client.logged_in:
             msg = (
                 "{prefix}{script_name}: Already logged in, " "syncing..."
@@ -574,6 +582,9 @@ class MatrixServer(object):
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
         # type: (RoomBuffer, Formatted, str) -> None
         if room_buffer.room.encrypted:
+            return
+
+        if not self.client:
             return
 
         if msgtype == "m.emote":
@@ -720,7 +731,7 @@ class MatrixServer(object):
             self.disconnect()
 
     def handle_response(self, response):
-        # type: (MatrixMessage) -> None
+        # type: (Response) -> None
         self.lag = response.elapsed * 1000
 
         # If the response was a sync response and contained a timeout the
@@ -836,7 +847,7 @@ def matrix_config_server_write_cb(data, config_file, section_name):
 
 @utf8_decode
 def matrix_config_server_change_cb(server_name, option):
-    # type: (str, weechat.config_option) -> int
+    # type: (str, str) -> int
     server = SERVERS[server_name]
     option_name = None
 
@@ -881,14 +892,6 @@ def matrix_timer_cb(server_name, remaining_calls):
         sync_filter = {"room": {"timeline": {"limit": 5000}}}
         server.sync(timeout, sync_filter)
 
-    while server.send_queue:
-        message = server.send_queue.popleft()
-        if not server.send(message):
-            # We got an error while sending the last message return the message
-            # to the queue and exit the loop
-            server.send_queue.appendleft(message)
-            break
-
     if not server.next_batch:
         return W.WEECHAT_RC_OK
 
@@ -926,6 +929,6 @@ def send_cb(server_name, file_descriptor):
         server.send_fd_hook = None
 
     if server.send_buffer:
-        server.try_send(server, server.send_buffer)
+        server.try_send(server.send_buffer)
 
     return W.WEECHAT_RC_OK

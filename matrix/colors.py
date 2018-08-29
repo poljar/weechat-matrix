@@ -25,6 +25,7 @@ import textwrap
 # pylint: disable=redefined-builtin
 from builtins import str
 from collections import namedtuple
+from typing import List
 
 import webcolors
 from pygments import highlight
@@ -45,7 +46,7 @@ except ImportError:
 FormattedString = namedtuple("FormattedString", ["text", "attributes"])
 
 
-class Formatted:
+class Formatted(object):
     def __init__(self, substrings):
         # type: (List[FormattedString]) -> None
         self.substrings = substrings
@@ -247,7 +248,7 @@ class Formatted:
     # TODO do we want at least some formatting using unicode
     # (strikethrough, quotes)?
     def to_plain(self):
-        # type: (List[FormattedString]) -> str
+        # type: () -> str
         def strip_atribute(string, _, __):
             return string
 
@@ -688,7 +689,7 @@ def color_html_to_weechat(color):
     try:
         rgb_color = webcolors.html5_parse_legacy_color(color)
     except ValueError:
-        return None
+        return ""
 
     if rgb_color in weechat_basic_colors:
         return weechat_basic_colors[rgb_color]

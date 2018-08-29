@@ -20,8 +20,11 @@ import sys
 
 from .utf import WeechatWrapper
 
+from typing import Dict, Optional
+
 if False:
-    from typing import Dict
+    from .server import MatrixServer
+    from .config import MatrixConfig
 
 
 try:
@@ -29,11 +32,11 @@ try:
 
     W = weechat if sys.hexversion >= 0x3000000 else WeechatWrapper(weechat)
 except ImportError:
-    import matrix._weechat as weechat
+    import matrix._weechat as weechat  # type: ignore
 
     W = weechat
 
 SERVERS = dict()  # type: Dict[str, MatrixServer]
-CONFIG = None  # type: MatrixConfig
+CONFIG = None  # type: Optional[MatrixConfig]
 ENCRYPTION = True  # type: bool
 SCRIPT_NAME = "matrix"  # type: str

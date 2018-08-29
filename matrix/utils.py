@@ -17,6 +17,10 @@
 from __future__ import unicode_literals
 
 import time
+from typing import Any, Dict, List
+
+if False:
+    from .server import MatrixServer
 
 from .globals import W
 
@@ -35,7 +39,7 @@ def server_buffer_prnt(server, string):
 
 
 def tags_from_line_data(line_data):
-    # type: (weechat.hdata) -> List[str]
+    # type: (str) -> List[str]
     tags_count = W.hdata_get_var_array_size(
         W.hdata_get("line_data"), line_data, "tags_array"
     )

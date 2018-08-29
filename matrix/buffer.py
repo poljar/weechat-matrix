@@ -20,7 +20,7 @@ from __future__ import unicode_literals
 import time
 from builtins import super
 from functools import partial
-from typing import NamedTuple
+from typing import Dict, List, NamedTuple, Set, Optional
 
 from nio import (
     Api,
@@ -46,8 +46,8 @@ from .globals import SCRIPT_NAME, SERVERS, W
 from .utf import utf8_decode
 from .utils import server_ts_to_weechat, shorten_sender, string_strikethrough
 
-OwnMessage = NamedTuple(
-    "OwnMessage",
+OwnMessages = NamedTuple(
+    "OwnMessages",
     [
         ("sender", str),
         ("age", int),
@@ -56,6 +56,10 @@ OwnMessage = NamedTuple(
         ("formatted_message", Formatted),
     ],
 )
+
+
+class OwnMessage(OwnMessages):
+    pass
 
 
 class OwnAction(OwnMessage):
@@ -100,7 +104,7 @@ class WeechatUser(object):
         self.prefix = prefix
         self.color = W.info_get("nick_color_name", nick)
         self.join_time = join_time or time.time()
-        self.speaking_time = None  # type: int
+        self.speaking_time = None  # type: Optional[int]
 
     def update_speaking_time(self, new_time=None):
         self.speaking_time = new_time or time.time()
@@ -434,7 +438,7 @@ class WeechatChannelBuffer(object):
         return color
 
     def _message_tags(self, user, message_type):
-        # type: (str, RoomUser, str) -> List[str]
+        # type: (WeechatUser, str) -> List[str]
         tags = list(self.tags[message_type])
 
         tags.append("nick_{nick}".format(nick=user.nick))
@@ -476,7 +480,7 @@ class WeechatChannelBuffer(object):
         self.print_date_tags(data, date, tags)
 
     def message(self, nick, message, date, extra_tags=None):
-        # type: (str, str, int, str) -> None
+        # type: (str, str, int, List[str]) -> None
         user = self._get_user(nick)
         tags = self._message_tags(user, "message") + (extra_tags or [])
         self._print_message(user, message, date, tags)
@@ -636,16 +640,16 @@ class WeechatChannelBuffer(object):
 
         if message:
             tags = self._message_tags(user, "join")
-            message = self._membership_message(user, "join")
+            msg = self._membership_message(user, "join")
 
             # TODO add a option to disable smart filters
             tags.append(SCRIPT_NAME + "_smart_filter")
 
-            self.print_date_tags(message, date, tags)
+            self.print_date_tags(msg, date, tags)
             self.add_smart_filtered_nick(user.nick)
 
     def invite(self, nick, date, extra_tags=None):
-        # type: (str, int, Optional[bool], Optional[List[str]]) -> None
+        # type: (str, int, Optional[List[str]]) -> None
         user = self._get_user(nick)
         tags = self._message_tags(user, "invite")
         message = self._membership_message(user, "invite")
@@ -670,19 +674,19 @@ class WeechatChannelBuffer(object):
             if not user.spoken_recently:
                 tags.append(SCRIPT_NAME + "_smart_filter")
 
-            message = self._membership_message(user, leave_type)
-            self.print_date_tags(message, date, tags + (extra_tags or []))
+            msg = self._membership_message(user, leave_type)
+            self.print_date_tags(msg, date, tags + (extra_tags or []))
             self.remove_smart_filtered_nick(user.nick)
 
         if user.nick in self.users:
             del self.users[user.nick]
 
     def part(self, nick, date, message=True, extra_tags=None):
-        # type: (str, int, Optional[bool], Optional[List[str]]) -> None
+        # type: (str, int, bool, Optional[List[str]]) -> None
         self._leave(nick, date, message, "part", extra_tags)
 
     def kick(self, nick, date, message=True, extra_tags=None):
-        # type: (str, int, Optional[bool], Optional[List[str]]) -> None
+        # type: (str, int, bool, Optional[List[str]]) -> None
         self._leave(nick, date, message, "kick", extra_tags)
 
     def _print_topic(self, nick, topic, date):
