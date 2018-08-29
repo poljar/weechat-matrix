@@ -54,8 +54,8 @@ class Formatted():
     def textwrapper(self):
         return textwrap.TextWrapper(
             width=67,
-            initial_indent="{}> ".format(G.CONFIG.color.quote),
-            subsequent_indent="{}> ".format(G.CONFIG.color.quote)
+            initial_indent="{}> ".format(W.color(G.CONFIG.color.quote)),
+            subsequent_indent="{}> ".format(W.color(G.CONFIG.color.quote))
             )
 
     def is_formatted(self):
