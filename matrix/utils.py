@@ -20,9 +20,8 @@ from builtins import str
 import time
 import math
 
-from matrix.globals import W, SERVERS, OPTIONS
-
-from matrix.plugin_options import ServerBufferType
+from matrix import globals as G
+from matrix.globals import W, SERVERS
 
 try:
     from urlparse import urlparse
@@ -33,11 +32,6 @@ except ImportError:
 def key_from_value(dictionary, value):
     # type: (Dict[str, Any], Any) -> str
     return list(dictionary.keys())[list(dictionary.values()).index(value)]
-
-
-def prnt_debug(debug_type, server, message):
-    if debug_type in OPTIONS.debug:
-        W.prnt(server.server_buffer, message)
 
 
 def server_buffer_prnt(server, string):
@@ -79,29 +73,7 @@ def create_server_buffer(server):
     W.buffer_set(server.server_buffer, "localvar_set_server", server.name)
     W.buffer_set(server.server_buffer, "localvar_set_channel", server.name)
 
-    server_buffer_merge(server.server_buffer)
-
-
-def server_buffer_merge(buffer):
-    if OPTIONS.look_server_buf == ServerBufferType.MERGE_CORE:
-        num = W.buffer_get_integer(W.buffer_search_main(), "number")
-        W.buffer_unmerge(buffer, num + 1)
-        W.buffer_merge(buffer, W.buffer_search_main())
-    elif OPTIONS.look_server_buf == ServerBufferType.MERGE:
-        if SERVERS:
-            first = None
-            for server in SERVERS.values():
-                if server.server_buffer:
-                    first = server.server_buffer
-                    break
-            if first:
-                num = W.buffer_get_integer(W.buffer_search_main(), "number")
-                W.buffer_unmerge(buffer, num + 1)
-                if buffer is not first:
-                    W.buffer_merge(buffer, first)
-    else:
-        num = W.buffer_get_integer(W.buffer_search_main(), "number")
-        W.buffer_unmerge(buffer, num + 1)
+    server.buffer_merge()
 
 
 def server_buffer_set_title(server):

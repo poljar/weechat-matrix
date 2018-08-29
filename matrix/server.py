@@ -29,18 +29,18 @@ from nio import (
     LoginResponse,
     SyncRepsponse,
     RoomSendResponse,
-    RoomPutStateResponse,
     TransportResponse,
     TransportType,
     LocalProtocolError
 )
 
-from matrix.plugin_options import Option, DebugType
-from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
+from matrix.utils import (key_from_value, server_buffer_prnt,
                           create_server_buffer)
 from matrix.utf import utf8_decode
-from matrix.globals import W, SERVERS, SCRIPT_NAME, OPTIONS
+from . import globals as G
+from matrix.globals import W, SERVERS, SCRIPT_NAME
 from .buffer import RoomBuffer, OwnMessage, OwnAction
+from .config import Option, ServerBufferType, ConfigSection
 
 try:
     FileNotFoundError
@@ -48,29 +48,12 @@ except NameError:
     FileNotFoundError = IOError
 
 
-class ServerConfig(object):
-    def option_property(name, option_type):
-        def bool_getter(self):
-            return bool(W.config_boolean(self.options[name]))
-
-        def str_getter(self):
-            return W.config_string(self.options[name])
-
-        def int_getter(self):
-            return W.config_integer(self.options[name])
-
-        if option_type == str:
-            return property(str_getter)
-        elif option_type == bool:
-            return property(bool_getter)
-        elif option_type == int:
-            return property(int_getter)
-
+class ServerConfig(ConfigSection):
     def __init__(self, server_name, config_ptr):
         # type: (str, str) -> None
         self._server_name = server_name
-        self._ptr = config_ptr
-        self.options = {}
+        self._config_ptr = config_ptr
+        self._option_ptrs = {}
 
         options = [
             Option('autoconnect', 'boolean', '', 0, 0, 'off',
@@ -95,37 +78,33 @@ class ServerConfig(object):
         ]
 
         section = W.config_search_section(config_ptr, 'server')
+        self._ptr = section
 
         for option in options:
             option_name = "{server}.{option}".format(
                 server=self._server_name, option=option.name)
 
-            self.options[option.name] = W.config_new_option(
+            self._option_ptrs[option.name] = W.config_new_option(
                 config_ptr, section, option_name, option.type,
                 option.description, option.string_values, option.min,
                 option.max, option.value, option.value, 0, "", "",
                 "matrix_config_server_change_cb", self._server_name, "", "")
 
-    def _get_str_option(self, option_name):
-        return W.config_string(self.options[option_name])
+    autoconnect = ConfigSection.option_property("autoconnect", "boolean")
+    address = ConfigSection.option_property("address", "string")
+    port = ConfigSection.option_property("port", "integer")
+    proxy = ConfigSection.option_property("proxy", "string")
+    ssl_verify = ConfigSection.option_property("ssl_verify", "boolean")
+    username = ConfigSection.option_property("username", "string")
+    device_name = ConfigSection.option_property("device_name", "string")
+    password = ConfigSection.option_property(
+        "password",
+        "string",
+        evaluate=True
+    )
 
-    autoconnect = option_property("autoconnect", bool)
-    address = option_property("address", str)
-    port = option_property("port", int)
-    proxy = option_property("proxy", str)
-    ssl_verify = option_property("ssl_verify", bool)
-    username = option_property("username", str)
-    device_name = option_property("device_name", str)
-
-    @property
-    def password(self):
-        # type: () -> str
-        return W.string_eval_expression(
-            self._get_str_option("password"),
-            {},
-            {},
-            {}
-        )
+    def free(self):
+        W.config_section_free_options(self._ptr)
 
 
 class MatrixServer(object):
@@ -609,7 +588,13 @@ class MatrixServer(object):
         #     self.store_olm()
         #     self.upload_keys(device_keys=True, one_time_keys=False)
 
-        sync_filter = {"room": {"timeline": {"limit": OPTIONS.sync_limit}}}
+        sync_filter = {
+            "room": {
+                "timeline": {
+                    "limit": G.CONFIG.network.max_initial_sync_events
+                }
+            }
+        }
         self.sync(timeout=0, filter=sync_filter)
 
     def _handle_room_info(self, response):
@@ -718,6 +703,35 @@ class MatrixServer(object):
         room_buffer = self.room_buffers[room_id]
         return room_buffer
 
+    def buffer_merge(self):
+        if not self.server_buffer:
+            return
+
+        buf = self.server_buffer
+
+        if G.CONFIG.look.server_buffer == ServerBufferType.MERGE_CORE:
+            num = W.buffer_get_integer(W.buffer_search_main(), "number")
+            W.buffer_unmerge(buf, num + 1)
+            W.buffer_merge(buf, W.buffer_search_main())
+        elif G.CONFIG.look.server_buffer == ServerBufferType.MERGE:
+            if SERVERS:
+                first = None
+                for server in SERVERS.values():
+                    if server.server_buffer:
+                        first = server.server_buffer
+                        break
+                if first:
+                    num = W.buffer_get_integer(
+                        W.buffer_search_main(),
+                        "number"
+                    )
+                    W.buffer_unmerge(buf, num + 1)
+                    if buf is not first:
+                        W.buffer_merge(buf, first)
+        else:
+            num = W.buffer_get_integer(W.buffer_search_main(), "number")
+            W.buffer_unmerge(buf, num + 1)
+
 
 @utf8_decode
 def matrix_config_server_read_cb(data, config_file, section, option_name,
@@ -736,9 +750,9 @@ def matrix_config_server_read_cb(data, config_file, section, option_name,
             SERVERS[server.name] = server
 
         # Ignore invalid options
-        if option in server.config.options:
+        if option in server.config._option_ptrs:
             return_code = W.config_option_set(
-                server.config.options[option],
+                server.config._option_ptrs[option],
                 value,
                 1
             )
@@ -754,7 +768,7 @@ def matrix_config_server_write_cb(data, config_file, section_name):
         return W.WECHAT_CONFIG_WRITE_ERROR
 
     for server in SERVERS.values():
-        for option in server.config.options.values():
+        for option in server.config._option_ptrs.values():
             if not W.config_write_option(config_file, option):
                 return W.WECHAT_CONFIG_WRITE_ERROR
 
@@ -770,7 +784,7 @@ def matrix_config_server_change_cb(server_name, option):
     # The function config_option_get_string() is used to get differing
     # properties from a config option, sadly it's only available in the plugin
     # API of weechat.
-    option_name = key_from_value(server.config.options, option)
+    option_name = key_from_value(server.config._option_ptrs, option)
     server.update_option(option, option_name)
 
     return 1
@@ -807,11 +821,6 @@ def matrix_timer_cb(server_name, remaining_calls):
 
     while server.send_queue:
         message = server.send_queue.popleft()
-        prnt_debug(
-            DebugType.MESSAGING,
-            server, ("Timer hook found message of type {t} in queue. Sending "
-                     "out.".format(t=message.__class__.__name__)))
-
         if not server.send(message):
             # We got an error while sending the last message return the message
             # to the queue and exit the loop
@@ -835,7 +844,7 @@ def matrix_timer_cb(server_name, remaining_calls):
 
 
 def create_default_server(config_file):
-    server = MatrixServer('matrix_org', config_file)
+    server = MatrixServer('matrix_org', config_file._ptr)
     SERVERS[server.name] = server
 
     option = W.config_get(SCRIPT_NAME + ".server." + server.name + ".address")

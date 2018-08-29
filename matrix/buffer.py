@@ -22,7 +22,8 @@ from builtins import super
 from functools import partial
 from typing import NamedTuple
 
-from .globals import W, SERVERS, OPTIONS, SCRIPT_NAME
+from . import globals as G
+from .globals import W, SERVERS, SCRIPT_NAME
 from .utf import utf8_decode
 from .colors import Formatted
 from .utils import (
@@ -30,7 +31,7 @@ from .utils import (
     server_ts_to_weechat,
     string_strikethrough,
 )
-from .plugin_options import RedactType
+from .config import RedactType
 
 from nio import (
     Api,
@@ -128,7 +129,7 @@ class RoomUser(WeechatUser):
     def __init__(self, nick, user_id=None, power_level=0, join_time=None):
         # type: (str, str, int) -> None
         prefix = self._get_prefix(power_level)
-        return super().__init__(nick, user_id, prefix, join_time)
+        super().__init__(nick, user_id, prefix, join_time)
 
     @property
     def power_level(self):
@@ -922,12 +923,12 @@ class RoomBuffer(object):
 
         new_message = ""
 
-        if OPTIONS.redaction_type == RedactType.STRIKETHROUGH:
+        if G.CONFIG.look.redaction_type == RedactType.STRIKETHROUGH:
             plaintext_msg = W.string_remove_color(message, '')
             new_message = string_strikethrough(plaintext_msg)
-        elif OPTIONS.redaction_type == RedactType.NOTICE:
+        elif G.CONFIG.look.redaction_type == RedactType.NOTICE:
             new_message = message
-        elif OPTIONS.redaction_type == RedactType.DELETE:
+        elif G.CONFIG.look.redaction_type == RedactType.DELETE:
             pass
 
         message = " ".join(s for s in [new_message, redaction_msg] if s)

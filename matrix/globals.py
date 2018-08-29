@@ -19,7 +19,6 @@ from __future__ import unicode_literals
 import sys
 
 from matrix.utf import WeechatWrapper
-from matrix.plugin_options import PluginOptions
 
 try:
     import weechat
@@ -28,8 +27,7 @@ except ImportError:
     import matrix._weechat as weechat
     W = weechat
 
-OPTIONS = PluginOptions()  # type: PluginOptions
 SERVERS = dict()  # type: Dict[str, MatrixServer]
-CONFIG = None  # type: weechat.config
+CONFIG = None  # type: MatrixConfig
 ENCRYPTION = True  # type: bool
 SCRIPT_NAME = "matrix"  # type: str

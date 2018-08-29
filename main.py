@@ -71,18 +71,20 @@ from matrix.completion import (
     matrix_olm_user_completion_cb, matrix_olm_device_completion_cb,
     matrix_user_completion_cb)
 
-from matrix.utils import (key_from_value, server_buffer_prnt, prnt_debug,
+from matrix.utils import (key_from_value, server_buffer_prnt,
                           server_buffer_set_title)
 
-from matrix.plugin_options import (DebugType, RedactType)
+from matrix.config import (
+    matrix_config_reload_cb,
+    MatrixConfig,
+    config_log_level_cb,
+    config_log_category_cb,
+    config_server_buffer_cb
+)
 
-from matrix.config import (matrix_config_init, matrix_config_read,
-                           matrix_config_free, matrix_config_change_cb,
-                           matrix_config_reload_cb)
+from matrix import globals as G
 
-import matrix.globals
-
-from matrix.globals import W, SERVERS, SCRIPT_NAME, OPTIONS
+from matrix.globals import W, SERVERS, SCRIPT_NAME
 
 # yapf: disable
 WEECHAT_SCRIPT_NAME = SCRIPT_NAME
@@ -415,7 +417,10 @@ def room_close_cb(data, buffer):
 
 @utf8_decode
 def matrix_unload_cb():
-    matrix_config_free(matrix.globals.CONFIG)
+    for server in SERVERS.values():
+        server.config.free()
+
+    G.CONFIG.free()
 
     # for server in SERVERS.values():
     #     server.store_olm()
@@ -430,7 +435,7 @@ def autoconnect(servers):
 
 
 def debug_buffer_close_cb(data, buffer):
-    OPTIONS.debug_buffer_ptr = ""
+    G.CONFIG.debug_buffer = ""
     return W.WEECHAT_RC_OK
 
 
@@ -450,12 +455,12 @@ class WeechatHandler(StreamHandler):
     def write(self, item):
         buf = ""
 
-        if OPTIONS.debug_buffer:
-            if not OPTIONS.debug_buffer_ptr:
-                OPTIONS.debug_buffer_ptr = W.buffer_new(
+        if G.CONFIG.network.debug_buffer:
+            if not G.CONFIG.debug_buffer:
+                G.CONFIG.debug_buffer = W.buffer_new(
                     "Matrix Debug", "", "", "debug_buffer_close_cb", "")
 
-            buf = OPTIONS.debug_buffer_ptr
+            buf = G.CONFIG.debug_buffer
 
         W.prnt(buf, item)
 
@@ -475,16 +480,14 @@ if __name__ == "__main__":
         handler.push_application()
 
         # TODO if this fails we should abort and unload the script.
-        matrix.globals.CONFIG = W.config_new("matrix",
-                                             "matrix_config_reload_cb", "")
-        matrix_config_init(matrix.globals.CONFIG)
-        matrix_config_read(matrix.globals.CONFIG)
+        G.CONFIG = MatrixConfig()
+        G.CONFIG.read()
 
         hook_commands()
         init_bar_items()
         init_completion()
 
         if not SERVERS:
-            create_default_server(matrix.globals.CONFIG)
+            create_default_server(G.CONFIG)
 
         autoconnect(SERVERS)

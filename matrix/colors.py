@@ -21,7 +21,8 @@ from __future__ import unicode_literals
 # pylint: disable=redefined-builtin
 from builtins import str
 from collections import namedtuple
-from matrix.globals import W, OPTIONS
+from matrix import globals as G
+from matrix.globals import W
 from matrix.utils import string_strikethrough
 
 import re
@@ -53,12 +54,9 @@ class Formatted():
     def textwrapper(self):
         return textwrap.TextWrapper(
             width=67,
-            initial_indent="{}> ".format(
-                W.color(W.config_string(OPTIONS.options["quote"]))
-            ),
-            subsequent_indent="{}> ".format(
-                W.color(W.config_string(OPTIONS.options["quote"]))
-            ))
+            initial_indent="{}> ".format(G.CONFIG.color.quote),
+            subsequent_indent="{}> ".format(G.CONFIG.color.quote)
+            )
 
     def is_formatted(self):
         # type: (Formatted) -> bool

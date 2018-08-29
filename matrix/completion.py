@@ -17,7 +17,7 @@
 from __future__ import unicode_literals
 
 from matrix.utf import utf8_decode
-from matrix.globals import W, SERVERS, OPTIONS
+from matrix.globals import W, SERVERS
 from matrix.utils import tags_from_line_data
 
 
@@ -82,6 +82,10 @@ def matrix_debug_completion_cb(data, completion_item, buffer, completion):
     return W.WEECHAT_RC_OK
 
 
+# TODO this should be configurable
+REDACTION_COMP_LEN = 50
+
+
 @utf8_decode
 def matrix_message_completion_cb(data, completion_item, buffer, completion):
     own_lines = W.hdata_pointer(W.hdata_get('buffer'), buffer, 'own_lines')
@@ -103,8 +107,8 @@ def matrix_message_completion_cb(data, completion_item, buffer, completion):
                 if (message and 'matrix_message' in tags and
                         'matrix_redacted' not in tags):
 
-                    if len(message) > OPTIONS.redaction_comp_len + 2:
-                        message = (message[:OPTIONS.redaction_comp_len] + '..')
+                    if len(message) > REDACTION_COMP_LEN + 2:
+                        message = (message[:REDACTION_COMP_LEN] + '..')
 
                     item = ("{number}:\"{message}\"").format(
                         number=line_number, message=message)

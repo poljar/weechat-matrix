@@ -21,7 +21,7 @@ import re
 import argparse
 
 import matrix.globals
-from matrix.globals import W, OPTIONS, SERVERS
+from matrix.globals import W, SERVERS
 
 from matrix.utf import utf8_decode
 from matrix.utils import key_from_value, tags_from_line_data
@@ -661,7 +661,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.config.options["autoconnect"]
+        option = server.config._option_ptrs["autoconnect"]
         default_value = W.config_string_default(option)
         value = W.config_string(option)
 
@@ -670,7 +670,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.config.options["address"]
+        option = server.config._option_ptrs["address"]
         default_value = W.config_string_default(option)
         value = W.config_string(option)
 
@@ -679,7 +679,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.config.options["port"]
+        option = server.config._option_ptrs["port"]
         default_value = str(W.config_integer_default(option))
         value = str(W.config_integer(option))
 
@@ -688,7 +688,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.config.options["username"]
+        option = server.config._option_ptrs["username"]
         default_value = W.config_string_default(option)
         value = W.config_string(option)
 
@@ -697,7 +697,7 @@ def matrix_server_command_listfull(args):
 
         W.prnt("", message)
 
-        option = server.config.options["password"]
+        option = server.config._option_ptrs["password"]
         value = W.config_string(option)
 
         if value:
@@ -732,7 +732,7 @@ def matrix_server_command_delete(args):
             if server.server_buffer:
                 W.buffer_close(server.server_buffer)
 
-            for option in server.config.options.values():
+            for option in server.config._option_ptrs.values():
                 W.config_option_free(option)
 
             message = ("matrix: server {color}{server}{ncolor} has been "
@@ -762,7 +762,7 @@ def matrix_server_command_add(args):
         return
 
     def remove_server(server):
-        for option in server.config.options.values():
+        for option in server.config._option_ptrs.values():
             W.config_option_free(option)
         del SERVERS[server.name]
 
@@ -788,7 +788,7 @@ def matrix_server_command_add(args):
             host, port = args[1], None
 
         return_code = W.config_option_set(
-            server.config.options["address"],
+            server.config._option_ptrs["address"],
             host,
             1
         )
@@ -809,7 +809,7 @@ def matrix_server_command_add(args):
 
         if port:
             return_code = W.config_option_set(
-                server.config.options["port"],
+                server.config._option_ptrs["port"],
                 port,
                 1
             )
@@ -830,7 +830,7 @@ def matrix_server_command_add(args):
     if len(args) >= 3:
         user = args[2]
         return_code = W.config_option_set(
-            server.config.options["username"],
+            server.config._option_ptrs["username"],
             user,
             1
         )
@@ -853,7 +853,7 @@ def matrix_server_command_add(args):
         password = args[3]
 
         return_code = W.config_option_set(
-            server.config.options["password"],
+            server.config._option_ptrs["password"],
             password,
             1
         )
