@@ -18,13 +18,19 @@ from __future__ import unicode_literals
 
 import sys
 
-from matrix.utf import WeechatWrapper
+from .utf import WeechatWrapper
+
+if False:
+    from typing import Dict
+
 
 try:
     import weechat
+
     W = weechat if sys.hexversion >= 0x3000000 else WeechatWrapper(weechat)
 except ImportError:
     import matrix._weechat as weechat
+
     W = weechat
 
 SERVERS = dict()  # type: Dict[str, MatrixServer]

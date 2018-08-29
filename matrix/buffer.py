@@ -22,42 +22,40 @@ from builtins import super
 from functools import partial
 from typing import NamedTuple
 
-from . import globals as G
-from .globals import W, SERVERS, SCRIPT_NAME
-from .utf import utf8_decode
-from .colors import Formatted
-from .utils import (
-    shorten_sender,
-    server_ts_to_weechat,
-    string_strikethrough,
-)
-from .config import RedactType
-
 from nio import (
     Api,
-    RoomMessageText,
-    RoomMemberEvent,
     PowerLevelsEvent,
-    RoomEncryptionEvent,
     RedactedEvent,
+    RedactionEvent,
     RoomAliasEvent,
-    RoomTopicEvent,
+    RoomEncryptionEvent,
+    RoomMemberEvent,
     RoomMessageEmote,
-    RoomNameEvent,
     RoomMessageMedia,
     RoomMessageNotice,
+    RoomMessageText,
     RoomMessageUnknown,
-    RedactionEvent
+    RoomNameEvent,
+    RoomTopicEvent,
 )
 
+from . import globals as G
+from .colors import Formatted
+from .config import RedactType
+from .globals import SCRIPT_NAME, SERVERS, W
+from .utf import utf8_decode
+from .utils import server_ts_to_weechat, shorten_sender, string_strikethrough
 
-OwnMessage = NamedTuple("OwnMessage", [
-    ("sender", str),
-    ("age", int),
-    ("event_id", str),
-    ("room_id", str),
-    ("formatted_message", Formatted)
-])
+OwnMessage = NamedTuple(
+    "OwnMessage",
+    [
+        ("sender", str),
+        ("age", int),
+        ("event_id", str),
+        ("room_id", str),
+        ("formatted_message", Formatted),
+    ],
+)
 
 
 class OwnAction(OwnMessage):
@@ -71,7 +69,7 @@ def room_buffer_input_cb(server_name, buffer, input_data):
 
     if not room_buffer:
         # TODO log error
-        return
+        return W.WEECHAT_RC_ERROR
 
     if not server.connected:
         room_buffer.error("You are not connected to the server")
@@ -96,7 +94,7 @@ def room_buffer_close_cb(data, buffer):
 
 class WeechatUser(object):
     def __init__(self, nick, host=None, prefix="", join_time=None):
-        # type: (str, str, str) -> None
+        # type: (str, str, str, int) -> None
         self.nick = nick
         self.host = host
         self.prefix = prefix
@@ -127,7 +125,7 @@ class WeechatUser(object):
 
 class RoomUser(WeechatUser):
     def __init__(self, nick, user_id=None, power_level=0, join_time=None):
-        # type: (str, str, int) -> None
+        # type: (str, str, int, int) -> None
         prefix = self._get_prefix(power_level)
         super().__init__(nick, user_id, prefix, join_time)
 
@@ -152,26 +150,22 @@ class RoomUser(WeechatUser):
         # type: (int) -> str
         if power_level >= 100:
             return "&"
-        elif power_level >= 50:
+        if power_level >= 50:
             return "@"
-        elif power_level > 0:
+        if power_level > 0:
             return "+"
         return ""
 
 
 class WeechatChannelBuffer(object):
     tags = {
-        "message": [
-            SCRIPT_NAME + "_message",
-            "notify_message",
-            "log1"
-        ],
+        "message": [SCRIPT_NAME + "_message", "notify_message", "log1"],
         "self_message": [
             SCRIPT_NAME + "_message",
             "notify_none",
             "no_highlight",
             "self_msg",
-            "log1"
+            "log1",
         ],
         "action": [
             SCRIPT_NAME + "_message",
@@ -179,44 +173,25 @@ class WeechatChannelBuffer(object):
             "notify_message",
             "log1",
         ],
-        "notice": [
-            SCRIPT_NAME + "_notice",
-            "notify_message",
-            "log1",
-        ],
+        "notice": [SCRIPT_NAME + "_notice", "notify_message", "log1"],
         "old_message": [
             SCRIPT_NAME + "_message",
             "notify_message",
             "no_log",
-            "no_highlight"
+            "no_highlight",
         ],
-        "join": [
-            SCRIPT_NAME + "_join",
-            "log4"
-        ],
-        "part": [
-            SCRIPT_NAME + "_leave",
-            "log4"
-        ],
-        "kick": [
-            SCRIPT_NAME + "_kick",
-            "log4"
-        ],
-        "invite": [
-            SCRIPT_NAME + "_invite",
-            "log4"
-        ],
-        "topic": [
-            SCRIPT_NAME + "_topic",
-            "log3",
-        ]
+        "join": [SCRIPT_NAME + "_join", "log4"],
+        "part": [SCRIPT_NAME + "_leave", "log4"],
+        "kick": [SCRIPT_NAME + "_kick", "log4"],
+        "invite": [SCRIPT_NAME + "_invite", "log4"],
+        "topic": [SCRIPT_NAME + "_topic", "log3"],
     }
 
     membership_messages = {
         "join": "has joined",
         "part": "has left",
         "kick": "has been kicked from",
-        "invite": "has been invited to"
+        "invite": "has been invited to",
     }
 
     class Line(object):
@@ -249,9 +224,7 @@ class WeechatChannelBuffer(object):
         @property
         def tags(self):
             tags_count = W.hdata_get_var_array_size(
-                self._hdata,
-                self._ptr,
-                "tags_array"
+                self._hdata, self._ptr, "tags_array"
             )
 
             tags = [
@@ -300,7 +273,7 @@ class WeechatChannelBuffer(object):
             tags=None,
             prefix=None,
             message=None,
-            highlight=None
+            highlight=None,
         ):
             new_data = {}
 
@@ -309,7 +282,7 @@ class WeechatChannelBuffer(object):
             if date_printed:
                 new_data["date_printed"] = str(date_printed)
             if tags:
-                new_data["tags_array"] = ','.join(tags)
+                new_data["tags_array"] = ",".join(tags)
             if prefix:
                 new_data["prefix"] = prefix
             if message:
@@ -337,8 +310,8 @@ class WeechatChannelBuffer(object):
         self.topic_author = ""
         self.topic_date = None
 
-        W.buffer_set(self._ptr, "localvar_set_type", 'channel')
-        W.buffer_set(self._ptr, "type", 'formatted')
+        W.buffer_set(self._ptr, "localvar_set_type", "channel")
+        W.buffer_set(self._ptr, "type", "formatted")
 
         W.buffer_set(self._ptr, "localvar_set_channel", name)
 
@@ -350,32 +323,16 @@ class WeechatChannelBuffer(object):
         # W.buffer_set(self._ptr, "short_name", short_name)
 
         W.nicklist_add_group(
-            self._ptr,
-            '',
-            "000|o",
-            "weechat.color.nicklist_group",
-            1
+            self._ptr, "", "000|o", "weechat.color.nicklist_group", 1
         )
         W.nicklist_add_group(
-            self._ptr,
-            '',
-            "001|h",
-            "weechat.color.nicklist_group",
-            1
+            self._ptr, "", "001|h", "weechat.color.nicklist_group", 1
         )
         W.nicklist_add_group(
-            self._ptr,
-            '',
-            "002|v",
-            "weechat.color.nicklist_group",
-            1
+            self._ptr, "", "002|v", "weechat.color.nicklist_group", 1
         )
         W.nicklist_add_group(
-            self._ptr,
-            '',
-            "999|...",
-            "weechat.color.nicklist_group",
-            1
+            self._ptr, "", "999|...", "weechat.color.nicklist_group", 1
         )
 
         W.buffer_set(self._ptr, "nicklist", "1")
@@ -385,9 +342,7 @@ class WeechatChannelBuffer(object):
 
         # TODO make this configurable
         W.buffer_set(
-            self._ptr,
-            "highlight_tags_restrict",
-            SCRIPT_NAME + "_message"
+            self._ptr, "highlight_tags_restrict", SCRIPT_NAME + "_message"
         )
 
     @property
@@ -428,23 +383,18 @@ class WeechatChannelBuffer(object):
 
     @property
     def lines(self):
-        own_lines = W.hdata_pointer(
-            self._hdata,
-            self._ptr,
-            "own_lines"
-        )
+        own_lines = W.hdata_pointer(self._hdata, self._ptr, "own_lines")
 
         if own_lines:
             hdata_line = W.hdata_get("line")
 
             line_pointer = W.hdata_pointer(
-                W.hdata_get("lines"), own_lines, "last_line")
+                W.hdata_get("lines"), own_lines, "last_line"
+            )
 
             while line_pointer:
                 data_pointer = W.hdata_pointer(
-                    hdata_line,
-                    line_pointer,
-                    "data"
+                    hdata_line, line_pointer, "data"
                 )
 
                 if data_pointer:
@@ -469,9 +419,7 @@ class WeechatChannelBuffer(object):
         # type: (str) -> None
         """ Print an error to the room buffer """
         message = "{prefix}{script}: {message}".format(
-            prefix=W.prefix("error"),
-            script=SCRIPT_NAME,
-            message=string
+            prefix=W.prefix("error"), script=SCRIPT_NAME, message=string
         )
 
         self._print(message)
@@ -493,7 +441,7 @@ class WeechatChannelBuffer(object):
 
         color = self._color_for_tags(user.color)
 
-        if message_type != "action" and message_type != "notice":
+        if message_type not in ("action", "notice"):
             tags.append("prefix_nick_{color}".format(color=color))
 
         return tags
@@ -507,18 +455,23 @@ class WeechatChannelBuffer(object):
         return WeechatUser(nick)
 
     def _print_message(self, user, message, date, tags):
-        prefix_string = ("" if not user.prefix else "{}{}{}".format(
-            W.color(self._get_prefix_color(user.prefix)),
-            user.prefix,
-            W.color("reset")
-        ))
+        prefix_string = (
+            ""
+            if not user.prefix
+            else "{}{}{}".format(
+                W.color(self._get_prefix_color(user.prefix)),
+                user.prefix,
+                W.color("reset"),
+            )
+        )
 
         data = "{prefix}{color}{author}{ncolor}\t{msg}".format(
             prefix=prefix_string,
             color=W.color(user.color),
             author=user.nick,
             ncolor=W.color("reset"),
-            msg=message)
+            msg=message,
+        )
 
         self.print_date_tags(data, date, tags)
 
@@ -534,27 +487,32 @@ class WeechatChannelBuffer(object):
     def notice(self, nick, message, date, extra_tags=None):
         # type: (str, str, int, Optional[List[str]]) -> None
         user = self._get_user(nick)
-        user_prefix = ("" if not user.prefix else "{}{}{}".format(
-            W.color(self._get_prefix_color(user.prefix)),
-            user.prefix,
-            W.color("reset")
-        ))
-
-        user_string = "{}{}{}{}".format(
-            user_prefix,
-            user.color,
-            user.nick,
-            W.color("reset")
+        user_prefix = (
+            ""
+            if not user.prefix
+            else "{}{}{}".format(
+                W.color(self._get_prefix_color(user.prefix)),
+                user.prefix,
+                W.color("reset"),
+            )
         )
 
-        data = ("{prefix}\t{color}Notice"
-                "{del_color}({ncolor}{user}{del_color}){ncolor}"
-                ": {message}").format(prefix=W.prefix("network"),
-                                      color=W.color("irc.color.notice"),
-                                      del_color=W.color("chat_delimiters"),
-                                      ncolor=W.color("reset"),
-                                      user=user_string,
-                                      message=message)
+        user_string = "{}{}{}{}".format(
+            user_prefix, user.color, user.nick, W.color("reset")
+        )
+
+        data = (
+            "{prefix}\t{color}Notice"
+            "{del_color}({ncolor}{user}{del_color}){ncolor}"
+            ": {message}"
+        ).format(
+            prefix=W.prefix("network"),
+            color=W.color("irc.color.notice"),
+            del_color=W.color("chat_delimiters"),
+            ncolor=W.color("reset"),
+            user=user_string,
+            message=message,
+        )
 
         tags = self._message_tags(user, "notice") + (extra_tags or [])
         self.print_date_tags(data, date, tags)
@@ -563,27 +521,33 @@ class WeechatChannelBuffer(object):
         self.unmask_smart_filtered_nick(nick)
 
     def _print_action(self, user, message, date, tags):
-        nick_prefix = ("" if not user.prefix else "{}{}{}".format(
-            W.color(self._get_prefix_color(user.prefix)),
-            user.prefix,
-            W.color("reset")
-        ))
+        nick_prefix = (
+            ""
+            if not user.prefix
+            else "{}{}{}".format(
+                W.color(self._get_prefix_color(user.prefix)),
+                user.prefix,
+                W.color("reset"),
+            )
+        )
 
-        data = ("{prefix}{nick_prefix}{nick_color}{author}"
-                "{ncolor} {msg}").format(
+        data = (
+            "{prefix}{nick_prefix}{nick_color}{author}" "{ncolor} {msg}"
+        ).format(
             prefix=W.prefix("action"),
             nick_prefix=nick_prefix,
             nick_color=W.color(user.color),
             author=user.nick,
             ncolor=W.color("reset"),
-            msg=message)
+            msg=message,
+        )
 
         self.print_date_tags(data, date, tags)
 
-    def action(self, nick, message, date, extra_tags=[]):
+    def action(self, nick, message, date, extra_tags=None):
         # type: (str, str, int, Optional[List[str]]) -> None
         user = self._get_user(nick)
-        tags = self._message_tags(user, "action") + extra_tags
+        tags = self._message_tags(user, "action") + (extra_tags or [])
         self._print_action(user, message, date, tags)
 
         user.update_speaking_time(date)
@@ -624,9 +588,7 @@ class WeechatChannelBuffer(object):
 
         if not nick_pointer:
             group = W.nicklist_search_group(
-                self._ptr,
-                "",
-                self._get_nicklist_group(user)
+                self._ptr, "", self._get_nicklist_group(user)
             )
             prefix = user.prefix if user.prefix else " "
             W.nicklist_add_nick(
@@ -636,22 +598,22 @@ class WeechatChannelBuffer(object):
                 user.color,
                 prefix,
                 self._get_prefix_color(user.prefix),
-                1
+                1,
             )
 
     def _membership_message(self, user, message_type):
         # type: (WeechatUser, str) -> str
-        action_color = ("green" if message_type == "join"
-                        or message_type == "invite" else "red")
-        prefix = ("join" if message_type == "join" or message_type == "invite"
-                  else "quit")
+        action_color = "green" if message_type in ("join", "invite") else "red"
+        prefix = "join" if message_type in ("join", "invite") else "quit"
 
         membership_message = self.membership_messages[message_type]
 
-        message = ("{prefix}{color}{author}{ncolor} "
-                   "{del_color}({host_color}{host}{del_color})"
-                   "{action_color} {message} "
-                   "{channel_color}{room}{ncolor}").format(
+        message = (
+            "{prefix}{color}{author}{ncolor} "
+            "{del_color}({host_color}{host}{del_color})"
+            "{action_color} {message} "
+            "{channel_color}{room}{ncolor}"
+        ).format(
             prefix=W.prefix(prefix),
             color=W.color(user.color),
             author=user.nick,
@@ -662,11 +624,12 @@ class WeechatChannelBuffer(object):
             action_color=W.color(action_color),
             message=membership_message,
             channel_color=W.color("chat_channel"),
-            room=self.short_name)
+            room=self.short_name,
+        )
 
         return message
 
-    def join(self, user, date, message=True, extra_tags=[]):
+    def join(self, user, date, message=True, extra_tags=None):
         # type: (WeechatUser, int, Optional[bool], Optional[List[str]]) -> None
         self._add_user_to_nicklist(user)
         self.users[user.nick] = user
@@ -681,12 +644,12 @@ class WeechatChannelBuffer(object):
             self.print_date_tags(message, date, tags)
             self.add_smart_filtered_nick(user.nick)
 
-    def invite(self, nick, date, extra_tags=[]):
+    def invite(self, nick, date, extra_tags=None):
         # type: (str, int, Optional[bool], Optional[List[str]]) -> None
         user = self._get_user(nick)
         tags = self._message_tags(user, "invite")
         message = self._membership_message(user, "invite")
-        self.print_date_tags(message, date, tags + extra_tags)
+        self.print_date_tags(message, date, tags + (extra_tags or []))
 
     def _remove_user_from_nicklist(self, user):
         # type: (WeechatUser) -> None
@@ -695,7 +658,7 @@ class WeechatChannelBuffer(object):
         if nick_pointer:
             W.nicklist_remove_nick(self._ptr, nick_pointer)
 
-    def _leave(self, nick, date, message, leave_type, extra_tags):
+    def _leave(self, nick, date, message, leave_type, extra_tags=None):
         # type: (str, int, bool, str, List[str]) -> None
         user = self._get_user(nick)
         self._remove_user_from_nicklist(user)
@@ -708,34 +671,36 @@ class WeechatChannelBuffer(object):
                 tags.append(SCRIPT_NAME + "_smart_filter")
 
             message = self._membership_message(user, leave_type)
-            self.print_date_tags(message, date, tags + extra_tags)
+            self.print_date_tags(message, date, tags + (extra_tags or []))
             self.remove_smart_filtered_nick(user.nick)
 
         if user.nick in self.users:
             del self.users[user.nick]
 
-    def part(self, nick, date, message=True, extra_tags=[]):
+    def part(self, nick, date, message=True, extra_tags=None):
         # type: (str, int, Optional[bool], Optional[List[str]]) -> None
         self._leave(nick, date, message, "part", extra_tags)
 
-    def kick(self, nick, date, message=True, extra_tags=[]):
+    def kick(self, nick, date, message=True, extra_tags=None):
         # type: (str, int, Optional[bool], Optional[List[str]]) -> None
-        self._leave(nick, date, message, "kick", extra_tags=[])
+        self._leave(nick, date, message, "kick", extra_tags)
 
     def _print_topic(self, nick, topic, date):
         user = self._get_user(nick)
         tags = self._message_tags(user, "topic")
 
-        data = ("{prefix}{nick} has changed "
-                "the topic for {chan_color}{room}{ncolor} "
-                "to \"{topic}\"").format(
-                    prefix=W.prefix("network"),
-                    nick=user.nick,
-                    chan_color=W.color("chat_channel"),
-                    ncolor=W.color("reset"),
-                    room=self.short_name,
-                    topic=topic
-                )
+        data = (
+            "{prefix}{nick} has changed "
+            "the topic for {chan_color}{room}{ncolor} "
+            'to "{topic}"'
+        ).format(
+            prefix=W.prefix("network"),
+            nick=user.nick,
+            chan_color=W.color("chat_channel"),
+            ncolor=W.color("reset"),
+            room=self.short_name,
+            topic=topic,
+        )
 
         self.print_date_tags(data, date, tags)
         user.update_speaking_time(date)
@@ -799,9 +764,7 @@ class RoomBuffer(object):
         self.displayed_nicks = {}
         user = shorten_sender(self.room.own_user_id)
         self.weechat_buffer = WeechatChannelBuffer(
-            buffer_name,
-            server_name,
-            user
+            buffer_name, server_name, user
         )
 
     def find_nick(self, user_id):
@@ -837,11 +800,7 @@ class RoomBuffer(object):
                 buffer_user.color = "weechat.color.chat_nick_self"
                 user.nick_color = "weechat.color.chat_nick_self"
 
-            self.weechat_buffer.join(
-                buffer_user,
-                date,
-                not is_state
-            )
+            self.weechat_buffer.join(buffer_user, date, not is_state)
 
         date = server_ts_to_weechat(event.server_timestamp)
 
@@ -909,22 +868,28 @@ class RoomBuffer(object):
         message = line.message
         tags = line.tags
 
-        reason = ("" if not event.reason else
-                  ", reason: \"{reason}\"".format(reason=event.reason))
+        reason = (
+            ""
+            if not event.reason
+            else ', reason: "{reason}"'.format(reason=event.reason)
+        )
 
-        redaction_msg = ("{del_color}<{log_color}Message redacted by: "
-                         "{censor}{log_color}{reason}{del_color}>"
-                         "{ncolor}").format(
-                             del_color=W.color("chat_delimiters"),
-                             ncolor=W.color("reset"),
-                             log_color=W.color("logger.color.backlog_line"),
-                             censor=censor,
-                             reason=reason)
+        redaction_msg = (
+            "{del_color}<{log_color}Message redacted by: "
+            "{censor}{log_color}{reason}{del_color}>"
+            "{ncolor}"
+        ).format(
+            del_color=W.color("chat_delimiters"),
+            ncolor=W.color("reset"),
+            log_color=W.color("logger.color.backlog_line"),
+            censor=censor,
+            reason=reason,
+        )
 
         new_message = ""
 
         if G.CONFIG.look.redaction_type == RedactType.STRIKETHROUGH:
-            plaintext_msg = W.string_remove_color(message, '')
+            plaintext_msg = W.string_remove_color(message, "")
             new_message = string_strikethrough(plaintext_msg)
         elif G.CONFIG.look.redaction_type == RedactType.NOTICE:
             new_message = message
@@ -944,18 +909,24 @@ class RoomBuffer(object):
         tags = self.get_event_tags(event)
         tags.append(SCRIPT_NAME + "_redacted")
 
-        reason = (", reason: \"{reason}\"".format(reason=event.reason)
-                  if event.reason else "")
+        reason = (
+            ', reason: "{reason}"'.format(reason=event.reason)
+            if event.reason
+            else ""
+        )
 
         censor = self.find_nick(event.redacter)
 
-        data = ("{del_color}<{log_color}Message redacted by: "
-                "{censor}{log_color}{reason}{del_color}>{ncolor}").format(
-                   del_color=W.color("chat_delimiters"),
-                   ncolor=W.color("reset"),
-                   log_color=W.color("logger.color.backlog_line"),
-                   censor=censor,
-                   reason=reason)
+        data = (
+            "{del_color}<{log_color}Message redacted by: "
+            "{censor}{log_color}{reason}{del_color}>{ncolor}"
+        ).format(
+            del_color=W.color("chat_delimiters"),
+            ncolor=W.color("reset"),
+            log_color=W.color("logger.color.backlog_line"),
+            censor=censor,
+            reason=reason,
+        )
 
         self.weechat_buffer.message(nick, data, date, tags)
 
@@ -966,20 +937,22 @@ class RoomBuffer(object):
             nick,
             event.topic,
             server_ts_to_weechat(event.server_timestamp),
-            not is_state)
+            not is_state,
+        )
 
     @staticmethod
     def get_event_tags(event):
         return ["matrix_id_{}".format(event.event_id)]
 
-    def _handle_power_level(self, event):
+    def _handle_power_level(self, _):
         for user_id in self.room.power_levels.users:
             if user_id in self.displayed_nicks:
                 nick = self.find_nick(user_id)
 
                 user = self.weechat_buffer.users[nick]
                 user.power_level = self.room.power_levels.get_user_level(
-                    user_id)
+                    user_id
+                )
 
                 # There is no way to change the group of a user without
                 # removing him from the nicklist
@@ -994,9 +967,11 @@ class RoomBuffer(object):
         elif isinstance(event, PowerLevelsEvent):
             self._handle_power_level(event)
         elif isinstance(event, RoomEncryptionEvent):
-            message = ("This room is encrypted, encryption is "
-                       "currently unsuported. Message sending is disabled for "
-                       "this room.")
+            message = (
+                "This room is encrypted, encryption is "
+                "currently unsuported. Message sending is disabled for "
+                "this room."
+            )
             self.weechat_buffer.error(message)
 
     def handle_timeline_event(self, event):
@@ -1016,10 +991,7 @@ class RoomBuffer(object):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
             self.weechat_buffer.action(
-                nick,
-                event.body,
-                date,
-                self.get_event_tags(event)
+                nick, event.body, date, self.get_event_tags(event)
             )
 
         elif isinstance(event, RoomMessageText):
@@ -1029,25 +1001,18 @@ class RoomBuffer(object):
             if event.formatted_body:
                 formatted = Formatted.from_html(event.formatted_body)
 
-            data = (formatted.to_weechat()
-                    if formatted else event.body)
+            data = formatted.to_weechat() if formatted else event.body
 
             date = server_ts_to_weechat(event.server_timestamp)
             self.weechat_buffer.message(
-                nick,
-                data,
-                date,
-                self.get_event_tags(event)
+                nick, data, date, self.get_event_tags(event)
             )
 
         elif isinstance(event, RoomMessageNotice):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
             self.weechat_buffer.notice(
-                nick,
-                event.body,
-                date,
-                self.get_event_tags(event)
+                nick, event.body, date, self.get_event_tags(event)
             )
 
         elif isinstance(event, RoomMessageMedia):
@@ -1056,15 +1021,11 @@ class RoomBuffer(object):
             http_url = Api.mxc_to_http(event.url)
             url = http_url if http_url else event.url
 
-            description = ("/{}".format(event.body)
-                           if event.body else "")
+            description = "/{}".format(event.body) if event.body else ""
             data = "{url}{desc}".format(url=url, desc=description)
 
             self.weechat_buffer.message(
-                nick,
-                data,
-                date,
-                self.get_event_tags(event)
+                nick, data, date, self.get_event_tags(event)
             )
 
         elif isinstance(event, RoomMessageUnknown):
@@ -1072,10 +1033,7 @@ class RoomBuffer(object):
             date = server_ts_to_weechat(event.server_timestamp)
             data = ("Unknown message of type {t}").format(t=event.type)
             self.weechat_buffer.message(
-                nick,
-                data,
-                date,
-                self.get_event_tags(event)
+                nick, data, date, self.get_event_tags(event)
             )
 
         elif isinstance(event, RedactionEvent):
@@ -1085,9 +1043,11 @@ class RoomBuffer(object):
             self._handle_redacted_message(event)
 
         elif isinstance(event, RoomEncryptionEvent):
-            message = ("This room is encrypted, encryption is "
-                       "currently unsuported. Message sending is disabled for "
-                       "this room.")
+            message = (
+                "This room is encrypted, encryption is "
+                "currently unsuported. Message sending is disabled for "
+                "this room."
+            )
             self.weechat_buffer.error(message)
 
         elif isinstance(event, PowerLevelsEvent):
@@ -1106,8 +1066,9 @@ class RoomBuffer(object):
         #     )
 
         else:
-            W.prnt("", "Unhandled event of type {}.".format(
-                type(event).__name__))
+            W.prnt(
+                "", "Unhandled event of type {}.".format(type(event).__name__)
+            )
 
     def self_message(self, message):
         # type: (OwnMessage) -> None
@@ -1125,10 +1086,7 @@ class RoomBuffer(object):
         tags = self.get_event_tags(message)
 
         self.weechat_buffer.self_action(
-            nick,
-            message.formatted_message.to_weechat(),
-            date,
-            tags
+            nick, message.formatted_message.to_weechat(), date, tags
         )
 
     def old_redacted(self, event):
@@ -1136,20 +1094,26 @@ class RoomBuffer(object):
             SCRIPT_NAME + "_message",
             "notify_message",
             "no_log",
-            "no_highlight"
+            "no_highlight",
         ]
-        reason = (", reason: \"{reason}\"".format(reason=event.reason)
-                  if event.reason else "")
+        reason = (
+            ', reason: "{reason}"'.format(reason=event.reason)
+            if event.reason
+            else ""
+        )
 
         censor = self.find_nick(event.redacter)
 
-        data = ("{del_color}<{log_color}Message redacted by: "
-                "{censor}{log_color}{reason}{del_color}>{ncolor}").format(
-                   del_color=W.color("chat_delimiters"),
-                   ncolor=W.color("reset"),
-                   log_color=W.color("logger.color.backlog_line"),
-                   censor=censor,
-                   reason=reason)
+        data = (
+            "{del_color}<{log_color}Message redacted by: "
+            "{censor}{log_color}{reason}{del_color}>{ncolor}"
+        ).format(
+            del_color=W.color("chat_delimiters"),
+            ncolor=W.color("reset"),
+            log_color=W.color("logger.color.backlog_line"),
+            censor=censor,
+            reason=reason,
+        )
 
         tags += self.get_event_tags(event)
         nick = self.find_nick(event.sender)
@@ -1162,12 +1126,15 @@ class RoomBuffer(object):
             SCRIPT_NAME + "_message",
             "notify_message",
             "no_log",
-            "no_highlight"
+            "no_highlight",
         ]
         tags += self.get_event_tags(event)
         nick = self.find_nick(event.sender)
-        data = (event.formatted_message.to_weechat()
-                if event.formatted_message else event.message)
+        data = (
+            event.formatted_message.to_weechat()
+            if event.formatted_message
+            else event.message
+        )
         user = self.weechat_buffer._get_user(nick)
         date = server_ts_to_weechat(event.server_timestamp)
         self.weechat_buffer._print_message(user, data, date, tags)
@@ -1175,13 +1142,7 @@ class RoomBuffer(object):
     def sort_messages(self):
         class LineCopy(object):
             def __init__(
-                self,
-                date,
-                date_printed,
-                tags,
-                prefix,
-                message,
-                highlight
+                self, date, date_printed, tags, prefix, message, highlight
             ):
                 self.date = date
                 self.date_printed = date_printed
@@ -1192,18 +1153,25 @@ class RoomBuffer(object):
 
             @classmethod
             def from_line(cls, line):
-                return cls(line.date, line.date_printed, line.tags,
-                           line.prefix, line.message, line.highlight)
+                return cls(
+                    line.date,
+                    line.date_printed,
+                    line.tags,
+                    line.prefix,
+                    line.message,
+                    line.highlight,
+                )
 
         lines = [
             LineCopy.from_line(line) for line in self.weechat_buffer.lines
         ]
         sorted_lines = sorted(lines, key=lambda line: line.date, reverse=True)
 
-        for n, line in enumerate(self.weechat_buffer.lines):
-            new = sorted_lines[n]
-            line.update(new.date, new.date_printed, new.tags, new.prefix,
-                        new.message)
+        for line_number, line in enumerate(self.weechat_buffer.lines):
+            new = sorted_lines[line_number]
+            line.update(
+                new.date, new.date_printed, new.tags, new.prefix, new.message
+            )
 
     def handle_backlog(self, events):
         for event in events:
@@ -1230,7 +1198,7 @@ class RoomBuffer(object):
                     break
 
             if leave_index:
-                timeline_events = info.timeline.events[leave_index+1:]
+                timeline_events = info.timeline.events[leave_index + 1 :]
                 # Handle our leave as a state event since we're not in the
                 # nicklist anymore but we're already printed out our leave
                 self.handle_state_event(info.timeline.events[leave_index])

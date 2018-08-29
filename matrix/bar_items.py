@@ -16,21 +16,20 @@
 
 from __future__ import unicode_literals
 
-from matrix.utf import utf8_decode
-
-from matrix.globals import W, SERVERS
+from .globals import SERVERS, W
+from .utf import utf8_decode
 
 
 @utf8_decode
 def matrix_bar_item_plugin(data, item, window, buffer, extra_info):
     # pylint: disable=unused-argument
     for server in SERVERS.values():
-        if (buffer in server.buffers.values() or
-                buffer == server.server_buffer):
+        if buffer in server.buffers.values() or buffer == server.server_buffer:
             return "matrix{color}/{color_fg}{name}".format(
                 color=W.color("bar_delim"),
                 color_fg=W.color("bar_fg"),
-                name=server.name)
+                name=server.name,
+            )
 
     return ""
 
@@ -40,24 +39,31 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
     # pylint: disable=unused-argument
     for server in SERVERS.values():
         if buffer in server.buffers.values():
-            color = ("status_name_ssl"
-                     if server.ssl_context.check_hostname else "status_name")
+            color = (
+                "status_name_ssl"
+                if server.ssl_context.check_hostname
+                else "status_name"
+            )
 
             room_buffer = server.find_room_from_ptr(buffer)
             room = room_buffer.room
 
             return "{color}{name}".format(
-                color=W.color(color),
-                name=room.display_name())
+                color=W.color(color), name=room.display_name()
+            )
 
-        elif buffer == server.server_buffer:
-            color = ("status_name_ssl"
-                     if server.ssl_context.check_hostname else "status_name")
+        if buffer == server.server_buffer:
+            color = (
+                "status_name_ssl"
+                if server.ssl_context.check_hostname
+                else "status_name"
+            )
 
             return "{color}server{del_color}[{color}{name}{del_color}]".format(
                 color=W.color(color),
                 del_color=W.color("bar_delim"),
-                name=server.name)
+                name=server.name,
+            )
 
     return ""
 
@@ -66,8 +72,7 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
 def matrix_bar_item_lag(data, item, window, buffer, extra_info):
     # pylint: disable=unused-argument
     for server in SERVERS.values():
-        if (buffer in server.buffers.values() or
-                buffer == server.server_buffer):
+        if buffer in server.buffers.values() or buffer == server.server_buffer:
             if server.lag >= 500:
                 color = W.color("irc.color.item_lag_counting")
                 if server.lag_done:
@@ -77,7 +82,8 @@ def matrix_bar_item_lag(data, item, window, buffer, extra_info):
                 lag_string = "Lag: {color}{lag}{ncolor}".format(
                     lag=lag.format((server.lag / 1000)),
                     color=color,
-                    ncolor=W.color("reset"))
+                    ncolor=W.color("reset"),
+                )
                 return lag_string
             return ""
 

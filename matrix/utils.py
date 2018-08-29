@@ -15,18 +15,10 @@
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 from __future__ import unicode_literals
-from builtins import str
 
 import time
-import math
 
-from matrix import globals as G
-from matrix.globals import W, SERVERS
-
-try:
-    from urlparse import urlparse
-except ImportError:
-    from urllib.parse import urlparse
+from .globals import W
 
 
 def key_from_value(dictionary, value):
@@ -45,11 +37,13 @@ def server_buffer_prnt(server, string):
 def tags_from_line_data(line_data):
     # type: (weechat.hdata) -> List[str]
     tags_count = W.hdata_get_var_array_size(
-        W.hdata_get('line_data'), line_data, 'tags_array')
+        W.hdata_get("line_data"), line_data, "tags_array"
+    )
 
     tags = [
         W.hdata_string(
-            W.hdata_get('line_data'), line_data, '%d|tags_array' % i)
+            W.hdata_get("line_data"), line_data, "%d|tags_array" % i
+        )
         for i in range(tags_count)
     ]
 
@@ -59,16 +53,15 @@ def tags_from_line_data(line_data):
 def create_server_buffer(server):
     # type: (MatrixServer) -> None
     buffer_name = "server.{}".format(server.name)
-    server.server_buffer = W.buffer_new(buffer_name, "server_buffer_cb",
-                                        server.name, "", "")
+    server.server_buffer = W.buffer_new(
+        buffer_name, "server_buffer_cb", server.name, "", ""
+    )
 
     server_buffer_set_title(server)
     W.buffer_set(server.server_buffer, "short_name", server.name)
-    W.buffer_set(server.server_buffer, "localvar_set_type", 'server')
+    W.buffer_set(server.server_buffer, "localvar_set_type", "server")
     W.buffer_set(
-        server.server_buffer,
-        "localvar_set_nick",
-        server.config.username
+        server.server_buffer, "localvar_set_nick", server.config.username
     )
     W.buffer_set(server.server_buffer, "localvar_set_server", server.name)
     W.buffer_set(server.server_buffer, "localvar_set_channel", server.name)
@@ -84,16 +77,10 @@ def server_buffer_set_title(server):
         ip_string = ""
 
     title = ("Matrix: {address}:{port}{ip}").format(
-        address=server.config.address, port=server.config.port, ip=ip_string)
+        address=server.config.address, port=server.config.port, ip=ip_string
+    )
 
     W.buffer_set(server.server_buffer, "title", title)
-
-
-def color_for_tags(color):
-    if color == "weechat.color.chat_nick_self":
-        option = W.config_get(color)
-        return W.config_string(option)
-    return color
 
 
 def server_ts_to_weechat(timestamp):
@@ -112,241 +99,5 @@ def shorten_sender(sender):
     return strip_matrix_server(sender)[1:]
 
 
-def sender_to_prefix_and_color(room, sender):
-    if sender in room.users:
-        user = room.users[sender]
-        prefix = user.prefix
-        prefix_color = get_prefix_color(prefix)
-        return prefix, prefix_color
-
-    return None, None
-
-
-def sender_to_nick_and_color(room, sender):
-    nick = sender
-    nick_color_name = "default"
-
-    if sender in room.users:
-        user = room.users[sender]
-        nick = (user.display_name if user.display_name else user.name)
-        nick_color_name = user.nick_color
-    else:
-        nick = sender
-        nick_color_name = W.info_get("nick_color_name", nick)
-
-    return (nick, nick_color_name)
-
-
-def tags_for_message(message_type):
-    default_tags = {
-        "message": ["matrix_message", "notify_message", "log1"],
-        "backlog":
-        ["matrix_message", "notify_message", "no_log", "no_highlight"]
-    }
-
-    return default_tags[message_type]
-
-
-def add_event_tags(event_id, nick, color=None, tags=[]):
-    tags.append("nick_{nick}".format(nick=nick))
-
-    if color:
-        tags.append("prefix_nick_{color}".format(color=color_for_tags(color)))
-
-    tags.append("matrix_id_{event_id}".format(event_id=event_id))
-
-    return tags
-
-
-def sanitize_token(string):
-    # type: (str) -> str
-    string = sanitize_string(string)
-
-    if len(string) > 512:
-        raise ValueError
-
-    if string == "":
-        raise ValueError
-
-    return string
-
-
-def sanitize_string(string):
-    # type: (str) -> str
-    if not isinstance(string, str):
-        raise TypeError
-
-    # string keys can have empty string values sometimes (e.g. room names that
-    # got deleted)
-    if string == "":
-        return None
-
-    remap = {
-        ord('\b'): None,
-        ord('\f'): None,
-        ord('\n'): None,
-        ord('\r'): None,
-        ord('\t'): None,
-        ord('\0'): None
-    }
-
-    return string.translate(remap)
-
-
-def sanitize_id(string):
-    # type: (str) -> str
-    string = sanitize_string(string)
-
-    if len(string) > 128:
-        raise ValueError
-
-    if string == "":
-        raise ValueError
-
-    return string
-
-
-def sanitize_int(number, minimum=None, maximum=None):
-    # type: (int, int, int) -> int
-    if not isinstance(number, int):
-        raise TypeError
-
-    if math.isnan(number):
-        raise ValueError
-
-    if math.isinf(number):
-        raise ValueError
-
-    if minimum:
-        if number < minimum:
-            raise ValueError
-
-    if maximum:
-        if number > maximum:
-            raise ValueError
-
-    return number
-
-
-def sanitize_ts(timestamp):
-    # type: (int) -> int
-    return sanitize_int(timestamp, 0)
-
-
-def sanitize_power_level(level):
-    # type: (int) -> int
-    return sanitize_int(level, 0, 100)
-
-
-def sanitize_text(string):
-    # type: (str) -> str
-    if not isinstance(string, str):
-        raise TypeError
-
-    # yapf: disable
-    remap = {
-        ord('\b'): None,
-        ord('\f'): None,
-        ord('\r'): None,
-        ord('\0'): None
-    }
-    # yapf: enable
-
-    return string.translate(remap)
-
-
-def add_user_to_nicklist(buf, user_id, user):
-    group_name = "999|..."
-
-    if user.power_level >= 100:
-        group_name = "000|o"
-    elif user.power_level >= 50:
-        group_name = "001|h"
-    elif user.power_level > 0:
-        group_name = "002|v"
-
-    group = W.nicklist_search_group(buf, "", group_name)
-    prefix = user.prefix if user.prefix else " "
-
-    # TODO make it configurable so we can use a display name or user_id here
-    W.nicklist_add_nick(buf, group, user_id, user.nick_color, prefix,
-                        get_prefix_color(user.prefix), 1)
-
-
-def get_prefix_for_level(level):
-    # type: (int) -> str
-    if level >= 100:
-        return "&"
-    elif level >= 50:
-        return "@"
-    elif level > 0:
-        return "+"
-    return ""
-
-
-# TODO make this configurable
-def get_prefix_color(prefix):
-    # type: (str) -> str
-    if prefix == "&":
-        return "lightgreen"
-    elif prefix == "@":
-        return "lightgreen"
-    elif prefix == "+":
-        return "yellow"
-    return ""
-
-
 def string_strikethrough(string):
     return "".join(["{}\u0336".format(c) for c in string])
-
-
-def line_pointer_and_tags_from_event(buff, event_id):
-    # type: (str, str) -> str
-    own_lines = W.hdata_pointer(W.hdata_get('buffer'), buff, 'own_lines')
-
-    if own_lines:
-        hdata_line = W.hdata_get('line')
-
-        line_pointer = W.hdata_pointer(
-            W.hdata_get('lines'), own_lines, 'last_line')
-
-        while line_pointer:
-            data_pointer = W.hdata_pointer(hdata_line, line_pointer, 'data')
-
-            if data_pointer:
-                tags = tags_from_line_data(data_pointer)
-
-                message_id = event_id_from_tags(tags)
-
-                if event_id == message_id:
-                    return data_pointer, tags
-
-            line_pointer = W.hdata_move(hdata_line, line_pointer, -1)
-
-    return None, []
-
-
-def event_id_from_tags(tags):
-    # type: (List[str]) -> str
-    for tag in tags:
-        if tag.startswith("matrix_id"):
-            return tag[10:]
-
-    return ""
-
-
-def mxc_to_http(mxc):
-    # type: (str) -> str
-    url = urlparse(mxc)
-
-    if url.scheme != "mxc":
-        return None
-
-    if not url.netloc or not url.path:
-        return None
-
-    return "https://{}/_matrix/media/r0/download/{}{}".format(
-        url.netloc,
-        url.netloc,
-        url.path
-    )

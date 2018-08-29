@@ -16,29 +16,32 @@
 
 from __future__ import unicode_literals
 
+from matrix.globals import SERVERS, W
 from matrix.utf import utf8_decode
-from matrix.globals import W, SERVERS
 from matrix.utils import tags_from_line_data
 
 
 def add_servers_to_completion(completion):
     for server_name in SERVERS:
-        W.hook_completion_list_add(completion, server_name, 0,
-                                   W.WEECHAT_LIST_POS_SORT)
+        W.hook_completion_list_add(
+            completion, server_name, 0, W.WEECHAT_LIST_POS_SORT
+        )
 
 
 @utf8_decode
-def matrix_server_command_completion_cb(data, completion_item, buffer,
-                                        completion):
+def matrix_server_command_completion_cb(
+    data, completion_item, buffer, completion
+):
     buffer_input = W.buffer_get_string(buffer, "input").split()
 
     args = buffer_input[1:]
-    commands = ['add', 'delete', 'list', 'listfull']
+    commands = ["add", "delete", "list", "listfull"]
 
     def complete_commands():
         for command in commands:
-            W.hook_completion_list_add(completion, command, 0,
-                                       W.WEECHAT_LIST_POS_SORT)
+            W.hook_completion_list_add(
+                completion, command, 0, W.WEECHAT_LIST_POS_SORT
+            )
 
     if len(args) == 1:
         complete_commands()
@@ -47,11 +50,11 @@ def matrix_server_command_completion_cb(data, completion_item, buffer,
         if args[1] not in commands:
             complete_commands()
         else:
-            if args[1] == 'delete' or args[1] == 'listfull':
+            if args[1] == "delete" or args[1] == "listfull":
                 add_servers_to_completion(completion)
 
     elif len(args) == 3:
-        if args[1] == 'delete' or args[1] == 'listfull':
+        if args[1] == "delete" or args[1] == "listfull":
             if args[2] not in SERVERS:
                 add_servers_to_completion(completion)
 
@@ -67,18 +70,25 @@ def matrix_server_completion_cb(data, completion_item, buffer, completion):
 @utf8_decode
 def matrix_command_completion_cb(data, completion_item, buffer, completion):
     for command in [
-            "connect", "disconnect", "reconnect", "server", "help", "debug"
+        "connect",
+        "disconnect",
+        "reconnect",
+        "server",
+        "help",
+        "debug",
     ]:
-        W.hook_completion_list_add(completion, command, 0,
-                                   W.WEECHAT_LIST_POS_SORT)
+        W.hook_completion_list_add(
+            completion, command, 0, W.WEECHAT_LIST_POS_SORT
+        )
     return W.WEECHAT_RC_OK
 
 
 @utf8_decode
 def matrix_debug_completion_cb(data, completion_item, buffer, completion):
     for debug_type in ["messaging", "network", "timing"]:
-        W.hook_completion_list_add(completion, debug_type, 0,
-                                   W.WEECHAT_LIST_POS_SORT)
+        W.hook_completion_list_add(
+            completion, debug_type, 0, W.WEECHAT_LIST_POS_SORT
+        )
     return W.WEECHAT_RC_OK
 
 
@@ -88,46 +98,52 @@ REDACTION_COMP_LEN = 50
 
 @utf8_decode
 def matrix_message_completion_cb(data, completion_item, buffer, completion):
-    own_lines = W.hdata_pointer(W.hdata_get('buffer'), buffer, 'own_lines')
+    own_lines = W.hdata_pointer(W.hdata_get("buffer"), buffer, "own_lines")
     if own_lines:
-        line = W.hdata_pointer(W.hdata_get('lines'), own_lines, 'last_line')
+        line = W.hdata_pointer(W.hdata_get("lines"), own_lines, "last_line")
 
         line_number = 1
 
         while line:
-            line_data = W.hdata_pointer(W.hdata_get('line'), line, 'data')
+            line_data = W.hdata_pointer(W.hdata_get("line"), line, "data")
 
             if line_data:
                 message = W.hdata_string(
-                    W.hdata_get('line_data'), line_data, 'message')
+                    W.hdata_get("line_data"), line_data, "message"
+                )
 
                 tags = tags_from_line_data(line_data)
 
                 # Only add non redacted user messages to the completion
-                if (message and 'matrix_message' in tags and
-                        'matrix_redacted' not in tags):
+                if (
+                    message
+                    and "matrix_message" in tags
+                    and "matrix_redacted" not in tags
+                ):
 
                     if len(message) > REDACTION_COMP_LEN + 2:
-                        message = (message[:REDACTION_COMP_LEN] + '..')
+                        message = message[:REDACTION_COMP_LEN] + ".."
 
-                    item = ("{number}:\"{message}\"").format(
-                        number=line_number, message=message)
+                    item = ('{number}:"{message}"').format(
+                        number=line_number, message=message
+                    )
 
-                    W.hook_completion_list_add(completion, item, 0,
-                                               W.WEECHAT_LIST_POS_END)
+                    W.hook_completion_list_add(
+                        completion, item, 0, W.WEECHAT_LIST_POS_END
+                    )
                     line_number += 1
 
-            line = W.hdata_move(W.hdata_get('line'), line, -1)
+            line = W.hdata_move(W.hdata_get("line"), line, -1)
 
     return W.WEECHAT_RC_OK
 
 
 def server_from_buffer(buffer):
     for server in SERVERS.values():
-            if buffer in server.buffers.values():
-                return server
-            elif buffer == server.server_buffer:
-                return server
+        if buffer in server.buffers.values():
+            return server
+        if buffer == server.server_buffer:
+            return server
     return None
 
 
@@ -141,8 +157,9 @@ def matrix_olm_user_completion_cb(data, completion_item, buffer, completion):
     olm = server.olm
 
     for user in olm.device_keys:
-        W.hook_completion_list_add(completion, user, 0,
-                                   W.WEECHAT_LIST_POS_SORT)
+        W.hook_completion_list_add(
+            completion, user, 0, W.WEECHAT_LIST_POS_SORT
+        )
 
     return W.WEECHAT_RC_OK
 
@@ -169,8 +186,9 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
         return W.WEECHAT_RC_OK
 
     for device in olm.device_keys[user]:
-        W.hook_completion_list_add(completion, device.device_id, 0,
-                                   W.WEECHAT_LIST_POS_SORT)
+        W.hook_completion_list_add(
+            completion, device.device_id, 0, W.WEECHAT_LIST_POS_SORT
+        )
 
     return W.WEECHAT_RC_OK
 
@@ -178,8 +196,9 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
 @utf8_decode
 def matrix_user_completion_cb(data, completion_item, buffer, completion):
     def add_user(completion, user):
-        W.hook_completion_list_add(completion, user, 0,
-                                   W.WEECHAT_LIST_POS_SORT)
+        W.hook_completion_list_add(
+            completion, user, 0, W.WEECHAT_LIST_POS_SORT
+        )
 
     for server in SERVERS.values():
         if buffer == server.server_buffer:
@@ -201,26 +220,58 @@ def matrix_user_completion_cb(data, completion_item, buffer, completion):
 
 
 def init_completion():
-    W.hook_completion("matrix_server_commands", "Matrix server completion",
-                      "matrix_server_command_completion_cb", "")
+    W.hook_completion(
+        "matrix_server_commands",
+        "Matrix server completion",
+        "matrix_server_command_completion_cb",
+        "",
+    )
 
-    W.hook_completion("matrix_servers", "Matrix server completion",
-                      "matrix_server_completion_cb", "")
+    W.hook_completion(
+        "matrix_servers",
+        "Matrix server completion",
+        "matrix_server_completion_cb",
+        "",
+    )
 
-    W.hook_completion("matrix_commands", "Matrix command completion",
-                      "matrix_command_completion_cb", "")
+    W.hook_completion(
+        "matrix_commands",
+        "Matrix command completion",
+        "matrix_command_completion_cb",
+        "",
+    )
 
-    W.hook_completion("matrix_messages", "Matrix message completion",
-                      "matrix_message_completion_cb", "")
+    W.hook_completion(
+        "matrix_messages",
+        "Matrix message completion",
+        "matrix_message_completion_cb",
+        "",
+    )
 
-    W.hook_completion("matrix_debug_types", "Matrix debugging type completion",
-                      "matrix_debug_completion_cb", "")
+    W.hook_completion(
+        "matrix_debug_types",
+        "Matrix debugging type completion",
+        "matrix_debug_completion_cb",
+        "",
+    )
 
-    W.hook_completion("olm_user_ids", "Matrix olm user id completion",
-                      "matrix_olm_user_completion_cb", "")
+    W.hook_completion(
+        "olm_user_ids",
+        "Matrix olm user id completion",
+        "matrix_olm_user_completion_cb",
+        "",
+    )
 
-    W.hook_completion("olm_devices", "Matrix olm device id completion",
-                      "matrix_olm_device_completion_cb", "")
+    W.hook_completion(
+        "olm_devices",
+        "Matrix olm device id completion",
+        "matrix_olm_device_completion_cb",
+        "",
+    )
 
-    W.hook_completion("matrix_users", "Matrix user id completion",
-                      "matrix_user_completion_cb", "")
+    W.hook_completion(
+        "matrix_users",
+        "Matrix user id completion",
+        "matrix_user_completion_cb",
+        "",
+    )

@@ -17,30 +17,28 @@
 from __future__ import unicode_literals
 
 import os
-import ssl
-import socket
-import time
 import pprint
-
-from collections import deque, defaultdict
+import socket
+import ssl
+import time
+from collections import defaultdict, deque
 
 from nio import (
     HttpClient,
+    LocalProtocolError,
     LoginResponse,
-    SyncRepsponse,
     RoomSendResponse,
+    SyncRepsponse,
     TransportResponse,
     TransportType,
-    LocalProtocolError
 )
 
-from matrix.utils import (key_from_value, server_buffer_prnt,
-                          create_server_buffer)
-from matrix.utf import utf8_decode
 from . import globals as G
-from matrix.globals import W, SERVERS, SCRIPT_NAME
-from .buffer import RoomBuffer, OwnMessage, OwnAction
-from .config import Option, ServerBufferType, ConfigSection
+from .buffer import OwnAction, OwnMessage, RoomBuffer
+from .config import ConfigSection, Option, ServerBufferType
+from .globals import SCRIPT_NAME, SERVERS, W
+from .utf import utf8_decode
+from .utils import create_server_buffer, key_from_value, server_buffer_prnt
 
 try:
     FileNotFoundError
@@ -56,39 +54,101 @@ class ServerConfig(ConfigSection):
         self._option_ptrs = {}
 
         options = [
-            Option('autoconnect', 'boolean', '', 0, 0, 'off',
-                   ("automatically connect to the matrix server when weechat "
-                    "is starting")),
-            Option('address', 'string', '', 0, 0, '',
-                   "Hostname or IP address for the server"),
-            Option('port', 'integer', '', 0, 65535, '443',
-                   "Port for the server"),
-            Option('proxy', 'string', '', 0, 0, '',
-                   ("Name of weechat proxy to use (see /help proxy)")),
-            Option('ssl_verify', 'boolean', '', 0, 0, 'on',
-                   ("Check that the SSL connection is fully trusted")),
-            Option('username', 'string', '', 0, 0, '',
-                   "Username to use on server"),
             Option(
-                'password', 'string', '', 0, 0, '',
-                ("Password for server (note: content is evaluated, see /help "
-                 "eval)")),
-            Option('device_name', 'string', '', 0, 0, 'Weechat Matrix',
-                   "Device name to use while logging in to the matrix server"),
+                "autoconnect",
+                "boolean",
+                "",
+                0,
+                0,
+                "off",
+                (
+                    "automatically connect to the matrix server when weechat "
+                    "is starting"
+                ),
+            ),
+            Option(
+                "address",
+                "string",
+                "",
+                0,
+                0,
+                "",
+                "Hostname or IP address for the server",
+            ),
+            Option(
+                "port", "integer", "", 0, 65535, "443", "Port for the server"
+            ),
+            Option(
+                "proxy",
+                "string",
+                "",
+                0,
+                0,
+                "",
+                ("Name of weechat proxy to use (see /help proxy)"),
+            ),
+            Option(
+                "ssl_verify",
+                "boolean",
+                "",
+                0,
+                0,
+                "on",
+                ("Check that the SSL connection is fully trusted"),
+            ),
+            Option(
+                "username", "string", "", 0, 0, "", "Username to use on server"
+            ),
+            Option(
+                "password",
+                "string",
+                "",
+                0,
+                0,
+                "",
+                (
+                    "Password for server (note: content is evaluated, see "
+                    "/help eval)"
+                ),
+            ),
+            Option(
+                "device_name",
+                "string",
+                "",
+                0,
+                0,
+                "Weechat Matrix",
+                "Device name to use while logging in to the matrix server",
+            ),
         ]
 
-        section = W.config_search_section(config_ptr, 'server')
+        section = W.config_search_section(config_ptr, "server")
         self._ptr = section
 
         for option in options:
             option_name = "{server}.{option}".format(
-                server=self._server_name, option=option.name)
+                server=self._server_name, option=option.name
+            )
 
             self._option_ptrs[option.name] = W.config_new_option(
-                config_ptr, section, option_name, option.type,
-                option.description, option.string_values, option.min,
-                option.max, option.value, option.value, 0, "", "",
-                "matrix_config_server_change_cb", self._server_name, "", "")
+                config_ptr,
+                section,
+                option_name,
+                option.type,
+                option.description,
+                option.string_values,
+                option.min,
+                option.max,
+                option.value,
+                option.value,
+                0,
+                "",
+                "",
+                "matrix_config_server_change_cb",
+                self._server_name,
+                "",
+                "",
+            )
 
     autoconnect = ConfigSection.option_property("autoconnect", "boolean")
     address = ConfigSection.option_property("address", "string")
@@ -98,9 +158,7 @@ class ServerConfig(ConfigSection):
     username = ConfigSection.option_property("username", "string")
     device_name = ConfigSection.option_property("device_name", "string")
     password = ConfigSection.option_property(
-        "password",
-        "string",
-        evaluate=True
+        "password", "string", evaluate=True
     )
 
     def free(self):
@@ -169,12 +227,13 @@ class MatrixServer(object):
     def _create_session_dir(self):
         path = os.path.join("matrix", self.name)
         if not W.mkdir_home(path, 0o700):
-            message = ("{prefix}matrix: Error creating server session "
-                       "directory").format(prefix=W.prefix("error"))
+            message = (
+                "{prefix}matrix: Error creating server session " "directory"
+            ).format(prefix=W.prefix("error"))
             W.prnt("", message)
 
     def get_session_path(self):
-        home_dir = W.info_get('weechat_dir', '')
+        home_dir = W.info_get("weechat_dir", "")
         return os.path.join(home_dir, "matrix", self.name)
 
     def _load_device_id(self):
@@ -184,8 +243,8 @@ class MatrixServer(object):
         if not os.path.isfile(path):
             return
 
-        with open(path, 'r') as f:
-            device_id = f.readline().rstrip()
+        with open(path, "r") as device_file:
+            device_id = device_file.readline().rstrip()
             if device_id:
                 self.device_id = device_id
 
@@ -193,11 +252,11 @@ class MatrixServer(object):
         file_name = "{}{}".format(self.config.username, ".device_id")
         path = os.path.join(self.get_session_path(), file_name)
 
-        with open(path, 'w') as f:
-            f.write(self.device_id)
+        with open(path, "w") as device_file:
+            device_file.write(self.device_id)
 
     def _change_client(self):
-        host = ':'.join([self.config.address, str(self.config.port)])
+        host = ":".join([self.config.address, str(self.config.port)])
         self.client = HttpClient(host, self.config.username, self.device_id)
 
     def update_option(self, option, option_name):
@@ -255,14 +314,17 @@ class MatrixServer(object):
                 strerr = error.strerror if error.strerror else "Unknown reason"
                 strerr = errno + strerr
 
-                error_message = ("{prefix}Error while writing to "
-                                 "socket: {error}").format(
-                                     prefix=W.prefix("network"), error=strerr)
+                error_message = (
+                    "{prefix}Error while writing to " "socket: {error}"
+                ).format(prefix=W.prefix("network"), error=strerr)
 
                 server_buffer_prnt(self, error_message)
                 server_buffer_prnt(
-                    self, ("{prefix}matrix: disconnecting from server..."
-                           ).format(prefix=W.prefix("network")))
+                    self,
+                    ("{prefix}matrix: disconnecting from server...").format(
+                        prefix=W.prefix("network")
+                    ),
+                )
 
                 self.disconnect()
                 return False
@@ -273,10 +335,15 @@ class MatrixServer(object):
                 server_buffer_prnt(
                     self,
                     "{prefix}matrix: Error while writing to socket".format(
-                        prefix=W.prefix("network")))
+                        prefix=W.prefix("network")
+                    ),
+                )
                 server_buffer_prnt(
-                    self, ("{prefix}matrix: disconnecting from server..."
-                           ).format(prefix=W.prefix("network")))
+                    self,
+                    ("{prefix}matrix: disconnecting from server...").format(
+                        prefix=W.prefix("network")
+                    ),
+                )
                 self.disconnect()
                 return False
 
@@ -286,7 +353,6 @@ class MatrixServer(object):
         return True
 
     def _abort_send(self):
-        self.current_message = None
         self.send_buffer = ""
 
     def _finalize_send(self):
@@ -316,8 +382,9 @@ class MatrixServer(object):
         return True
 
     def reconnect(self):
-        message = ("{prefix}matrix: reconnecting to server..."
-                   ).format(prefix=W.prefix("network"))
+        message = ("{prefix}matrix: reconnecting to server...").format(
+            prefix=W.prefix("network")
+        )
 
         server_buffer_prnt(self, message)
 
@@ -336,9 +403,9 @@ class MatrixServer(object):
         else:
             self.reconnect_delay = 10
 
-        message = ("{prefix}matrix: reconnecting to server in {t} "
-                   "seconds").format(
-                       prefix=W.prefix("network"), t=self.reconnect_delay)
+        message = (
+            "{prefix}matrix: reconnecting to server in {t} " "seconds"
+        ).format(prefix=W.prefix("network"), t=self.reconnect_delay)
 
         server_buffer_prnt(self, message)
 
@@ -364,7 +431,6 @@ class MatrixServer(object):
         self.access_token = ""
 
         self.send_buffer = b""
-        self.current_message = None
         self.transport_type = None
 
         try:
@@ -378,8 +444,9 @@ class MatrixServer(object):
         self.reconnect_time = None
 
         if self.server_buffer:
-            message = ("{prefix}matrix: disconnected from server"
-                       ).format(prefix=W.prefix("network"))
+            message = ("{prefix}matrix: disconnected from server").format(
+                prefix=W.prefix("network")
+            )
             server_buffer_prnt(self, message)
 
         if reconnect:
@@ -390,13 +457,15 @@ class MatrixServer(object):
         if not self.config.address or not self.config.port:
             W.prnt("", self.config.address)
             message = "{prefix}Server address or port not set".format(
-                prefix=W.prefix("error"))
+                prefix=W.prefix("error")
+            )
             W.prnt("", message)
             return False
 
         if not self.config.username or not self.config.password:
             message = "{prefix}User or password not set".format(
-                prefix=W.prefix("error"))
+                prefix=W.prefix("error")
+            )
             W.prnt("", message)
             return False
 
@@ -407,54 +476,59 @@ class MatrixServer(object):
             create_server_buffer(self)
 
         if not self.timer_hook:
-            self.timer_hook = W.hook_timer(1 * 1000, 0, 0, "matrix_timer_cb",
-                                           self.name)
+            self.timer_hook = W.hook_timer(
+                1 * 1000, 0, 0, "matrix_timer_cb", self.name
+            )
 
         ssl_message = " (SSL)" if self.ssl_context.check_hostname else ""
 
-        message = ("{prefix}matrix: Connecting to "
-                   "{server}:{port}{ssl}...").format(
-                       prefix=W.prefix("network"),
-                       server=self.config.address,
-                       port=self.config.port,
-                       ssl=ssl_message)
+        message = (
+            "{prefix}matrix: Connecting to " "{server}:{port}{ssl}..."
+        ).format(
+            prefix=W.prefix("network"),
+            server=self.config.address,
+            port=self.config.port,
+            ssl=ssl_message,
+        )
 
         W.prnt(self.server_buffer, message)
 
-        W.hook_connect(self.config.proxy,
-                       self.config.address, self.config.port,
-                       1, 0, "", "connect_cb",
-                       self.name)
+        W.hook_connect(
+            self.config.proxy,
+            self.config.address,
+            self.config.port,
+            1,
+            0,
+            "",
+            "connect_cb",
+            self.name,
+        )
 
         return True
 
     def schedule_sync(self):
         self.sync_time = time.time()
 
-    def sync(self, timeout=None, filter=None):
+    def sync(self, timeout=None, sync_filter=None):
         # type: (Optional[int], Optional[Dict[Any, Any]]) -> None
         self.sync_time = None
-        _, request = self.client.sync(timeout, filter)
+        _, request = self.client.sync(timeout, sync_filter)
         self.send_or_queue(request)
 
     def login(self):
         # type: () -> None
         if self.client.logged_in:
-            msg = ("{prefix}{script_name}: Already logged in, "
-                   "syncing...").format(
-                      prefix=W.prefix("network"),
-                      script_name=SCRIPT_NAME
-                  )
+            msg = (
+                "{prefix}{script_name}: Already logged in, " "syncing..."
+            ).format(prefix=W.prefix("network"), script_name=SCRIPT_NAME)
             W.prnt(self.server_buffer, msg)
-            timeout = (0 if self.transport_type == TransportType.HTTP
-                       else 30000)
+            timeout = 0 if self.transport_type == TransportType.HTTP else 30000
             sync_filter = {"room": {"timeline": {"limit": 5000}}}
             self.sync(timeout, sync_filter)
             return
 
         _, request = self.client.login(
-            self.config.password,
-            self.config.device_name
+            self.config.password, self.config.device_name
         )
         self.send_or_queue(request)
 
@@ -469,30 +543,24 @@ class MatrixServer(object):
             return
 
         _, request = self.client.room_put_state(
-            room_buffer.room.room_id,
-            event_type,
-            body
+            room_buffer.room.room_id, event_type, body
         )
         self.send_or_queue(request)
 
     def room_send_redaction(self, room_buffer, event_id, reason=None):
         _, request = self.client.room_redact(
-            room_buffer.room.room_id,
-            event_id,
-            reason)
+            room_buffer.room.room_id, event_id, reason
+        )
         self.send_or_queue(request)
 
     def room_kick(self, room_buffer, user_id, reason=None):
         _, request = self.client.room_kick(
-            room_buffer.room.room_id,
-            user_id,
-            reason)
+            room_buffer.room.room_id, user_id, reason
+        )
         self.send_or_queue(request)
 
     def room_invite(self, room_buffer, user_id):
-        _, request = self.client.room_invite(
-            room_buffer.room.room_id,
-            user_id)
+        _, request = self.client.room_invite(room_buffer.room.room_id, user_id)
         self.send_or_queue(request)
 
     def room_join(self, room_id):
@@ -514,11 +582,7 @@ class MatrixServer(object):
             message_class = OwnMessage
 
         own_message = message_class(
-            self.user_id,
-            0,
-            "",
-            room_buffer.room.room_id,
-            formatted
+            self.user_id, 0, "", room_buffer.room.room_id, formatted
         )
 
         body = {"msgtype": msgtype, "body": formatted.to_plain()}
@@ -528,20 +592,22 @@ class MatrixServer(object):
             body["formatted_body"] = formatted.to_html()
 
         uuid, request = self.client.room_send(
-            room_buffer.room.room_id,
-            "m.room.message",
-            body
+            room_buffer.room.room_id, "m.room.message", body
         )
 
         self.own_message_queue[uuid] = own_message
         self.send_or_queue(request)
 
     def _print_message_error(self, message):
-        server_buffer_prnt(self,
-                           ("{prefix}Unhandled {status_code} error, please "
-                            "inform the developers about this.").format(
-                                prefix=W.prefix("error"),
-                                status_code=message.response.status))
+        server_buffer_prnt(
+            self,
+            (
+                "{prefix}Unhandled {status_code} error, please "
+                "inform the developers about this."
+            ).format(
+                prefix=W.prefix("error"), status_code=message.response.status
+            ),
+        )
 
         server_buffer_prnt(self, pprint.pformat(message.__class__.__name__))
         server_buffer_prnt(self, pprint.pformat(message.request.payload))
@@ -555,21 +621,13 @@ class MatrixServer(object):
         if isinstance(message, OwnAction):
             room_buffer.self_action(message)
             return
-        elif isinstance(message, OwnMessage):
+        if isinstance(message, OwnMessage):
             room_buffer.self_message(message)
             return
 
-        raise NotImplementedError("Unsupported message of type {}".format(
-            type(message)))
-
-    def _handle_erorr_response(self, response):
-        message = ("{prefix}matrix: {error}").format(
-            prefix=W.prefix("error"), error=self.error_message)
-
-        W.prnt(self.server.server_buffer, message)
-
-        if self.fatal:
-            self.server.disconnect(reconnect=False)
+        raise NotImplementedError(
+            "Unsupported message of type {}".format(type(message))
+        )
 
     def _handle_login(self, response):
         self.access_token = response.access_token
@@ -579,7 +637,8 @@ class MatrixServer(object):
         self.save_device_id()
 
         message = "{prefix}matrix: Logged in as {user}".format(
-            prefix=W.prefix("network"), user=self.user_id)
+            prefix=W.prefix("network"), user=self.user_id
+        )
 
         W.prnt(self.server_buffer, message)
 
@@ -590,12 +649,10 @@ class MatrixServer(object):
 
         sync_filter = {
             "room": {
-                "timeline": {
-                    "limit": G.CONFIG.network.max_initial_sync_events
-                }
+                "timeline": {"limit": G.CONFIG.network.max_initial_sync_events}
             }
         }
-        self.sync(timeout=0, filter=sync_filter)
+        self.sync(timeout=0, sync_filter=sync_filter)
 
     def _handle_room_info(self, response):
         for room_id, info in response.rooms.invite.items():
@@ -604,21 +661,23 @@ class MatrixServer(object):
             if room:
                 if room.inviter:
                     inviter_msg = " by {}{}".format(
-                        W.color("chat_nick_other"),
-                        room.inviter)
+                        W.color("chat_nick_other"), room.inviter
+                    )
                 else:
                     inviter_msg = ""
 
-                self.info("You have been invited to {} {}({}{}{}){}"
-                          "{}".format(
-                              room.display_name(),
-                              W.color("chat_delimiters"),
-                              W.color("chat_channel"),
-                              room_id,
-                              W.color("chat_delimiters"),
-                              W.color("reset"),
-                              inviter_msg
-                          ))
+                self.info(
+                    "You have been invited to {} {}({}{}{}){}"
+                    "{}".format(
+                        room.display_name(),
+                        W.color("chat_delimiters"),
+                        W.color("chat_channel"),
+                        room_id,
+                        W.color("chat_delimiters"),
+                        W.color("reset"),
+                        inviter_msg,
+                    )
+                )
             else:
                 self.info("You have been invited to {}.".format(room_id))
 
@@ -647,13 +706,17 @@ class MatrixServer(object):
         self.schedule_sync()
 
     def handle_transport_response(self, response):
-        self.error(("Error with response of type type: {}, "
-                    "error code {}").format(
-            response.request_info.type, response.status_code))
+        self.error(
+            ("Error with response of type type: {}, " "error code {}").format(
+                response.request_info.type, response.status_code
+            )
+        )
 
         # TODO better error handling.
-        if (response.request_info.type == "sync" or
-                response.request_info.type == "login"):
+        if (
+            response.request_info.type == "sync"
+            or response.request_info.type == "login"
+        ):
             self.disconnect()
 
     def handle_response(self, response):
@@ -680,8 +743,6 @@ class MatrixServer(object):
 
         elif isinstance(response, RoomSendResponse):
             self.handle_own_messages(response)
-
-        return
 
     def create_room_buffer(self, room_id):
         room = self.client.rooms[room_id]
@@ -722,8 +783,7 @@ class MatrixServer(object):
                         break
                 if first:
                     num = W.buffer_get_integer(
-                        W.buffer_search_main(),
-                        "number"
+                        W.buffer_search_main(), "number"
                     )
                     W.buffer_unmerge(buf, num + 1)
                     if buf is not first:
@@ -734,13 +794,14 @@ class MatrixServer(object):
 
 
 @utf8_decode
-def matrix_config_server_read_cb(data, config_file, section, option_name,
-                                 value):
+def matrix_config_server_read_cb(
+    data, config_file, section, option_name, value
+):
 
     return_code = W.WEECHAT_CONFIG_OPTION_SET_ERROR
 
     if option_name:
-        server_name, option = option_name.rsplit('.', 1)
+        server_name, option = option_name.rsplit(".", 1)
         server = None
 
         if server_name in SERVERS:
@@ -752,9 +813,7 @@ def matrix_config_server_read_cb(data, config_file, section, option_name,
         # Ignore invalid options
         if option in server.config._option_ptrs:
             return_code = W.config_option_set(
-                server.config._option_ptrs[option],
-                value,
-                1
+                server.config._option_ptrs[option], value, 1
             )
 
     # TODO print out error message in case of erroneous return_code
@@ -796,8 +855,11 @@ def matrix_timer_cb(server_name, remaining_calls):
 
     current_time = time.time()
 
-    if ((not server.connected) and server.reconnect_time and
-            current_time >= (server.reconnect_time + server.reconnect_delay)):
+    if (
+        (not server.connected)
+        and server.reconnect_time
+        and current_time >= (server.reconnect_time + server.reconnect_delay)
+    ):
         server.reconnect()
         return W.WEECHAT_RC_OK
 
@@ -844,7 +906,7 @@ def matrix_timer_cb(server_name, remaining_calls):
 
 
 def create_default_server(config_file):
-    server = MatrixServer('matrix_org', config_file._ptr)
+    server = MatrixServer("matrix_org", config_file._ptr)
     SERVERS[server.name] = server
 
     option = W.config_get(SCRIPT_NAME + ".server." + server.name + ".address")

@@ -1,9 +1,8 @@
+import datetime
 import random
 import string
-import datetime
 
-
-weechat_base_colors = {
+WEECHAT_BASE_COLORS = {
     "black":        "0",
     "red":          "1",
     "green":        "2",
@@ -29,11 +28,11 @@ def color(color_name):
     escape_codes = []
     reset_code = "0"
 
-    def make_fg_color(color):
-        return "38;5;{}".format(color)
+    def make_fg_color(color_code):
+        return "38;5;{}".format(color_code)
 
-    def make_bg_color(color):
-        return "48;5;{}".format(color)
+    def make_bg_color(color_code):
+        return "48;5;{}".format(color_code)
 
     attributes = {
         "bold":       "1",
@@ -76,21 +75,21 @@ def color(color_name):
 
         stripped_color = fg_color.lstrip("*_|/!")
 
-        if stripped_color in weechat_base_colors:
+        if stripped_color in WEECHAT_BASE_COLORS:
             escape_codes.append(
-                make_fg_color(weechat_base_colors[stripped_color]))
+                make_fg_color(WEECHAT_BASE_COLORS[stripped_color]))
 
         elif stripped_color.isdigit():
             num_color = int(stripped_color)
-            if num_color >= 0 and num_color < 256:
+            if 0 <= num_color < 256:
                 escape_codes.append(make_fg_color(stripped_color))
 
-    if bg_color in weechat_base_colors:
-        escape_codes.append(make_bg_color(weechat_base_colors[bg_color]))
+    if bg_color in WEECHAT_BASE_COLORS:
+        escape_codes.append(make_bg_color(WEECHAT_BASE_COLORS[bg_color]))
     else:
         if bg_color.isdigit():
             num_color = int(bg_color)
-            if num_color >= 0 and num_color < 256:
+            if 0 <= num_color < 256:
                 escape_codes.append(make_bg_color(bg_color))
 
     escape_string = "\033[{}{}m".format(reset_code, ";".join(escape_codes))
@@ -98,7 +97,7 @@ def color(color_name):
     return escape_string
 
 
-def prefix(prefix):
+def prefix(prefix_string):
     prefix_to_symbol = {
         "error":   "=!=",
         "network": "--",
@@ -107,14 +106,14 @@ def prefix(prefix):
         "quit":    "<--"
     }
 
-    if prefix in prefix_to_symbol:
+    if prefix_string in prefix_to_symbol:
         return prefix_to_symbol[prefix]
 
     return ""
 
 
-def prnt(_, string):
-    print(string)
+def prnt(_, message):
+    print(message)
 
 
 def prnt_date_tags(_, date, tags_string, data):
@@ -126,44 +125,44 @@ def prnt_date_tags(_, date, tags_string, data):
     print(message)
 
 
-def config_search_section(*args, **kwargs):
+def config_search_section(*_, **__):
     pass
 
 
-def config_new_option(*args, **kwargs):
+def config_new_option(*_, **__):
     pass
 
 
-def mkdir_home(*args, **kwargs):
+def mkdir_home(*_, **__):
     return True
 
 
-def info_get(info, *args):
+def info_get(info, *_):
     if info == "nick_color_name":
-        return random.choice(list(weechat_base_colors.keys()))
+        return random.choice(list(WEECHAT_BASE_COLORS.keys()))
 
     return ""
 
 
-def buffer_new(*args, **kwargs):
+def buffer_new(*_, **__):
     return "".join(
         random.choice(string.ascii_uppercase + string.digits) for _ in range(8)
     )
 
 
-def buffer_set(*args, **kwargs):
+def buffer_set(*_, **__):
     return
 
 
-def nicklist_add_group(*args, **kwargs):
+def nicklist_add_group(*_, **__):
     return
 
 
-def nicklist_add_nick(*args, **kwargs):
+def nicklist_add_nick(*_, **__):
     return
 
 
-def nicklist_remove_nick(*args, **kwargs):
+def nicklist_remove_nick(*_, **__):
     return
 
 

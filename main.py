@@ -19,72 +19,51 @@ from __future__ import unicode_literals
 
 import socket
 import ssl
-import time
-import pprint
-import OpenSSL.crypto as crypto
 import textwrap
-from itertools import chain
-
 # pylint: disable=redefined-builtin
 from builtins import str
-from future.utils import bytes_to_native_str as n
-
+from itertools import chain
 # pylint: disable=unused-import
-from typing import (List, Set, Dict, Tuple, Text, Optional, AnyStr, Deque, Any)
+from typing import Any, AnyStr, Deque, Dict, List, Optional, Set, Text, Tuple
+
 import logbook
-from logbook import Logger, StderrHandler, StreamHandler
-
-import nio
-from nio import TransportType, RemoteTransportError, RemoteProtocolError
-
-from matrix.colors import Formatted
-from matrix.utf import utf8_decode
-
-# Weechat searches for the registered callbacks in the scope of the main script
-# file, import the callbacks here so weechat can find them.
-from matrix.commands import (hook_commands, hook_page_up, matrix_command_cb,
-                             matrix_topic_command_cb, matrix_join_command_cb,
-                             matrix_part_command_cb, matrix_invite_command_cb,
-                             matrix_command_pgup_cb, matrix_redact_command_cb,
-                             matrix_command_buf_clear_cb, matrix_me_command_cb,
-                             matrix_kick_command_cb)
-from matrix.buffer import room_buffer_input_cb, room_buffer_close_cb
-
-from matrix.server import (
-    MatrixServer,
-    create_default_server,
-    send_cb,
-    matrix_timer_cb,
-    matrix_config_server_read_cb,
-    matrix_config_server_write_cb,
-    matrix_config_server_change_cb,
-)
-
-from matrix.bar_items import (init_bar_items, matrix_bar_item_name,
-                              matrix_bar_item_plugin, matrix_bar_item_lag,
-                              matrix_bar_item_buffer_modes)
-
-from matrix.completion import (
-    init_completion, matrix_command_completion_cb,
-    matrix_server_command_completion_cb, matrix_debug_completion_cb,
-    matrix_message_completion_cb, matrix_server_completion_cb,
-    matrix_olm_user_completion_cb, matrix_olm_device_completion_cb,
-    matrix_user_completion_cb)
-
-from matrix.utils import (key_from_value, server_buffer_prnt,
-                          server_buffer_set_title)
-
-from matrix.config import (
-    matrix_config_reload_cb,
-    MatrixConfig,
-    config_log_level_cb,
-    config_log_category_cb,
-    config_server_buffer_cb
-)
+import OpenSSL.crypto as crypto
+from future.utils import bytes_to_native_str as n
+from logbook import Logger, StreamHandler
+from nio import RemoteProtocolError, RemoteTransportError, TransportType
 
 from matrix import globals as G
-
-from matrix.globals import W, SERVERS, SCRIPT_NAME
+from matrix.bar_items import (init_bar_items, matrix_bar_item_buffer_modes,
+                              matrix_bar_item_lag, matrix_bar_item_name,
+                              matrix_bar_item_plugin)
+from matrix.buffer import room_buffer_close_cb, room_buffer_input_cb
+# Weechat searches for the registered callbacks in the scope of the main script
+# file, import the callbacks here so weechat can find them.
+from matrix.commands import (hook_commands, hook_page_up,
+                             matrix_command_buf_clear_cb, matrix_command_cb,
+                             matrix_command_pgup_cb, matrix_invite_command_cb,
+                             matrix_join_command_cb, matrix_kick_command_cb,
+                             matrix_me_command_cb, matrix_part_command_cb,
+                             matrix_redact_command_cb, matrix_topic_command_cb)
+from matrix.completion import (init_completion, matrix_command_completion_cb,
+                               matrix_debug_completion_cb,
+                               matrix_message_completion_cb,
+                               matrix_olm_device_completion_cb,
+                               matrix_olm_user_completion_cb,
+                               matrix_server_command_completion_cb,
+                               matrix_server_completion_cb,
+                               matrix_user_completion_cb)
+from matrix.config import (MatrixConfig, config_log_category_cb,
+                           config_log_level_cb, config_server_buffer_cb,
+                           matrix_config_reload_cb)
+from matrix.globals import SCRIPT_NAME, SERVERS, W
+from matrix.server import (MatrixServer, create_default_server,
+                           matrix_config_server_change_cb,
+                           matrix_config_server_read_cb,
+                           matrix_config_server_write_cb, matrix_timer_cb,
+                           send_cb)
+from matrix.utf import utf8_decode
+from matrix.utils import server_buffer_prnt, server_buffer_set_title
 
 # yapf: disable
 WEECHAT_SCRIPT_NAME = SCRIPT_NAME

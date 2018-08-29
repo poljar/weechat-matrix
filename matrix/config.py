@@ -16,16 +16,16 @@
 
 # from __future__ import unicode_literals
 from builtins import super
+from collections import namedtuple
+from enum import Enum, unique
 
-import nio
 import logbook
+import nio
 
-from . import globals as G
-from matrix.globals import W, SERVERS, SCRIPT_NAME
+from matrix.globals import SCRIPT_NAME, SERVERS, W
 from matrix.utf import utf8_decode
 
-from enum import Enum, unique
-from collections import namedtuple
+from . import globals as G
 
 
 @unique
@@ -49,20 +49,22 @@ class DebugType(Enum):
     TIMING = 2
 
 
-class Option(namedtuple(
-    'Option',
-    [
-        'name',
-        'type',
-        'string_values',
-        'min',
-        'max',
-        'value',
-        'description',
-        'cast_func',
-        'change_callback'
-    ]
-)):
+class Option(
+    namedtuple(
+        "Option",
+        [
+            "name",
+            "type",
+            "string_values",
+            "min",
+            "max",
+            "value",
+            "description",
+            "cast_func",
+            "change_callback",
+        ],
+    )
+):
     __slots__ = ()
 
     def __new__(
@@ -75,7 +77,7 @@ class Option(namedtuple(
         value,
         description,
         cast=None,
-        change_callback=None
+        change_callback=None,
     ):
         return super().__new__(
             cls,
@@ -87,10 +89,8 @@ class Option(namedtuple(
             value,
             description,
             cast,
-            change_callback
+            change_callback,
         )
-
-
 
 
 @utf8_decode
@@ -121,8 +121,7 @@ def config_server_buffer_cb(data, option):
 @utf8_decode
 def config_log_level_cb(data, option):
     change_log_level(
-        G.CONFIG.network.debug_category,
-        G.CONFIG.network.debug_level
+        G.CONFIG.network.debug_category, G.CONFIG.network.debug_level
     )
     return 1
 
@@ -132,8 +131,7 @@ def config_log_category_cb(data, option):
     change_log_level(G.CONFIG.debug_category, logbook.ERROR)
     G.CONFIG.debug_category = G.CONFIG.network.debug_category
     change_log_level(
-        G.CONFIG.network.debug_category,
-        G.CONFIG.network.debug_level
+        G.CONFIG.network.debug_category, G.CONFIG.network.debug_level
     )
     return 1
 
@@ -141,11 +139,11 @@ def config_log_category_cb(data, option):
 def level_to_logbook(value):
     if value == 0:
         return logbook.ERROR
-    elif value == 1:
+    if value == 1:
         return logbook.WARNING
-    elif value == 2:
+    if value == 2:
         return logbook.INFO
-    elif value == 3:
+    if value == 3:
         return logbook.DEBUG
 
     return logbook.ERROR
@@ -154,13 +152,13 @@ def level_to_logbook(value):
 def logbook_category(value):
     if value == 0:
         return "all"
-    elif value == 1:
+    if value == 1:
         return "http"
-    elif value == 2:
+    if value == 2:
         return "client"
-    elif value == 3:
+    if value == 3:
         return "events"
-    elif value == 4:
+    if value == 4:
         return "responses"
 
     return "all"
@@ -169,9 +167,7 @@ def logbook_category(value):
 class WeechatConfig(object):
     def __init__(self, sections):
         self._ptr = W.config_new(
-            SCRIPT_NAME,
-            SCRIPT_NAME + "_config_reload_cb",
-            ""
+            SCRIPT_NAME, SCRIPT_NAME + "_config_reload_cb", ""
         )
 
         for section in sections:
@@ -180,8 +176,11 @@ class WeechatConfig(object):
             setattr(self, name, section_class(name, self._ptr, options))
 
     def free(self):
-        for section in [getattr(self, a) for a in dir(self) if
-                        isinstance(getattr(self, a), ConfigSection)]:
+        for section in [
+            getattr(self, a)
+            for a in dir(self)
+            if isinstance(getattr(self, a), ConfigSection)
+        ]:
             section.free()
 
         W.config_free(self._ptr)
@@ -190,9 +189,9 @@ class WeechatConfig(object):
         return_code = W.config_read(self._ptr)
         if return_code == W.WEECHAT_CONFIG_READ_OK:
             return True
-        elif return_code == W.WEECHAT_CONFIG_READ_MEMORY_ERROR:
+        if return_code == W.WEECHAT_CONFIG_READ_MEMORY_ERROR:
             return False
-        elif return_code == W.WEECHAT_CONFIG_READ_FILE_NOT_FOUND:
+        if return_code == W.WEECHAT_CONFIG_READ_FILE_NOT_FOUND:
             return True
         return False
 
@@ -201,8 +200,9 @@ class ConfigSection(object):
     @classmethod
     def build(cls, name, options):
         def constructor(self, name, config_ptr, options):
-            self._ptr = W.config_new_section(config_ptr, name, 0, 0, "", "",
-                                             "", "", "", "", "", "", "", "")
+            self._ptr = W.config_new_section(
+                config_ptr, name, 0, 0, "", "", "", "", "", "", "", "", "", ""
+            )
             self._config_ptr = config_ptr
             self._option_ptrs = {}
 
@@ -211,18 +211,13 @@ class ConfigSection(object):
 
         attributes = {
             option.name: cls.option_property(
-                option.name,
-                option.type,
-                cast_func=option.cast_func
-            ) for option in options
+                option.name, option.type, cast_func=option.cast_func
+            )
+            for option in options
         }
         attributes["__init__"] = constructor
 
-        section_class = type(
-            name.title() + "Section",
-            (cls,),
-            attributes
-        )
+        section_class = type(name.title() + "Section", (cls,), attributes)
         return section_class
 
     def free(self):
@@ -232,10 +227,24 @@ class ConfigSection(object):
     def _add_option(self, option):
         cb = option.change_callback.__name__ if option.change_callback else ""
         option_ptr = W.config_new_option(
-            self._config_ptr, self._ptr, option.name, option.type,
-            option.description, option.string_values, option.min,
-            option.max, option.value, option.value, 0, "", "",
-            cb, "", "", "")
+            self._config_ptr,
+            self._ptr,
+            option.name,
+            option.type,
+            option.description,
+            option.string_values,
+            option.min,
+            option.max,
+            option.value,
+            option.value,
+            0,
+            "",
+            "",
+            cb,
+            "",
+            "",
+            "",
+        )
 
         self._option_ptrs[option.name] = option_ptr
 
@@ -249,25 +258,21 @@ class ConfigSection(object):
 
         def str_evaluate_getter(self):
             return W.string_eval_expression(
-                W.config_string(self._option_ptrs[name]),
-                {},
-                {},
-                {}
+                W.config_string(self._option_ptrs[name]), {}, {}, {}
             )
 
         def int_getter(self):
             if cast_func:
                 return cast_func(W.config_integer(self._option_ptrs[name]))
-            else:
-                return W.config_integer(self._option_ptrs[name])
+            return W.config_integer(self._option_ptrs[name])
 
-        if option_type == "string" or option_type == "color":
+        if option_type in ("string", "color"):
             if evaluate:
                 return property(str_evaluate_getter)
             return property(str_getter)
-        elif option_type == "boolean":
+        if option_type == "boolean":
             return property(bool_getter)
-        elif option_type == "integer":
+        if option_type == "integer":
             return property(int_getter)
 
 
@@ -276,45 +281,111 @@ class MatrixConfig(WeechatConfig):
 
         self.debug_buffer = ""
         self.debug_category = "all"
+        self.page_up_hook = None
 
         look_options = [
-            Option("redactions", "integer", "strikethrough|notice|delete", 0,
-                   0, "strikethrough",
-                   ("Only notice redactions, strike through or delete "
-                    "redacted messages"), RedactType),
-            Option("server_buffer", "integer",
-                   "merge_with_core|merge_without_core|independent", 0, 0,
-                   "merge_with_core", "Merge server buffers", ServerBufferType,
-                   config_server_buffer_cb)
+            Option(
+                "redactions",
+                "integer",
+                "strikethrough|notice|delete",
+                0,
+                0,
+                "strikethrough",
+                (
+                    "Only notice redactions, strike through or delete "
+                    "redacted messages"
+                ),
+                RedactType,
+            ),
+            Option(
+                "server_buffer",
+                "integer",
+                "merge_with_core|merge_without_core|independent",
+                0,
+                0,
+                "merge_with_core",
+                "Merge server buffers",
+                ServerBufferType,
+                config_server_buffer_cb,
+            ),
         ]
 
         network_options = [
-            Option("max_initial_sync_events", "integer", "", 1, 10000, "30",
-                   ("How many events to fetch during the initial sync")),
-            Option("max_backlog_sync_events", "integer", "", 1, 100, "10",
-                   ("How many events to fetch during backlog fetching")),
-            Option("fetch_backlog_on_pgup", "boolean", "", 0, 0, "on",
-                   ("Fetch messages in the backlog on a window page up event")
-                   ),
-            Option("debug_level", "integer", "error|warn|info|debug", 0, 0,
-                   "error", "Enable network protocol debugging.",
-                   level_to_logbook, config_log_level_cb),
-            Option("debug_category", "integer",
-                   "all|http|client|events|responses",
-                   0, 0, "all", "Debugging category", logbook_category),
-            Option("debug_buffer", "boolean", "", 0, 0, "off",
-                   ("Use a separate buffer for debug logs.")),
+            Option(
+                "max_initial_sync_events",
+                "integer",
+                "",
+                1,
+                10000,
+                "30",
+                ("How many events to fetch during the initial sync"),
+            ),
+            Option(
+                "max_backlog_sync_events",
+                "integer",
+                "",
+                1,
+                100,
+                "10",
+                ("How many events to fetch during backlog fetching"),
+            ),
+            Option(
+                "fetch_backlog_on_pgup",
+                "boolean",
+                "",
+                0,
+                0,
+                "on",
+                ("Fetch messages in the backlog on a window page up event"),
+            ),
+            Option(
+                "debug_level",
+                "integer",
+                "error|warn|info|debug",
+                0,
+                0,
+                "error",
+                "Enable network protocol debugging.",
+                level_to_logbook,
+                config_log_level_cb,
+            ),
+            Option(
+                "debug_category",
+                "integer",
+                "all|http|client|events|responses",
+                0,
+                0,
+                "all",
+                "Debugging category",
+                logbook_category,
+            ),
+            Option(
+                "debug_buffer",
+                "boolean",
+                "",
+                0,
+                0,
+                "off",
+                ("Use a separate buffer for debug logs."),
+            ),
         ]
 
         color_options = [
-            Option("quote", "color", "", 0, 0, "lightgreen",
-                   ("Color for matrix style blockquotes"))
+            Option(
+                "quote",
+                "color",
+                "",
+                0,
+                0,
+                "lightgreen",
+                ("Color for matrix style blockquotes"),
+            )
         ]
 
         sections = [
             ("network", network_options),
             ("look", look_options),
-            ("color", color_options)
+            ("color", color_options),
         ]
 
         super().__init__(sections)
@@ -322,10 +393,23 @@ class MatrixConfig(WeechatConfig):
         # The server section is essentially a section with subsections and no
         # options, handle that case independently.
         W.config_new_section(
-            self._ptr, "server", 0, 0, "matrix_config_server_read_cb", "",
-            "matrix_config_server_write_cb", "", "", "", "", "", "", "")
+            self._ptr,
+            "server",
+            0,
+            0,
+            "matrix_config_server_read_cb",
+            "",
+            "matrix_config_server_write_cb",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
 
     def free(self):
-        section_ptr = W.config_search_section(self._ptr, 'server')
+        section_ptr = W.config_search_section(self._ptr, "server")
         W.config_section_free(section_ptr)
         super().free()
