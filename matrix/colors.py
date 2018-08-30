@@ -334,12 +334,36 @@ class Formatted(object):
                 )
                 attributes.pop("strikethrough")
 
+            def indent(text, prefix):
+                return prefix + text.replace("\n", "\n{}".format(prefix))
+
             for key, value in attributes.items():
+                # Don't use textwrap to quote the code
+                if attributes["code"] and key == "quote" and value:
+                    continue
+
                 text = add_attribute(text, key, value)
-            return text
+
+                # If we're quoted code add quotation marks now.
+                if attributes["quote"] and key == "code" and value:
+                    text = indent(text, "{}>{} ".format(
+                        W.color(G.CONFIG.color.quote),
+                        W.color("reset")))
+
+            # If we're code don't remove multiple newlines blindly
+            if attributes["code"]:
+                return text
+            return re.sub(r"\n+", "\n", text)
 
         weechat_strings = map(format_string, self.substrings)
-        return re.sub(r"\n+", "\n", "".join(weechat_strings)).strip()
+
+        # Remove duplicate \n elements from the list
+        strings = []
+        for string in weechat_strings:
+            if len(strings) == 0 or string != "\n" or string != strings[-1]:
+                strings.append(string)
+
+        return "".join(strings).strip()
 
 
 # TODO this should be a typed dict.

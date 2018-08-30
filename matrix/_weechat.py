@@ -168,3 +168,7 @@ def nicklist_remove_nick(*_, **__):
 
 def nicklist_search_nick(*args, **kwargs):
     return buffer_new(args, kwargs)
+
+
+def string_remove_color(message, _):
+    return message
