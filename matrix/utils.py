@@ -19,10 +19,10 @@ from __future__ import unicode_literals
 import time
 from typing import Any, Dict, List
 
+from .globals import W
+
 if False:
     from .server import MatrixServer
-
-from .globals import W
 
 
 def key_from_value(dictionary, value):

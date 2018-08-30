@@ -17,10 +17,9 @@
 from __future__ import unicode_literals
 
 import sys
+from typing import Dict, Optional
 
 from .utf import WeechatWrapper
-
-from typing import Dict, Optional
 
 if False:
     from .server import MatrixServer

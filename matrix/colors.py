@@ -346,9 +346,12 @@ class Formatted(object):
 
                 # If we're quoted code add quotation marks now.
                 if attributes["quote"] and key == "code" and value:
-                    text = indent(text, "{}>{} ".format(
-                        W.color(G.CONFIG.color.quote),
-                        W.color("reset")))
+                    text = indent(
+                        text,
+                        "{}>{} ".format(
+                            W.color(G.CONFIG.color.quote), W.color("reset")
+                        ),
+                    )
 
             # If we're code don't remove multiple newlines blindly
             if attributes["code"]:

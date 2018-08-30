@@ -20,7 +20,7 @@ from __future__ import unicode_literals
 import time
 from builtins import super
 from functools import partial
-from typing import Dict, List, NamedTuple, Set, Optional
+from typing import Dict, List, NamedTuple, Optional, Set
 
 from nio import (
     Api,

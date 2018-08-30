@@ -24,19 +24,16 @@ import time
 from collections import defaultdict, deque
 from typing import Any, Deque, Dict, Optional
 
-if False:
-    from .colors import Formatted
-
 from nio import (
     HttpClient,
     LocalProtocolError,
     LoginResponse,
+    Response,
+    Rooms,
     RoomSendResponse,
     SyncRepsponse,
     TransportResponse,
     TransportType,
-    Rooms,
-    Response
 )
 
 from . import globals as G
@@ -45,6 +42,10 @@ from .config import ConfigSection, Option, ServerBufferType
 from .globals import SCRIPT_NAME, SERVERS, W
 from .utf import utf8_decode
 from .utils import create_server_buffer, key_from_value, server_buffer_prnt
+
+if False:
+    from .colors import Formatted
+
 
 try:
     FileNotFoundError  # type: ignore

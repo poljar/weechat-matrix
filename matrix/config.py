@@ -20,8 +20,8 @@ from collections import namedtuple
 from enum import Enum, unique
 
 import logbook
-import nio
 
+import nio
 from matrix.globals import SCRIPT_NAME, SERVERS, W
 from matrix.utf import utf8_decode
 
