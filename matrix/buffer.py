@@ -757,7 +757,7 @@ class WeechatChannelBuffer(object):
 class RoomBuffer(object):
     def __init__(self, room, server_name, prev_batch):
         self.room = room
-        self.backlog_pending = False
+        self._backlog_pending = False
         self.prev_batch = prev_batch
         self.joined = True
         self.leave_event_id = None  # type: Optional[str]
@@ -771,6 +771,15 @@ class RoomBuffer(object):
         self.weechat_buffer = WeechatChannelBuffer(
             buffer_name, server_name, user
         )
+
+    @property
+    def backlog_pending(self):
+        return self._backlog_pending
+
+    @backlog_pending.setter
+    def backlog_pending(self, value):
+        self._backlog_pending = value
+        W.bar_item_update("buffer_modes")
 
     def find_nick(self, user_id):
         # type: (str) -> str
@@ -1200,7 +1209,6 @@ class RoomBuffer(object):
         self.sort_messages()
 
         self.backlog_pending = False
-        W.bar_item_update("buffer_modes")
 
     def handle_joined_room(self, info):
         for event in info.state:

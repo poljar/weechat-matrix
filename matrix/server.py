@@ -599,7 +599,6 @@ class MatrixServer(object):
             limit=10)
 
         room_buffer.backlog_pending = True
-        W.bar_item_update("buffer_modes")
         self.backlog_queue[uuid] = room_id
         self.send_or_queue(request)
 
