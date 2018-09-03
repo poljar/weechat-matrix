@@ -502,11 +502,11 @@ class WeechatChannelBuffer(object):
         )
 
         user_string = "{}{}{}{}".format(
-            user_prefix, user.color, user.nick, W.color("reset")
+            user_prefix, W.color(user.color), user.nick, W.color("reset")
         )
 
         data = (
-            "{prefix}\t{color}Notice"
+            "{prefix}{color}Notice"
             "{del_color}({ncolor}{user}{del_color}){ncolor}"
             ": {message}"
         ).format(
