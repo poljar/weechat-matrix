@@ -136,6 +136,21 @@ def config_log_category_cb(data, option):
     return 1
 
 
+@utf8_decode
+def config_pgup_cb(data, option):
+    if G.CONFIG.network.fetch_backlog_on_pgup:
+        if not G.CONFIG.page_up_hook:
+            G.CONFIG.page_up_hook = W.hook_command_run(
+                "/window page_up", "matrix_command_pgup_cb", ""
+            )
+    else:
+        if G.CONFIG.page_up_hook:
+            W.unhook(G.CONFIG.page_up_hook)
+            G.CONFIG.page_up_hook = None
+
+    return 1
+
+
 def level_to_logbook(value):
     if value == 0:
         return logbook.ERROR
@@ -337,6 +352,8 @@ class MatrixConfig(WeechatConfig):
                 0,
                 "on",
                 ("Fetch messages in the backlog on a window page up event"),
+                None,
+                config_pgup_cb,
             ),
             Option(
                 "debug_level",

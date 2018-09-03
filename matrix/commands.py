@@ -246,8 +246,8 @@ def hook_commands():
 
     W.hook_command_run("/buffer clear", "matrix_command_buf_clear_cb", "")
 
-    # if OPTIONS.enable_backlog:
-    # hook_page_up()
+    if G.CONFIG.network.fetch_backlog_on_pgup:
+        hook_page_up()
 
 
 @utf8_decode
@@ -375,7 +375,7 @@ def matrix_command_pgup_cb(data, buffer, command):
 
             if first_line_displayed:
                 room_id = key_from_value(server.buffers, buffer)
-                matrix_fetch_old_messages(server, room_id)
+                server.room_get_messages(room_id)
 
             return W.WEECHAT_RC_OK
 

@@ -34,6 +34,7 @@ from nio import (
     SyncRepsponse,
     TransportResponse,
     TransportType,
+    RoomMessagesResponse,
 )
 
 from . import globals as G
@@ -218,6 +219,7 @@ class MatrixServer(object):
         self.device_check_timestamp = None               # type: Optional[int]
 
         self.own_message_queue = dict()  # type: Dict[str, OwnMessage]
+        self.backlog_queue = dict()  # type: Dict[str, str]
 
         self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
@@ -581,6 +583,26 @@ class MatrixServer(object):
         _, request = self.client.room_leave(room_id)
         self.send_or_queue(request)
 
+    def room_get_messages(self, room_id):
+        room_buffer = self.find_room_from_id(room_id)
+
+        # We're already fetching old messages
+        if room_buffer.backlog_pending:
+            return
+
+        if not room_buffer.prev_batch:
+            return
+
+        uuid, request = self.client.room_messages(
+            room_id,
+            room_buffer.prev_batch,
+            limit=10)
+
+        room_buffer.backlog_pending = True
+        W.bar_item_update("buffer_modes")
+        self.backlog_queue[uuid] = room_id
+        self.send_or_queue(request)
+
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
         # type: (RoomBuffer, Formatted, str) -> None
         if room_buffer.room.encrypted:
@@ -641,6 +663,12 @@ class MatrixServer(object):
         raise NotImplementedError(
             "Unsupported message of type {}".format(type(message))
         )
+
+    def handle_backlog_response(self, response):
+        room_id = self.backlog_queue.pop(response.uuid)
+        room_buffer = self.find_room_from_id(room_id)
+
+        room_buffer.handle_backlog(response)
 
     def _handle_login(self, response):
         self.access_token = response.access_token
@@ -703,7 +731,7 @@ class MatrixServer(object):
 
         for room_id, info in response.rooms.join.items():
             if room_id not in self.buffers:
-                self.create_room_buffer(room_id)
+                self.create_room_buffer(room_id, info.timeline.prev_batch)
 
             room_buffer = self.find_room_from_id(room_id)
             room_buffer.handle_joined_room(info)
@@ -756,10 +784,12 @@ class MatrixServer(object):
 
         elif isinstance(response, RoomSendResponse):
             self.handle_own_messages(response)
+        elif isinstance(response, RoomMessagesResponse):
+            self.handle_backlog_response(response)
 
-    def create_room_buffer(self, room_id):
+    def create_room_buffer(self, room_id, prev_batch):
         room = self.client.rooms[room_id]
-        buf = RoomBuffer(room, self.name)
+        buf = RoomBuffer(room, self.name, prev_batch)
         # TODO this should turned into a propper class
         self.room_buffers[room_id] = buf
         self.buffers[room_id] = buf.weechat_buffer._ptr

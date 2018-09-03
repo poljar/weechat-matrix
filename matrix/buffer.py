@@ -755,9 +755,10 @@ class WeechatChannelBuffer(object):
 
 
 class RoomBuffer(object):
-    def __init__(self, room, server_name):
+    def __init__(self, room, server_name, prev_batch):
         self.room = room
         self.backlog_pending = False
+        self.prev_batch = prev_batch
         self.joined = True
         self.leave_event_id = None  # type: Optional[str]
 
@@ -1142,11 +1143,13 @@ class RoomBuffer(object):
         ]
         tags += self.get_event_tags(event)
         nick = self.find_nick(event.sender)
-        data = (
-            event.formatted_message.to_weechat()
-            if event.formatted_message
-            else event.message
-        )
+
+        formatted = None
+
+        if event.formatted_body:
+            formatted = Formatted.from_html(event.formatted_body)
+
+        data = formatted.to_weechat() if formatted else event.body
         user = self.weechat_buffer._get_user(nick)
         date = server_ts_to_weechat(event.server_timestamp)
         self.weechat_buffer._print_message(user, data, date, tags)
@@ -1185,14 +1188,19 @@ class RoomBuffer(object):
                 new.date, new.date_printed, new.tags, new.prefix, new.message
             )
 
-    def handle_backlog(self, events):
-        for event in events:
+    def handle_backlog(self, response):
+        self.prev_batch = response.end
+
+        for event in response.chunk:
             if isinstance(event, RoomMessageText):
                 self.old_message(event)
             elif isinstance(event, RedactedEvent):
                 self.old_redacted(event)
 
         self.sort_messages()
+
+        self.backlog_pending = False
+        W.bar_item_update("buffer_modes")
 
     def handle_joined_room(self, info):
         for event in info.state:
