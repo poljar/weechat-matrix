@@ -314,6 +314,7 @@ def finalize_connection(server):
     server.fd_hook = hook
     server.connected = True
     server.connecting = False
+    server.reconnect_delay = 0
 
     negotiated_protocol = server.socket.selected_alpn_protocol()
 

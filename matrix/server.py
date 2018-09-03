@@ -443,7 +443,6 @@ class MatrixServer(object):
 
         self.lag = 0
         W.bar_item_update("lag")
-        self.reconnect_delay = 0
         self.reconnect_time = None
 
         if self.server_buffer:
@@ -454,6 +453,8 @@ class MatrixServer(object):
 
         if reconnect:
             self.schedule_reconnect()
+        else:
+            self.reconnect_delay = 0
 
     def connect(self):
         # type: (MatrixServer) -> int
