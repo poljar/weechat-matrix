@@ -916,12 +916,12 @@ class RoomBuffer(object):
 
         new_message = ""
 
-        if G.CONFIG.look.redaction_type == RedactType.STRIKETHROUGH:
+        if G.CONFIG.look.redactions == RedactType.STRIKETHROUGH:
             plaintext_msg = W.string_remove_color(message, "")
             new_message = string_strikethrough(plaintext_msg)
-        elif G.CONFIG.look.redaction_type == RedactType.NOTICE:
+        elif G.CONFIG.look.redactions == RedactType.NOTICE:
             new_message = message
-        elif G.CONFIG.look.redaction_type == RedactType.DELETE:
+        elif G.CONFIG.look.redactions == RedactType.DELETE:
             pass
 
         message = " ".join(s for s in [new_message, redaction_msg] if s)
