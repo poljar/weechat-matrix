@@ -35,6 +35,7 @@ from nio import (
     TransportResponse,
     TransportType,
     RoomMessagesResponse,
+    RequestType,
 )
 
 from . import globals as G
@@ -753,10 +754,7 @@ class MatrixServer(object):
         )
 
         # TODO better error handling.
-        if (
-            response.request_info.type == "sync"
-            or response.request_info.type == "login"
-        ):
+        if response.request_info.type in (RequestType.sync, RequestType.login):
             self.disconnect()
 
     def handle_response(self, response):
