@@ -314,7 +314,7 @@ class WeechatChannelBuffer(object):
         self.topic_author = ""
         self.topic_date = None
 
-        W.buffer_set(self._ptr, "localvar_set_type", "channel")
+        W.buffer_set(self._ptr, "localvar_set_type", "private")
         W.buffer_set(self._ptr, "type", "formatted")
 
         W.buffer_set(self._ptr, "localvar_set_channel", name)
@@ -638,6 +638,9 @@ class WeechatChannelBuffer(object):
         self._add_user_to_nicklist(user)
         self.users[user.nick] = user
 
+        if len(self.users) > 2:
+            W.buffer_set(self._ptr, "localvar_set_type", "channel")
+
         if message:
             tags = self._message_tags(user, "join")
             msg = self._membership_message(user, "join")
@@ -666,6 +669,9 @@ class WeechatChannelBuffer(object):
         # type: (str, int, bool, str, List[str]) -> None
         user = self._get_user(nick)
         self._remove_user_from_nicklist(user)
+
+        if len(self.users) <= 2:
+            W.buffer_set(self._ptr, "localvar_set_type", "private")
 
         if message:
             tags = self._message_tags(user, leave_type)
