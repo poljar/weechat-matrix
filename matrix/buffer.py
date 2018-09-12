@@ -164,6 +164,11 @@ class RoomUser(WeechatUser):
 class WeechatChannelBuffer(object):
     tags = {
         "message": [SCRIPT_NAME + "_message", "notify_message", "log1"],
+        "message_private": [
+            SCRIPT_NAME + "_message",
+            "notify_private",
+            "log1"
+        ],
         "self_message": [
             SCRIPT_NAME + "_message",
             "notify_none",
@@ -175,6 +180,12 @@ class WeechatChannelBuffer(object):
             SCRIPT_NAME + "_message",
             SCRIPT_NAME + "_action",
             "notify_message",
+            "log1",
+        ],
+        "action_private": [
+            SCRIPT_NAME + "_message",
+            SCRIPT_NAME + "_action",
+            "notify_private",
             "log1",
         ],
         "notice": [SCRIPT_NAME + "_notice", "notify_message", "log1"],
@@ -482,7 +493,8 @@ class WeechatChannelBuffer(object):
     def message(self, nick, message, date, extra_tags=None):
         # type: (str, str, int, List[str]) -> None
         user = self._get_user(nick)
-        tags = self._message_tags(user, "message") + (extra_tags or [])
+        tags_type = "message_private" if self.type == "private" else "message"
+        tags = self._message_tags(user, tags_type) + (extra_tags or [])
         self._print_message(user, message, date, tags)
 
         user.update_speaking_time(date)
@@ -551,7 +563,8 @@ class WeechatChannelBuffer(object):
     def action(self, nick, message, date, extra_tags=None):
         # type: (str, str, int, Optional[List[str]]) -> None
         user = self._get_user(nick)
-        tags = self._message_tags(user, "action") + (extra_tags or [])
+        tags_type = "action_private" if self.type == "private" else "action"
+        tags = self._message_tags(user, tags_type) + (extra_tags or [])
         self._print_action(user, message, date, tags)
 
         user.update_speaking_time(date)
@@ -746,6 +759,10 @@ class WeechatChannelBuffer(object):
     @property
     def short_name(self):
         return W.buffer_get_string(self._ptr, "short_name")
+
+    @property
+    def type(self):
+        return W.buffer_get_string(self._ptr, "localvar_type")
 
     @short_name.setter
     def short_name(self, name):
