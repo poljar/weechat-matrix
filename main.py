@@ -92,7 +92,8 @@ def print_certificate_info(buff, sock, cert):
 
     key_info = ("key info: {key_type} key {bits} bits, signed using "
                 "{algo}").format(
-                    key_type=key_type, bits=key_size, algo=signature_algorithm)
+                    key_type=key_type, bits=key_size,
+                    algo=n(signature_algorithm))
 
     validity_info = ("        Begins on:  {before}\n"
                      "        Expires on: {after}").format(
@@ -110,8 +111,8 @@ def print_certificate_info(buff, sock, cert):
     issuer = "issuer: {issuer}".format(issuer=issuer)
 
     fingerprints = ("        SHA1:   {}\n"
-                    "        SHA256: {}").format(sha1_fingerprint,
-                                                 sha256_fingerprint)
+                    "        SHA256: {}").format(n(sha1_fingerprint),
+                                                 n(sha256_fingerprint))
 
     wrapper = textwrap.TextWrapper(
         initial_indent="    - ", subsequent_indent="        ")
