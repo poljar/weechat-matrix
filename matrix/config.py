@@ -42,13 +42,6 @@ class ServerBufferType(Enum):
     INDEPENDENT = 2
 
 
-@unique
-class DebugType(Enum):
-    MESSAGING = 0
-    NETWORK = 1
-    TIMING = 2
-
-
 class Option(
     namedtuple(
         "Option",
@@ -109,6 +102,8 @@ def change_log_level(category, level):
         nio.events.logger.level = level
     elif category == "responses":
         nio.responses.logger.level = level
+    elif category == "encryption":
+        nio.encryption.logger.level = level
 
 
 @utf8_decode
@@ -175,6 +170,8 @@ def logbook_category(value):
         return "events"
     if value == 4:
         return "responses"
+    if value == 5:
+        return "encryption"
 
     return "all"
 
@@ -369,7 +366,7 @@ class MatrixConfig(WeechatConfig):
             Option(
                 "debug_category",
                 "integer",
-                "all|http|client|events|responses",
+                "all|http|client|events|responses|encryption",
                 0,
                 0,
                 "all",
