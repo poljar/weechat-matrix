@@ -829,7 +829,7 @@ class RoomBuffer(object):
                 if user.display_name:
                     short_name = user.display_name
             elif user.user_id.startswith("@freenode_"):
-                short_name = shorten_sender(user.user_id[10:])
+                short_name = shorten_sender(user.user_id[9:])
 
             # TODO make this configurable
             if not short_name or short_name in self.displayed_nicks.values():
