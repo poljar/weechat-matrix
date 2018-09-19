@@ -30,6 +30,7 @@ from nio import (
     RoomAliasEvent,
     RoomEncryptionEvent,
     RoomMemberEvent,
+    RoomMessage,
     RoomMessageEmote,
     RoomMessageMedia,
     RoomMessageNotice,
@@ -785,6 +786,7 @@ class RoomBuffer(object):
         self.prev_batch = prev_batch
         self.joined = True
         self.leave_event_id = None  # type: Optional[str]
+        self.unhandled_users = []   # type: List[str]
 
         buffer_name = "{}.{}".format(server_name, room.room_id)
 
@@ -813,51 +815,67 @@ class RoomBuffer(object):
 
         return user_id
 
+    def add_user(self, user_id, date, is_state):
+        try:
+            user = self.room.users[user_id]
+        except KeyError:
+            # No user found, he must have left already in an event that is
+            # yet to come, so do nothing
+            # W.prnt("", "NOT ADDING USER {}".format(user_id))
+            return
+
+        short_name = shorten_sender(user.user_id)
+
+        # TODO handle this special case for discord bridge users and
+        # freenode bridge users better
+        if user.user_id.startswith("@_discord_"):
+            if user.display_name:
+                short_name = user.display_name
+        elif user.user_id.startswith("@freenode_"):
+            short_name = shorten_sender(user.user_id[9:])
+
+        # TODO make this configurable
+        if not short_name or short_name in self.displayed_nicks.values():
+            # Use the full user id, but don't include the @
+            nick = user_id[1:]
+        else:
+            nick = short_name
+
+        buffer_user = RoomUser(nick, user_id, user.power_level, date)
+        self.displayed_nicks[user_id] = nick
+
+        if self.room.own_user_id == user_id:
+            buffer_user.color = "weechat.color.chat_nick_self"
+            user.nick_color = "weechat.color.chat_nick_self"
+
+        self.weechat_buffer.join(buffer_user, date, not is_state)
+
     def handle_membership_events(self, event, is_state):
-        def join(event, date, is_state):
-            try:
-                user = self.room.users[event.state_key]
-            except KeyError:
-                # No user found, he must have left already in an event that is
-                # yet to come, so do nothing
-                return
-
-            short_name = shorten_sender(user.user_id)
-
-            # TODO handle this special case for discord bridge users and
-            # freenode bridge users better
-            if user.user_id.startswith("@_discord_"):
-                if user.display_name:
-                    short_name = user.display_name
-            elif user.user_id.startswith("@freenode_"):
-                short_name = shorten_sender(user.user_id[9:])
-
-            # TODO make this configurable
-            if not short_name or short_name in self.displayed_nicks.values():
-                # Use the full user id, but don't include the @
-                nick = event.sender[1:]
-            else:
-                nick = short_name
-
-            buffer_user = RoomUser(nick, event.sender, user.power_level, date)
-            self.displayed_nicks[event.sender] = nick
-
-            if self.room.own_user_id == event.sender:
-                buffer_user.color = "weechat.color.chat_nick_self"
-                user.nick_color = "weechat.color.chat_nick_self"
-
-            self.weechat_buffer.join(buffer_user, date, not is_state)
-
         date = server_ts_to_weechat(event.server_timestamp)
 
         if event.content["membership"] == "join":
             if event.state_key not in self.displayed_nicks:
-                join(event, date, is_state)
+                # Adding users to the nicklist is a O(1) + search time
+                # operation (the nicks are added to a linked list sorted).
+                # The search time is O(N * min(a,b)) where N is the number
+                # of nicks already added and a/b are the length of
+                # the strings that are compared at every itteration.
+                # Because the search time get's increasingly longer we're
+                # going to add nicks later in a timer hook.
+                if ((len(self.room.users) - len(self.displayed_nicks)) > 500
+                        and is_state):
+                    self.unhandled_users.append(event.state_key)
+                else:
+                    self.add_user(event.state_key, date, is_state)
             else:
                 # TODO print out profile changes
                 return
 
         elif event.content["membership"] == "leave":
+            if event.state_key in self.unhandled_users:
+                self.unhandled_users.remove(event.state_key)
+                return
+
             nick = self.find_nick(event.state_key)
             if event.sender == event.state_key:
                 self.weechat_buffer.part(nick, date, not is_state)
@@ -1021,6 +1039,19 @@ class RoomBuffer(object):
             self.weechat_buffer.error(message)
 
     def handle_timeline_event(self, event):
+        # TODO this should be done for every messagetype that gets printed in
+        # the buffer
+        if isinstance(event, (RoomMessage, MegolmEvent)):
+            if (event.sender not in self.displayed_nicks and
+                    event.sender in self.room.users):
+
+                try:
+                    self.unhandled_users.remove(event.sender)
+                except ValueError:
+                    pass
+
+                self.add_user(event.sender, 0, True)
+
         if isinstance(event, RoomMemberEvent):
             self.handle_membership_events(event, False)
 
@@ -1273,6 +1304,12 @@ class RoomBuffer(object):
 
         for event in timeline_events:
             self.handle_timeline_event(event)
+
+        # We didn't handle all joined users, the room display name might still
+        # be outdated because of that, update it now.
+        if self.unhandled_users:
+            room_name = self.room.display_name()
+            self.weechat_buffer.short_name = room_name
 
     def handle_left_room(self, info):
         self.joined = False

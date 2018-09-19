@@ -220,7 +220,10 @@ class MatrixServer(object):
         self.device_check_timestamp = None               # type: Optional[int]
 
         self.own_message_queue = dict()  # type: Dict[str, OwnMessage]
-        self.backlog_queue = dict()  # type: Dict[str, str]
+        self.backlog_queue = dict()      # type: Dict[str, str]
+
+        self.unhandled_users = dict()    # type: Dict[str, List[str]]
+        self.lazy_load_hook = None       # type: str
 
         self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
@@ -736,12 +739,50 @@ class MatrixServer(object):
             room_buffer = self.find_room_from_id(room_id)
             room_buffer.handle_left_room(info)
 
+        should_lazy_hook = False
+
         for room_id, info in response.rooms.join.items():
             if room_id not in self.buffers:
                 self.create_room_buffer(room_id, info.timeline.prev_batch)
 
             room_buffer = self.find_room_from_id(room_id)
             room_buffer.handle_joined_room(info)
+
+            if room_buffer.unhandled_users:
+                should_lazy_hook = True
+
+        if should_lazy_hook:
+            hook = W.hook_timer(1 * 100, 0, 0, "matrix_load_users_cb",
+                                self.name)
+            self.lazy_load_hook = hook
+
+    def add_unhandled_users(self, rooms, n):
+        # type: (List[RoomBuffer], int) -> bool
+        total_users = 0
+
+        while total_users <= n:
+            try:
+                room_buffer = rooms.pop()
+            except IndexError:
+                return False
+
+            handled_users = 0
+
+            users = room_buffer.unhandled_users
+
+            for user_id in users:
+                room_buffer.add_user(user_id, 0, True)
+                handled_users += 1
+                total_users += 1
+
+                if total_users >= n:
+                    room_buffer.unhandled_users = users[handled_users:]
+                    rooms.append(room_buffer)
+                    return True
+
+            room_buffer.unhandled_users = []
+
+            return False
 
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
@@ -899,6 +940,26 @@ def matrix_config_server_change_cb(server_name, option):
     server.update_option(option, option_name)
 
     return 1
+
+
+@utf8_decode
+def matrix_load_users_cb(server_name, remaining_calls):
+    server = SERVERS[server_name]
+    start = time.time()
+
+    rooms = [x for x in server.room_buffers.values() if x.unhandled_users]
+
+    while server.add_unhandled_users(rooms, 100):
+        current = time.time()
+
+        if current - start >= 0.1:
+            return W.WEECHAT_RC_OK
+
+    # We are done adding users, we can unhook now.
+    W.unhook(server.lazy_load_hook)
+    server.lazy_load_hook = None
+
+    return W.WEECHAT_RC_OK
 
 
 @utf8_decode

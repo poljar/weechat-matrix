@@ -61,7 +61,7 @@ from matrix.server import (MatrixServer, create_default_server,
                            matrix_config_server_change_cb,
                            matrix_config_server_read_cb,
                            matrix_config_server_write_cb, matrix_timer_cb,
-                           send_cb)
+                           send_cb, matrix_load_users_cb)
 from matrix.utf import utf8_decode
 from matrix.utils import server_buffer_prnt, server_buffer_set_title
 
