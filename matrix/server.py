@@ -259,7 +259,12 @@ class MatrixServer(object):
 
     def _change_client(self):
         host = ":".join([self.config.address, str(self.config.port)])
-        self.client = HttpClient(host, self.config.username, self.device_id)
+        self.client = HttpClient(
+            host,
+            self.config.username,
+            self.device_id,
+            self.get_session_path()
+        )
 
     def update_option(self, option, option_name):
         if option_name == "address":
@@ -633,6 +638,10 @@ class MatrixServer(object):
         self.own_message_queue[uuid] = own_message
         self.send_or_queue(request)
 
+    def keys_upload(self):
+        _, request = self.client.keys_upload()
+        self.send_or_queue(request)
+
     def _print_message_error(self, message):
         server_buffer_prnt(
             self,
@@ -683,10 +692,8 @@ class MatrixServer(object):
 
         W.prnt(self.server_buffer, message)
 
-        # if not self.olm:
-        #     self.create_olm()
-        #     self.store_olm()
-        #     self.upload_keys(device_keys=True, one_time_keys=False)
+        if not self.client.olm_account_shared:
+            self.keys_upload()
 
         sync_filter = {
             "room": {
@@ -743,7 +750,12 @@ class MatrixServer(object):
             return
 
         self._handle_room_info(response)
+
         self.next_batch = response.next_batch
+
+        if self.client.should_upload_keys:
+            self.keys_upload()
+
         self.schedule_sync()
 
     def handle_transport_response(self, response):

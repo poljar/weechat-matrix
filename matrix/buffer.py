@@ -37,6 +37,7 @@ from nio import (
     RoomMessageUnknown,
     RoomNameEvent,
     RoomTopicEvent,
+    MegolmEvent
 )
 
 from . import globals as G
@@ -1098,17 +1099,25 @@ class RoomBuffer(object):
         elif isinstance(event, PowerLevelsEvent):
             self._handle_power_level(event)
 
-        # elif isinstance(event, UndecryptedEvent):
-        #     nick = self.find_nick(event.sender)
-        #     date = server_ts_to_weechat(event.server_timestamp)
-        #     data = ("Error decrypting event session "
-        #             "id: {}".format(event.session_id))
-        #     self.weechat_buffer.message(
-        #         nick,
-        #         data,
-        #         date,
-        #         self.get_event_tags(event)
-        #     )
+        elif isinstance(event, MegolmEvent):
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.server_timestamp)
+            "{del_color}<{log_color}Message redacted by: "
+            "{censor}{log_color}{reason}{del_color}>"
+            "{ncolor}"
+            data = ("{del_color}<{log_color}Unable to decrypt: "
+                    "The sender's device has not sent us "
+                    "the keys for this message{del_color}>{ncolor}").format(
+                            del_color=W.color("chat_delimiters"),
+                            log_color=W.color("logger.color.backlog_line"),
+                            ncolor=W.color("reset"))
+            session_id_tag = SCRIPT_NAME + "_sessionid_" + event.session_id
+            self.weechat_buffer.message(
+                nick,
+                data,
+                date,
+                self.get_event_tags(event) + [session_id_tag]
+            )
 
         else:
             W.prnt(
@@ -1249,7 +1258,7 @@ class RoomBuffer(object):
                     break
 
             if leave_index:
-                timeline_events = info.timeline.events[leave_index + 1 :]
+                timeline_events = info.timeline.events[leave_index + 1:]
                 # Handle our leave as a state event since we're not in the
                 # nicklist anymore but we're already printed out our leave
                 self.handle_state_event(info.timeline.events[leave_index])
