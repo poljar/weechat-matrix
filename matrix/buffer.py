@@ -759,12 +759,12 @@ class WeechatChannelBuffer(object):
         self._print_action(user, message, date, tags)
 
     @property
-    def short_name(self):
-        return W.buffer_get_string(self._ptr, "short_name")
-
-    @property
     def type(self):
         return W.buffer_get_string(self._ptr, "localvar_type")
+
+    @property
+    def short_name(self):
+        return W.buffer_get_string(self._ptr, "short_name")
 
     @short_name.setter
     def short_name(self, name):
