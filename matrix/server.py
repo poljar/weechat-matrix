@@ -22,7 +22,7 @@ import socket
 import ssl
 import time
 from collections import defaultdict, deque
-from typing import Any, Deque, Dict, Optional
+from typing import Any, Deque, Dict, Optional, List
 
 from nio import (
     HttpClient,
@@ -193,6 +193,7 @@ class MatrixServer(object):
 
         self.connected = False      # type: bool
         self.connecting = False     # type: bool
+        self.keys_queried = False   # type: bool
         self.reconnect_delay = 0    # type: int
         self.reconnect_time = None  # type: Optional[float]
         self.sync_time = None       # type: Optional[float]
@@ -223,7 +224,7 @@ class MatrixServer(object):
         self.backlog_queue = dict()      # type: Dict[str, str]
 
         self.unhandled_users = dict()    # type: Dict[str, List[str]]
-        self.lazy_load_hook = None       # type: str
+        self.lazy_load_hook = None       # type: Optional[str]
 
         self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
@@ -645,6 +646,11 @@ class MatrixServer(object):
         _, request = self.client.keys_upload()
         self.send_or_queue(request)
 
+    def keys_query(self):
+        _, request = self.client.keys_query()
+        self.keys_queried = True
+        self.send_or_queue(request)
+
     def _print_message_error(self, message):
         server_buffer_prnt(
             self,
@@ -782,7 +788,7 @@ class MatrixServer(object):
 
             room_buffer.unhandled_users = []
 
-            return False
+        return False
 
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
@@ -796,6 +802,9 @@ class MatrixServer(object):
 
         if self.client.should_upload_keys:
             self.keys_upload()
+
+        if self.client.should_query_keys and not self.keys_queried:
+            self.keys_query()
 
         self.schedule_sync()
 
