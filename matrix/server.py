@@ -1006,16 +1006,6 @@ def matrix_timer_cb(server_name, remaining_calls):
     if not server.next_batch:
         return W.WEECHAT_RC_OK
 
-    # check for new devices by users in encrypted rooms periodically
-    # if (not server.device_check_timestamp or
-    #         current_time - server.device_check_timestamp > 600):
-
-    #     W.prnt(server.server_buffer,
-    #            "{prefix}matrix: Querying user devices.".format(
-    #                prefix=W.prefix("networ")))
-
-    #     server.device_check_timestamp = current_time
-
     return W.WEECHAT_RC_OK
 
 
