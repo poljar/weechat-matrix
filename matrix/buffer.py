@@ -38,7 +38,8 @@ from nio import (
     RoomMessageUnknown,
     RoomNameEvent,
     RoomTopicEvent,
-    MegolmEvent
+    MegolmEvent,
+    Event
 )
 
 from . import globals as G
@@ -471,11 +472,12 @@ class WeechatChannelBuffer(object):
         # A message from a non joined user
         return WeechatUser(nick)
 
-    def _print_message(self, user, message, date, tags):
+    def _print_message(self, user, message, date, tags, extra_prefix=""):
         prefix_string = (
-            ""
+            extra_prefix
             if not user.prefix
-            else "{}{}{}".format(
+            else "{}{}{}{}".format(
+                extra_prefix,
                 W.color(self._get_prefix_color(user.prefix)),
                 user.prefix,
                 W.color("reset"),
@@ -492,18 +494,18 @@ class WeechatChannelBuffer(object):
 
         self.print_date_tags(data, date, tags)
 
-    def message(self, nick, message, date, extra_tags=None):
-        # type: (str, str, int, List[str]) -> None
+    def message(self, nick, message, date, extra_tags=None, extra_prefix=""):
+        # type: (str, str, int, List[str], str) -> None
         user = self._get_user(nick)
         tags_type = "message_private" if self.type == "private" else "message"
         tags = self._message_tags(user, tags_type) + (extra_tags or [])
-        self._print_message(user, message, date, tags)
+        self._print_message(user, message, date, tags, extra_prefix)
 
         user.update_speaking_time(date)
         self.unmask_smart_filtered_nick(nick)
 
-    def notice(self, nick, message, date, extra_tags=None):
-        # type: (str, str, int, Optional[List[str]]) -> None
+    def notice(self, nick, message, date, extra_tags=None, extra_prefix=""):
+        # type: (str, str, int, Optional[List[str]], str) -> None
         user = self._get_user(nick)
         user_prefix = (
             ""
@@ -520,10 +522,11 @@ class WeechatChannelBuffer(object):
         )
 
         data = (
-            "{prefix}{color}Notice"
+            "{extra_prefix}{prefix}{color}Notice"
             "{del_color}({ncolor}{user}{del_color}){ncolor}"
             ": {message}"
         ).format(
+            extra_prefix=extra_prefix,
             prefix=W.prefix("network"),
             color=W.color("irc.color.notice"),
             del_color=W.color("chat_delimiters"),
@@ -538,7 +541,7 @@ class WeechatChannelBuffer(object):
         user.update_speaking_time(date)
         self.unmask_smart_filtered_nick(nick)
 
-    def _print_action(self, user, message, date, tags):
+    def _print_action(self, user, message, date, tags, extra_prefix):
         nick_prefix = (
             ""
             if not user.prefix
@@ -550,8 +553,9 @@ class WeechatChannelBuffer(object):
         )
 
         data = (
-            "{prefix}{nick_prefix}{nick_color}{author}" "{ncolor} {msg}"
-        ).format(
+            "{extra_prefix}{prefix}{nick_prefix}{nick_color}{author}"
+            "{ncolor} {msg}").format(
+            extra_prefix=extra_prefix,
             prefix=W.prefix("action"),
             nick_prefix=nick_prefix,
             nick_color=W.color(user.color),
@@ -562,12 +566,12 @@ class WeechatChannelBuffer(object):
 
         self.print_date_tags(data, date, tags)
 
-    def action(self, nick, message, date, extra_tags=None):
-        # type: (str, str, int, Optional[List[str]]) -> None
+    def action(self, nick, message, date, extra_tags=None, extra_prefix=""):
+        # type: (str, str, int, Optional[List[str]], str) -> None
         user = self._get_user(nick)
         tags_type = "action_private" if self.type == "private" else "action"
         tags = self._message_tags(user, tags_type) + (extra_tags or [])
-        self._print_action(user, message, date, tags)
+        self._print_action(user, message, date, tags, extra_prefix)
 
         user.update_speaking_time(date)
         self.unmask_smart_filtered_nick(nick)
@@ -807,6 +811,10 @@ class RoomBuffer(object):
         self._backlog_pending = value
         W.bar_item_update("buffer_modes")
 
+    @property
+    def warning_prefix(self):
+        return "⚠️ "
+
     def find_nick(self, user_id):
         # type: (str) -> str
         """Find a suitable nick from a user_id"""
@@ -1006,7 +1014,12 @@ class RoomBuffer(object):
 
     @staticmethod
     def get_event_tags(event):
-        return ["matrix_id_{}".format(event.event_id)]
+        # type: (Event) -> List[str]
+        tags = [SCRIPT_NAME + "_id_{}".format(event.event_id)]
+        if event.sender_key:
+            tags.append(SCRIPT_NAME + "_senderkey_{}".format(event.sender_key))
+
+        return tags
 
     def _handle_power_level(self, _):
         for user_id in self.room.power_levels.users:
@@ -1067,8 +1080,13 @@ class RoomBuffer(object):
         elif isinstance(event, RoomMessageEmote):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
+
+            extra_prefix = (self.warning_prefix if event.decrypted
+                            and not event.verified else "")
+
             self.weechat_buffer.action(
-                nick, event.body, date, self.get_event_tags(event)
+                nick, event.body, date, self.get_event_tags(event),
+                extra_prefix
             )
 
         elif isinstance(event, RoomMessageText):
@@ -1080,16 +1098,23 @@ class RoomBuffer(object):
 
             data = formatted.to_weechat() if formatted else event.body
 
+            extra_prefix = (self.warning_prefix if event.decrypted
+                            and not event.verified else "")
+
             date = server_ts_to_weechat(event.server_timestamp)
             self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event)
+                nick, data, date, self.get_event_tags(event), extra_prefix
             )
 
         elif isinstance(event, RoomMessageNotice):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
+            extra_prefix = (self.warning_prefix if event.decrypted
+                            and not event.verified else "")
+
             self.weechat_buffer.notice(
-                nick, event.body, date, self.get_event_tags(event)
+                nick, event.body, date, self.get_event_tags(event),
+                extra_prefix
             )
 
         elif isinstance(event, RoomMessageMedia):
@@ -1101,16 +1126,22 @@ class RoomBuffer(object):
             description = "/{}".format(event.body) if event.body else ""
             data = "{url}{desc}".format(url=url, desc=description)
 
+            extra_prefix = (self.warning_prefix if event.decrypted
+                            and not event.verified else "")
+
             self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event)
+                nick, data, date, self.get_event_tags(event), extra_prefix
             )
 
         elif isinstance(event, RoomMessageUnknown):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
             data = ("Unknown message of type {t}").format(t=event.type)
+            extra_prefix = (self.warning_prefix if event.decrypted
+                            and not event.verified else "")
+
             self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event)
+                nick, data, date, self.get_event_tags(event), extra_prefix
             )
 
         elif isinstance(event, RedactionEvent):
@@ -1133,9 +1164,7 @@ class RoomBuffer(object):
         elif isinstance(event, MegolmEvent):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
-            "{del_color}<{log_color}Message redacted by: "
-            "{censor}{log_color}{reason}{del_color}>"
-            "{ncolor}"
+
             data = ("{del_color}<{log_color}Unable to decrypt: "
                     "The sender's device has not sent us "
                     "the keys for this message{del_color}>{ncolor}").format(
@@ -1159,7 +1188,7 @@ class RoomBuffer(object):
         # type: (OwnMessage) -> None
         nick = self.find_nick(self.room.own_user_id)
         data = message.formatted_message.to_weechat()
-        tags = self.get_event_tags(message)
+        tags = [SCRIPT_NAME + "_id_{}".format(message.event_id)]
         date = message.age
 
         self.weechat_buffer.self_message(nick, data, date, tags)
@@ -1168,7 +1197,7 @@ class RoomBuffer(object):
         # type: (OwnMessage) -> None
         nick = self.find_nick(self.room.own_user_id)
         date = message.age
-        tags = self.get_event_tags(message)
+        tags = [SCRIPT_NAME + "_id_{}".format(message.event_id)]
 
         self.weechat_buffer.self_action(
             nick, message.formatted_message.to_weechat(), date, tags
