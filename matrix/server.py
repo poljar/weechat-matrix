@@ -22,7 +22,7 @@ import socket
 import ssl
 import time
 from collections import defaultdict, deque
-from typing import Any, Deque, Dict, Optional, List
+from typing import Any, Deque, Dict, Optional, List, NamedTuple
 
 from nio import (
     HttpClient,
@@ -31,11 +31,13 @@ from nio import (
     Response,
     Rooms,
     RoomSendResponse,
-    SyncRepsponse,
+    SyncResponse,
     TransportResponse,
     TransportType,
     RoomMessagesResponse,
     RequestType,
+    EncryptionError,
+    OlmTrustError,
 )
 
 from . import globals as G
@@ -45,14 +47,22 @@ from .globals import SCRIPT_NAME, SERVERS, W
 from .utf import utf8_decode
 from .utils import create_server_buffer, key_from_value, server_buffer_prnt
 
-if False:
-    from .colors import Formatted
+from .colors import Formatted
 
 
 try:
     FileNotFoundError  # type: ignore
 except NameError:
     FileNotFoundError = IOError
+
+
+EncrytpionQueueItem = NamedTuple(
+    "EncrytpionQueueItem",
+    [
+        ("message_type", str),
+        ("formatted_message", Formatted),
+    ],
+)
 
 
 class ServerConfig(ConfigSection):
@@ -221,6 +231,7 @@ class MatrixServer(object):
         self.device_check_timestamp = None               # type: Optional[int]
 
         self.own_message_queue = dict()  # type: Dict[str, OwnMessage]
+        self.encryption_queue = defaultdict(deque)
         self.backlog_queue = dict()      # type: Dict[str, str]
 
         self.unhandled_users = dict()    # type: Dict[str, List[str]]
@@ -614,20 +625,10 @@ class MatrixServer(object):
 
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
         # type: (RoomBuffer, Formatted, str) -> None
-        if room_buffer.room.encrypted:
-            return
+        room = room_buffer.room
 
         if not self.client:
             return
-
-        if msgtype == "m.emote":
-            message_class = OwnAction
-        else:
-            message_class = OwnMessage
-
-        own_message = message_class(
-            self.user_id, 0, "", room_buffer.room.room_id, formatted
-        )
 
         body = {"msgtype": msgtype, "body": formatted.to_plain()}
 
@@ -635,8 +636,27 @@ class MatrixServer(object):
             body["format"] = "org.matrix.custom.html"
             body["formatted_body"] = formatted.to_html()
 
-        uuid, request = self.client.room_send(
-            room_buffer.room.room_id, "m.room.message", body
+        try:
+            uuid, request = self.client.room_send(
+                room.room_id, "m.room.message", body
+            )
+        except EncryptionError:
+            try:
+                uuid, request = self.client.share_group_session(room.room_id)
+                message = EncrytpionQueueItem(msgtype, formatted)
+                self.encryption_queue[room.room_id].append(message)
+            except OlmTrustError as e:
+                m = ("Untrusted devices found in room: {}".format(e))
+                self.error(m)
+                return
+
+        if msgtype == "m.emote":
+            message_class = OwnAction
+        else:
+            message_class = OwnMessage
+
+        own_message = message_class(
+            self.user_id, 0, "", room.room_id, formatted
         )
 
         self.own_message_queue[uuid] = own_message
@@ -826,7 +846,7 @@ class MatrixServer(object):
         # If the response was a sync response and contained a timeout the
         # timeout is expected and should be removed from the lag.
         # TODO the timeout isn't a constant
-        if isinstance(response, SyncRepsponse):
+        if isinstance(response, SyncResponse):
             self.lag = max(0, self.lag - (30000))
 
         self.lag_done = True
@@ -838,7 +858,7 @@ class MatrixServer(object):
         elif isinstance(response, LoginResponse):
             self._handle_login(response)
 
-        elif isinstance(response, SyncRepsponse):
+        elif isinstance(response, SyncResponse):
             self._handle_sync(response)
 
         elif isinstance(response, RoomSendResponse):
