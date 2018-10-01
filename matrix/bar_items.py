@@ -122,3 +122,4 @@ def init_bar_items():
     W.bar_item_new("(extra)buffer_name", "matrix_bar_item_name", "")
     W.bar_item_new("(extra)lag", "matrix_bar_item_lag", "")
     W.bar_item_new("(extra)buffer_modes", "matrix_bar_item_buffer_modes", "")
+    W.bar_item_new("(extra)matrix_modes", "matrix_bar_item_buffer_modes", "")
