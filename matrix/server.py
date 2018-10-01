@@ -32,6 +32,7 @@ from nio import (
     Rooms,
     RoomSendResponse,
     SyncResponse,
+    ShareGroupSessionResponse,
     TransportResponse,
     TransportType,
     RoomMessagesResponse,
@@ -624,11 +625,11 @@ class MatrixServer(object):
         self.send_or_queue(request)
 
     def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
-        # type: (RoomBuffer, Formatted, str) -> None
+        # type: (RoomBuffer, Formatted, str) -> bool
         room = room_buffer.room
 
         if not self.client:
-            return
+            return False
 
         body = {"msgtype": msgtype, "body": formatted.to_plain()}
 
@@ -641,14 +642,11 @@ class MatrixServer(object):
                 room.room_id, "m.room.message", body
             )
         except EncryptionError:
-            try:
-                uuid, request = self.client.share_group_session(room.room_id)
-                message = EncrytpionQueueItem(msgtype, formatted)
-                self.encryption_queue[room.room_id].append(message)
-            except OlmTrustError as e:
-                m = ("Untrusted devices found in room: {}".format(e))
-                self.error(m)
-                return
+            _, request = self.client.share_group_session(room.room_id)
+            message = EncrytpionQueueItem(msgtype, formatted)
+            self.encryption_queue[room.room_id].append(message)
+            self.send_or_queue(request)
+            return False
 
         if msgtype == "m.emote":
             message_class = OwnAction
@@ -661,6 +659,7 @@ class MatrixServer(object):
 
         self.own_message_queue[uuid] = own_message
         self.send_or_queue(request)
+        return True
 
     def keys_upload(self):
         _, request = self.client.keys_upload()
@@ -863,8 +862,25 @@ class MatrixServer(object):
 
         elif isinstance(response, RoomSendResponse):
             self.handle_own_messages(response)
+
         elif isinstance(response, RoomMessagesResponse):
             self.handle_backlog_response(response)
+
+        elif isinstance(response, ShareGroupSessionResponse):
+            room_id = response.room_id
+            room_buffer = self.room_buffers[room_id]
+
+            while self.encryption_queue[room_id]:
+                message = self.encryption_queue[room_id].popleft()
+                try:
+                    if not self.room_send_message(room_buffer,
+                                                  message.formatted_message,
+                                                  message.message_type):
+                        self.encryption_queue.pop()
+                        self.encryption_queue[room_id].appendleft(message)
+                        break
+                except OlmTrustError:
+                    break
 
     def create_room_buffer(self, room_id, prev_batch):
         room = self.client.rooms[room_id]

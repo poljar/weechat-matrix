@@ -39,7 +39,8 @@ from nio import (
     RoomNameEvent,
     RoomTopicEvent,
     MegolmEvent,
-    Event
+    Event,
+    OlmTrustError
 )
 
 from . import globals as G
@@ -89,7 +90,12 @@ def room_buffer_input_cb(server_name, buffer, input_data):
 
     formatted_data = Formatted.from_input_line(data)
 
-    server.room_send_message(room_buffer, formatted_data, "m.text")
+    try:
+        server.room_send_message(room_buffer, formatted_data, "m.text")
+    except OlmTrustError as e:
+        m = ("Untrusted devices found in room: {}".format(e))
+        server.error(m)
+        pass
 
     return W.WEECHAT_RC_OK
 
