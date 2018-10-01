@@ -22,7 +22,7 @@ import socket
 import ssl
 import time
 from collections import defaultdict, deque
-from typing import Any, Deque, Dict, Optional, List, NamedTuple
+from typing import Any, Deque, Dict, Optional, List, NamedTuple, DefaultDict
 
 from nio import (
     HttpClient,
@@ -33,11 +33,13 @@ from nio import (
     RoomSendResponse,
     SyncResponse,
     ShareGroupSessionResponse,
+    KeysClaimResponse,
     TransportResponse,
     TransportType,
     RoomMessagesResponse,
     RequestType,
     EncryptionError,
+    GroupEncryptionError,
     OlmTrustError,
 )
 
@@ -232,7 +234,8 @@ class MatrixServer(object):
         self.device_check_timestamp = None               # type: Optional[int]
 
         self.own_message_queue = dict()  # type: Dict[str, OwnMessage]
-        self.encryption_queue = defaultdict(deque)
+        self.encryption_queue = defaultdict(deque)  \
+            # type: DefaultDict[str, Deque[EncrytpionQueueItem]]
         self.backlog_queue = dict()      # type: Dict[str, str]
 
         self.unhandled_users = dict()    # type: Dict[str, List[str]]
@@ -624,12 +627,16 @@ class MatrixServer(object):
         self.backlog_queue[uuid] = room_id
         self.send_or_queue(request)
 
-    def room_send_message(self, room_buffer, formatted, msgtype="m.text"):
-        # type: (RoomBuffer, Formatted, str) -> bool
+    def room_send_message(
+        self,
+        room_buffer,  # type: RoomBuffer
+        formatted,    # type: Formatted
+        msgtype="m.text",  # type: str
+    ):
+        # type: (...) -> bool
         room = room_buffer.room
 
-        if not self.client:
-            return False
+        assert self.client
 
         body = {"msgtype": msgtype, "body": formatted.to_plain()}
 
@@ -641,8 +648,12 @@ class MatrixServer(object):
             uuid, request = self.client.room_send(
                 room.room_id, "m.room.message", body
             )
-        except EncryptionError:
-            _, request = self.client.share_group_session(room.room_id)
+        except GroupEncryptionError:
+            try:
+                _, request = self.client.share_group_session(room.room_id)
+            except EncryptionError:
+                _, request = self.client.keys_claim(room.room_id)
+
             message = EncrytpionQueueItem(msgtype, formatted)
             self.encryption_queue[room.room_id].append(message)
             self.send_or_queue(request)
@@ -865,6 +876,13 @@ class MatrixServer(object):
 
         elif isinstance(response, RoomMessagesResponse):
             self.handle_backlog_response(response)
+
+        elif isinstance(response, KeysClaimResponse):
+            _, request = self.client.share_group_session(
+                response.room_id,
+                ignore_missing_sessions=True
+            )
+            self.send(request)
 
         elif isinstance(response, ShareGroupSessionResponse):
             room_id = response.room_id
