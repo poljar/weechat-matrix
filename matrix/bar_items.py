@@ -106,6 +106,9 @@ def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
                     and server.client.room_contains_unverified(room.room_id)):
                 modes.append("⚠️ ")
 
+            if not server.connected:
+                modes.append("❌")
+
             if room_buffer.backlog_pending:
                 modes.append("⏳")
 
