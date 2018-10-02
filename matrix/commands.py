@@ -115,6 +115,14 @@ class WeechatCommandParser(object):
         unverify_parser.add_argument("user_filter")
         unverify_parser.add_argument("device_filter", nargs="?")
 
+        blacklist_parser = subparsers.add_parser("blacklist")
+        blacklist_parser.add_argument("user_filter")
+        blacklist_parser.add_argument("device_filter", nargs="?")
+
+        unblacklist_parser = subparsers.add_parser("unblacklist")
+        unblacklist_parser.add_argument("user_filter")
+        unblacklist_parser.add_argument("device_filter", nargs="?")
+
         return WeechatCommandParser._run_parser(parser, args)
 
 
@@ -295,14 +303,19 @@ def hook_commands():
          "unverify <user-id> <device-id> ||"
          "verify <user-id> <device-id>"),
         # Description
-        ("     info: show info about known devices and their keys\n"
-         "blacklist: blacklist a device\n"
-         " unverify: unverify a device\n"
-         "   verify: verify a device\n\n"
-         "Examples:\n"),
+        ("       info: show info about known devices and their keys\n"
+         "  blacklist: blacklist a device\n"
+         "unblacklist: unblacklist a device\n"
+         "   unverify: unverify a device\n"
+         "     verify: verify a device\n\n"
+         "Examples:"
+         "\n  /olm verify @example:example.com *"
+         "\n  /olm info all example*"
+         ),
         # Completions
         ('info all|blacklisted|private|unverified|verified ||'
-         'blacklist %(device_ids) ||'
+         'blacklist %(olm_user_ids) %(olm_devices) ||'
+         'unblacklist %(olm_user_ids) %(olm_devices) ||'
          'unverify %(olm_user_ids) %(olm_devices) ||'
          'verify %(olm_user_ids) %(olm_devices)'),
         # Function name
@@ -376,7 +389,7 @@ def olm_info_command(server, args):
             return
 
         W.prnt(server.server_buffer,
-               "{}matrix: {} keys:\n".format(
+               "{}matrix: {} devices:\n".format(
                    W.prefix("network"),
                    device_category
                ))
@@ -516,6 +529,28 @@ def olm_unverify_command(server, args):
     )
 
 
+def olm_blacklist_command(server, args):
+    olm_action_command(
+        server,
+        args,
+        "Blacklisted",
+        "unblacklisted",
+        "join",
+        server.client.olm.blacklist_device
+    )
+
+
+def olm_unblacklist_command(server, args):
+    olm_action_command(
+        server,
+        args,
+        "Unblacklisted",
+        "blacklisted",
+        "join",
+        server.client.olm.unblacklist_device
+    )
+
+
 @utf8_decode
 def matrix_olm_command_cb(data, buffer, args):
     def command(server, data, buffer, args):
@@ -537,6 +572,10 @@ def matrix_olm_command_cb(data, buffer, args):
             olm_verify_command(server, parsed_args)
         elif parsed_args.subcommand == "unverify":
             olm_unverify_command(server, parsed_args)
+        elif parsed_args.subcommand == "blacklist":
+            olm_blacklist_command(server, parsed_args)
+        elif parsed_args.subcommand == "unblacklist":
+            olm_unblacklist_command(server, parsed_args)
         else:
             message = ("{prefix}matrix: Command not implemented.".format(
                 prefix=W.prefix("error")))
