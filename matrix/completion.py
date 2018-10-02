@@ -154,9 +154,12 @@ def matrix_olm_user_completion_cb(data, completion_item, buffer, completion):
     if not server:
         return W.WEECHAT_RC_OK
 
-    olm = server.olm
+    olm = server.client.olm
 
-    for user in olm.device_keys:
+    if not olm:
+        return W.WEECHAT_RC_OK
+
+    for user in olm.device_store.users:
         W.hook_completion_list_add(
             completion, user, 0, W.WEECHAT_LIST_POS_SORT
         )
@@ -171,7 +174,10 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
     if not server:
         return W.WEECHAT_RC_OK
 
-    olm = server.olm
+    olm = server.client.olm
+
+    if not olm:
+        return W.WEECHAT_RC_OK
 
     args = W.hook_completion_get_string(completion, "args")
 
@@ -182,12 +188,12 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
 
     user = fields[1]
 
-    if user not in olm.device_keys:
+    if user not in olm.device_store.users:
         return W.WEECHAT_RC_OK
 
-    for device in olm.device_keys[user]:
+    for device in olm.device_store[user]:
         W.hook_completion_list_add(
-            completion, device.device_id, 0, W.WEECHAT_LIST_POS_SORT
+            completion, device, 0, W.WEECHAT_LIST_POS_SORT
         )
 
     return W.WEECHAT_RC_OK
