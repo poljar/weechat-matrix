@@ -135,9 +135,11 @@ def hook_commands():
         ('<message-number>[:"<message-part>"] [<reason>]'),
         # Description
         (
-            "message-number: number of message to redact (starting from 1 for\n"
+            "message-number: number of message to redact "
+            "(starting from 1 for\n"
             "                the last message received, counting up)\n"
-            "  message-part: an initial part of the message (ignored, only used\n"
+            "  message-part: an initial part of the message (ignored, only "
+            "used\n"
             "                as visual feedback when using completion)\n"
             "        reason: the redaction reason\n"
         ),
