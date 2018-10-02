@@ -878,10 +878,16 @@ class MatrixServer(object):
             self.handle_backlog_response(response)
 
         elif isinstance(response, KeysClaimResponse):
-            _, request = self.client.share_group_session(
-                response.room_id,
-                ignore_missing_sessions=True
-            )
+            try:
+                _, request = self.client.share_group_session(
+                    response.room_id,
+                    ignore_missing_sessions=True
+                )
+            except OlmTrustError as e:
+                m = ("Untrusted devices found in room: {}".format(e))
+                self.error(m)
+                return
+
             self.send(request)
 
         elif isinstance(response, ShareGroupSessionResponse):
