@@ -241,6 +241,9 @@ class MatrixServer(object):
         self.unhandled_users = dict()    # type: Dict[str, List[str]]
         self.lazy_load_hook = None       # type: Optional[str]
 
+        self.keys_claimed = defaultdict(bool)
+        self.group_session_shared = defaultdict(bool)
+
         self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
         # yapf: enable
@@ -649,14 +652,20 @@ class MatrixServer(object):
                 room.room_id, "m.room.message", body
             )
         except GroupEncryptionError:
+            request = None
             try:
-                _, request = self.client.share_group_session(room.room_id)
+                if not self.group_session_shared[room.room_id]:
+                    _, request = self.client.share_group_session(room.room_id)
+                    self.group_session_shared[room.room_id] = True
             except EncryptionError:
-                _, request = self.client.keys_claim(room.room_id)
+                if not self.keys_claimed[room.room_id]:
+                    _, request = self.client.keys_claim(room.room_id)
+                    self.keys_claimed[room.room_id] = True
 
             message = EncrytpionQueueItem(msgtype, formatted)
             self.encryption_queue[room.room_id].append(message)
-            self.send_or_queue(request)
+            if request:
+                self.send_or_queue(request)
             return False
 
         if msgtype == "m.emote":
@@ -878,6 +887,7 @@ class MatrixServer(object):
             self.handle_backlog_response(response)
 
         elif isinstance(response, KeysClaimResponse):
+            self.keys_claimed[response.room_id] = False
             try:
                 _, request = self.client.share_group_session(
                     response.room_id,
@@ -892,6 +902,7 @@ class MatrixServer(object):
 
         elif isinstance(response, ShareGroupSessionResponse):
             room_id = response.room_id
+            self.group_session_shared[response.room_id] = False
             room_buffer = self.room_buffers[room_id]
 
             while self.encryption_queue[room_id]:
