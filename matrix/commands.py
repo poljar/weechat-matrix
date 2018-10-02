@@ -110,7 +110,7 @@ def hook_commands():
             "    server: list, add, or remove Matrix servers\n"
             "   connect: connect to Matrix servers\n"
             "disconnect: disconnect from one or all Matrix servers\n"
-            " reconnect: reconnect to server(s)\n\n"
+            " reconnect: reconnect to server(s)\n"
             "      help: show detailed command help\n\n"
             "Use /matrix help [command] to find out more.\n"
         ),
