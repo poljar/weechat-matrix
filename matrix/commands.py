@@ -514,7 +514,7 @@ def olm_verify_command(server, args):
         "Verified",
         "unverified",
         "join",
-        server.client.olm.verify_device
+        server.client.verify_device
     )
 
 
@@ -525,7 +525,7 @@ def olm_unverify_command(server, args):
         "Unverified",
         "verified",
         "quit",
-        server.client.olm.unverify_device
+        server.client.unverify_device
     )
 
 
@@ -536,7 +536,7 @@ def olm_blacklist_command(server, args):
         "Blacklisted",
         "unblacklisted",
         "join",
-        server.client.olm.blacklist_device
+        server.client.blacklist_device
     )
 
 
@@ -547,7 +547,7 @@ def olm_unblacklist_command(server, args):
         "Unblacklisted",
         "blacklisted",
         "join",
-        server.client.olm.unblacklist_device
+        server.client.unblacklist_device
     )
 
 
