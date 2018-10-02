@@ -420,6 +420,13 @@ def debug_buffer_close_cb(data, buffer):
     return W.WEECHAT_RC_OK
 
 
+def server_buffer_cb(server_name, buffer, input_data):
+    message = ("{}{}: this buffer is not a room buffer!").format(
+            W.prefix("error"), SCRIPT_NAME)
+    W.prnt(buffer, message)
+    return W.WEECHAT_RC_OK
+
+
 class WeechatHandler(StreamHandler):
     def __init__(self, level=logbook.NOTSET, format_string=None, filter=None,
                  bubble=False):
