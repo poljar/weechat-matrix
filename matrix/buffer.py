@@ -836,7 +836,6 @@ class RoomBuffer(object):
         except KeyError:
             # No user found, he must have left already in an event that is
             # yet to come, so do nothing
-            # W.prnt("", "NOT ADDING USER {}".format(user_id))
             return
 
         short_name = shorten_sender(user.user_id)
