@@ -57,12 +57,13 @@ from matrix.completion import (init_completion, matrix_command_completion_cb,
 from matrix.config import (MatrixConfig, config_log_category_cb,
                            config_log_level_cb, config_server_buffer_cb,
                            matrix_config_reload_cb, config_pgup_cb)
-from matrix.globals import SCRIPT_NAME, SERVERS, W
+from matrix.globals import SCRIPT_NAME, SERVERS, W, MAX_EVENTS
 from matrix.server import (MatrixServer, create_default_server,
                            matrix_config_server_change_cb,
                            matrix_config_server_read_cb,
                            matrix_config_server_write_cb, matrix_timer_cb,
-                           send_cb, matrix_load_users_cb)
+                           send_cb, matrix_load_users_cb,
+                           matrix_partial_sync_cb)
 from matrix.utf import utf8_decode
 from matrix.utils import server_buffer_prnt, server_buffer_set_title
 
@@ -288,7 +289,7 @@ def receive_cb(server_name, file_descriptor):
             server.disconnect()
             break
 
-        response = server.client.next_response()
+        response = server.client.next_response(MAX_EVENTS)
 
         # Check if we need to send some data back
         data_to_send = server.client.data_to_send()

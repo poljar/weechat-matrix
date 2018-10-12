@@ -39,3 +39,4 @@ SERVERS = dict()  # type: Dict[str, MatrixServer]
 CONFIG = None  # type: Optional[MatrixConfig]
 ENCRYPTION = True  # type: bool
 SCRIPT_NAME = "matrix"  # type: str
+MAX_EVENTS = 10

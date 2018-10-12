@@ -32,6 +32,7 @@ from nio import (
     Rooms,
     RoomSendResponse,
     SyncResponse,
+    PartialSyncResponse,
     ShareGroupSessionResponse,
     KeysClaimResponse,
     TransportResponse,
@@ -46,7 +47,7 @@ from nio import (
 from . import globals as G
 from .buffer import OwnAction, OwnMessage, RoomBuffer
 from .config import ConfigSection, Option, ServerBufferType
-from .globals import SCRIPT_NAME, SERVERS, W
+from .globals import SCRIPT_NAME, SERVERS, W, MAX_EVENTS
 from .utf import utf8_decode
 from .utils import create_server_buffer, key_from_value, server_buffer_prnt
 
@@ -228,6 +229,7 @@ class MatrixServer(object):
         self.transaction_id = 0                          # type: int
         self.lag = 0                                     # type: int
         self.lag_done = False                            # type: bool
+        self.busy = False                                # type: bool
 
         self.send_fd_hook = None                         # type: Optional[str]
         self.send_buffer = b""                           # type: bytes
@@ -240,6 +242,7 @@ class MatrixServer(object):
 
         self.unhandled_users = dict()    # type: Dict[str, List[str]]
         self.lazy_load_hook = None       # type: Optional[str]
+        self.partial_sync_hook = None    # type: Optional[str]
 
         self.keys_claimed = defaultdict(bool)
         self.group_session_shared = defaultdict(bool)
@@ -793,13 +796,6 @@ class MatrixServer(object):
             room_buffer = self.find_room_from_id(room_id)
             room_buffer.handle_joined_room(info)
 
-            if room_buffer.unhandled_users:
-                should_lazy_hook = True
-
-        if should_lazy_hook:
-            hook = W.hook_timer(1 * 100, 0, 0, "matrix_load_users_cb",
-                                self.name)
-            self.lazy_load_hook = hook
 
     def add_unhandled_users(self, rooms, n):
         # type: (List[RoomBuffer], int) -> bool
@@ -837,15 +833,31 @@ class MatrixServer(object):
 
         self._handle_room_info(response)
 
-        self.next_batch = response.next_batch
+        # Full sync response handle everything.
+        if isinstance(response, SyncResponse):
+            if self.client.should_upload_keys:
+                self.keys_upload()
 
-        if self.client.should_upload_keys:
-            self.keys_upload()
+            if self.client.should_query_keys and not self.keys_queried:
+                self.keys_query()
 
-        if self.client.should_query_keys and not self.keys_queried:
-            self.keys_query()
+            for room_buffer in self.room_buffers.values():
+                if room_buffer.unhandled_users:
+                    hook = W.hook_timer(1 * 100, 0, 0, "matrix_load_users_cb",
+                                        self.name)
+                    self.lazy_load_hook = hook
+                    break
 
-        self.schedule_sync()
+            self.next_batch = response.next_batch
+            self.schedule_sync()
+        else:
+            if not self.partial_sync_hook:
+                hook = W.hook_timer(1 * 100, 0, 0, "matrix_partial_sync_cb",
+                                    self.name)
+                self.partial_sync_hook = hook
+                self.busy = True
+                W.bar_item_update("buffer_modes")
+                W.bar_item_update("matrix_modes")
 
     def handle_transport_response(self, response):
         self.error(
@@ -877,7 +889,7 @@ class MatrixServer(object):
         elif isinstance(response, LoginResponse):
             self._handle_login(response)
 
-        elif isinstance(response, SyncResponse):
+        elif isinstance(response, (SyncResponse, PartialSyncResponse)):
             self._handle_sync(response)
 
         elif isinstance(response, RoomSendResponse):
@@ -1020,6 +1032,30 @@ def matrix_config_server_change_cb(server_name, option):
     server.update_option(option, option_name)
 
     return 1
+
+
+@utf8_decode
+def matrix_partial_sync_cb(server_name, remaining_calls):
+    start = time.time()
+    server = SERVERS[server_name]
+    W.unhook(server.partial_sync_hook)
+    server.partial_sync_hook = None
+
+    response = server.client.next_response(MAX_EVENTS)
+
+    while response:
+        server.handle_response(response)
+        current = time.time()
+        if current - start >= 0.1:
+            break
+        response = server.client.next_response(MAX_EVENTS)
+
+    if not server.partial_sync_hook:
+        server.busy = False
+        W.bar_item_update("buffer_modes")
+        W.bar_item_update("matrix_modes")
+
+    return W.WEECHAT_RC_OK
 
 
 @utf8_decode

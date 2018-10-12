@@ -816,6 +816,7 @@ class RoomBuffer(object):
     def backlog_pending(self, value):
         self._backlog_pending = value
         W.bar_item_update("buffer_modes")
+        W.bar_item_update("matrix_modes")
 
     @property
     def warning_prefix(self):
