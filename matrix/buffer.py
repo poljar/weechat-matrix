@@ -877,7 +877,7 @@ class RoomBuffer(object):
                 # the strings that are compared at every itteration.
                 # Because the search time get's increasingly longer we're
                 # going to add nicks later in a timer hook.
-                if ((len(self.room.users) - len(self.displayed_nicks)) > 500
+                if (len(self.displayed_nicks) > 100
                         and is_state):
                     self.unhandled_users.append(event.state_key)
                 else:
