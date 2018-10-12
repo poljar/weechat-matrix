@@ -879,7 +879,16 @@ class RoomBuffer(object):
                 # going to add nicks later in a timer hook.
                 if (len(self.displayed_nicks) > 100
                         and is_state):
-                    self.unhandled_users.append(event.state_key)
+                    # Always add users with a high power level
+                    try:
+                        user = self.room.users[event.state_key]
+                    except KeyError:
+                        self.unhandled_users.append(event.state_key)
+                    else:
+                        if user.power_level > 0:
+                            self.add_user(event.state_key, date, is_state)
+                        else:
+                            self.unhandled_users.append(event.state_key)
                 else:
                     self.add_user(event.state_key, date, is_state)
             else:
