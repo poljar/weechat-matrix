@@ -560,9 +560,6 @@ def matrix_olm_command_cb(data, buffer, args):
         if not parsed_args:
             return W.WEECHAT_RC_OK
 
-        if not parsed_args:
-            return W.WEECHAT_RC_OK
-
         if not server.client.olm:
             W.prnt(server.server_buffer, "{}matrix: Olm account isn't "
                    "loaded.".format(W.prefix("error")))
