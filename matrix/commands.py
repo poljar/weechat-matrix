@@ -356,7 +356,7 @@ def olm_info_command(server, args):
 
         for user_id in sorted(device_store.users):
             device_strings = []
-            for device in device_store[user_id].values():
+            for device in device_store.active_user_devices(user_id):
                 if filter_regex:
                     if (not filter_regex.search(user_id) and
                             not filter_regex.search(device.id)):
@@ -454,7 +454,9 @@ def olm_action_command(server, args, category, error_category, prefix, action):
     else:
         users = [x for x in device_store.users if args.user_filter in x]
 
-    user_devices = {user: device_store[user].values() for user in users}
+    user_devices = {
+        user: device_store.active_user_devices(user) for user in users
+    }
 
     if args.device_filter and args.device_filter != "*":
         filtered_user_devices = {}

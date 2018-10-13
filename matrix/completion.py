@@ -191,6 +191,17 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
     if user not in olm.device_store.users:
         return W.WEECHAT_RC_OK
 
+    for device in olm.device_store.active_user_devices(user):
+        W.hook_completion_list_add(
+            completion, device.id, 0, W.WEECHAT_LIST_POS_SORT
+        )
+
+    return W.WEECHAT_RC_OK
+
+
+    if user not in olm.device_store.users:
+        return W.WEECHAT_RC_OK
+
     for device in olm.device_store[user]:
         W.hook_completion_list_add(
             completion, device, 0, W.WEECHAT_LIST_POS_SORT
