@@ -34,6 +34,7 @@ from nio import (
     SyncResponse,
     PartialSyncResponse,
     ShareGroupSessionResponse,
+    KeysQueryResponse,
     KeysClaimResponse,
     TransportResponse,
     TransportType,
@@ -897,6 +898,9 @@ class MatrixServer(object):
 
         elif isinstance(response, RoomMessagesResponse):
             self.handle_backlog_response(response)
+
+        elif isinstance(response, KeysQueryResponse):
+            self.keys_queried = False
 
         elif isinstance(response, KeysClaimResponse):
             self.keys_claimed[response.room_id] = False
