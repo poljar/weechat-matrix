@@ -101,7 +101,15 @@ def room_buffer_input_cb(server_name, buffer, input_data):
 
 
 @utf8_decode
-def room_buffer_close_cb(data, buffer):
+def room_buffer_close_cb(server_name, buffer):
+    server = SERVERS[server_name]
+    room_buffer = server.find_room_from_ptr(buffer)
+
+    if room_buffer:
+        room_id = room_buffer.room.room_id
+        server.buffers.pop(room_id, None)
+        server.room_buffers.pop(room_id, None)
+
     return W.WEECHAT_RC_OK
 
 
