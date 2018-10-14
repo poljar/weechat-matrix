@@ -99,6 +99,10 @@ class WeechatCommandParser(object):
         delete_parser = subparsers.add_parser("delete")
         delete_parser.add_argument("device_id")
 
+        name_parser = subparsers.add_parser("set-name")
+        name_parser.add_argument("device_id")
+        name_parser.add_argument("device_name", nargs="*")
+
         return WeechatCommandParser._run_parser(parser, args)
 
     @staticmethod
@@ -307,15 +311,19 @@ def hook_commands():
     W.hook_command(
         # Command name and short description
         "devices",
-        "list or delete matrix devices",
+        "list, delete or rename matrix devices",
         # Synopsis
         ("list ||"
-         "delete <device-id>"),
+         "delete <device-id> ||"
+         "set-name <name>"
+         ),
         # Description
-        ("device-id: device id of the device to delete"),
+        ("device-id: device id of the device to delete\n"
+         "     name: new device name to set\n"),
         # Completions
         ("list ||"
-         "delete %(matrix_own_devices)"),
+         "delete %(matrix_own_devices) ||"
+         "set-name %(matrix_own_devices)"),
         # Callback
         "matrix_devices_command_cb",
         "",
@@ -636,6 +644,9 @@ def matrix_devices_command_cb(data, buffer, args):
                 server.devices()
             elif parsed_args.subcommand == "delete":
                 server.delete_device(parsed_args.device_id)
+            elif parsed_args.subcommand == "set-name":
+                new_name = " ".join(parsed_args.device_name).strip("\"")
+                server.rename_device(parsed_args.device_id, new_name)
 
             return W.WEECHAT_RC_OK
 

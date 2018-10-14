@@ -37,6 +37,7 @@ from nio import (
     KeysQueryResponse,
     KeysClaimResponse,
     DevicesResponse,
+    UpdateDeviceResponse,
     DeleteDevicesAuthResponse,
     DeleteDevicesResponse,
     TransportResponse,
@@ -600,6 +601,14 @@ class MatrixServer(object):
         self.send_or_queue(request)
         return
 
+    def rename_device(self, device_id, display_name):
+        content = {
+            "display_name": display_name
+        }
+
+        _, request = self.client.update_device(device_id, content)
+        self.send_or_queue(request)
+
     def room_send_state(self, room_buffer, body, event_type):
         if room_buffer.room.encrypted:
             return
@@ -971,6 +980,9 @@ class MatrixServer(object):
 
         elif isinstance(response, DevicesResponse):
             self.handle_devices_response(response)
+
+        elif isinstance(response, UpdateDeviceResponse):
+            self.info("Device name successfully updated")
 
         elif isinstance(response, DeleteDevicesAuthResponse):
             self.handle_delete_device_auth(response)
