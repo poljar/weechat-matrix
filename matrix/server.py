@@ -716,8 +716,8 @@ class MatrixServer(object):
         _, request = self.client.keys_upload()
         self.send_or_queue(request)
 
-    def keys_query(self):
-        _, request = self.client.keys_query()
+    def keys_query(self, full=False):
+        _, request = self.client.keys_query(full)
         self.keys_queried = True
         self.send_or_queue(request)
 
@@ -903,7 +903,11 @@ class MatrixServer(object):
             if self.client.should_upload_keys:
                 self.keys_upload()
 
-            if self.client.should_query_keys and not self.keys_queried:
+            # Query the keys for all users in the encrypted rooms after our
+            # initial sync
+            if not self.next_batch and not self.keys_queried:
+                self.keys_query(True)
+            elif self.client.should_query_keys and not self.keys_queried:
                 self.keys_query()
 
             for room_buffer in self.room_buffers.values():
