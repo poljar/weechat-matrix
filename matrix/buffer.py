@@ -1067,12 +1067,7 @@ class RoomBuffer(object):
         elif isinstance(event, PowerLevelsEvent):
             self._handle_power_level(event)
         elif isinstance(event, RoomEncryptionEvent):
-            message = (
-                "This room is encrypted, encryption is "
-                "currently unsuported. Message sending is disabled for "
-                "this room."
-            )
-            self.weechat_buffer.error(message)
+            pass
 
     def handle_timeline_event(self, event):
         # TODO this should be done for every messagetype that gets printed in
