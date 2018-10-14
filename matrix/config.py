@@ -41,6 +41,9 @@ class ServerBufferType(Enum):
     INDEPENDENT = 2
 
 
+nio.logger_group.level = logbook.ERROR
+
+
 class Option(
     namedtuple(
         "Option",
@@ -371,6 +374,7 @@ class MatrixConfig(WeechatConfig):
                 "all",
                 "Debugging category",
                 logbook_category,
+                config_log_category_cb,
             ),
             Option(
                 "debug_buffer",
