@@ -37,6 +37,8 @@ from nio import (
     KeysQueryResponse,
     KeysClaimResponse,
     DevicesResponse,
+    DeleteDevicesAuthResponse,
+    DeleteDevicesResponse,
     TransportResponse,
     TransportType,
     RoomMessagesResponse,
@@ -44,6 +46,9 @@ from nio import (
     EncryptionError,
     GroupEncryptionError,
     OlmTrustError,
+    ErrorResponse,
+    SyncError,
+    LoginError,
 )
 
 from . import globals as G
@@ -236,6 +241,8 @@ class MatrixServer(object):
         self.send_fd_hook = None                         # type: Optional[str]
         self.send_buffer = b""                           # type: bytes
         self.device_check_timestamp = None               # type: Optional[int]
+
+        self.device_deletion_queue = dict()
 
         self.own_message_queue = dict()  # type: Dict[str, OwnMessage]
         self.encryption_queue = defaultdict(deque)  \
@@ -587,8 +594,10 @@ class MatrixServer(object):
         _, request = self.client.devices()
         self.send_or_queue(request)
 
-    def delete_device(self, device_id):
-        # TODO implement this
+    def delete_device(self, device_id, auth=None):
+        uuid, request = self.client.delete_devices([device_id], auth)
+        self.device_deletion_queue[uuid] = device_id
+        self.send_or_queue(request)
         return
 
     def room_send_state(self, room_buffer, body, event_type):
@@ -906,15 +915,30 @@ class MatrixServer(object):
                 W.bar_item_update("buffer_modes")
                 W.bar_item_update("matrix_modes")
 
-    def handle_transport_response(self, response):
-        self.error(
-            ("Error with response of type type: {}, " "error code {}").format(
-                response.request_info.type, response.status_code
-            )
-        )
+    def handle_delete_device_auth(self, response):
+        device_id = self.device_deletion_queue.pop(response.uuid, None)
 
-        # TODO better error handling.
-        if response.request_info.type in (RequestType.sync, RequestType.login):
+        if not device_id:
+            return
+
+        for flow in response.flows:
+            if "m.login.password" in flow["stages"]:
+                session = response.session
+                auth = {
+                    "type": "m.login.password",
+                    "session": session,
+                    "user": self.client.user_id,
+                    "password": self.config.password
+                }
+                self.delete_device(device_id, auth)
+                return
+
+        self.error("No supported auth method for device deletion found.")
+
+    def handle_error_response(self, response):
+        self.error("Error: {}".format(str(response)))
+
+        if isinstance(response, (SyncError, LoginError)):
             self.disconnect()
 
     def handle_response(self, response):
@@ -930,8 +954,8 @@ class MatrixServer(object):
         self.lag_done = True
         W.bar_item_update("lag")
 
-        if isinstance(response, TransportResponse):
-            self.handle_transport_response(response)
+        if isinstance(response, ErrorResponse):
+            self.handle_error_response(response)
 
         elif isinstance(response, LoginResponse):
             self._handle_login(response)
@@ -947,6 +971,12 @@ class MatrixServer(object):
 
         elif isinstance(response, DevicesResponse):
             self.handle_devices_response(response)
+
+        elif isinstance(response, DeleteDevicesAuthResponse):
+            self.handle_delete_device_auth(response)
+
+        elif isinstance(response, DeleteDevicesResponse):
+            self.info("Device successfully deleted")
 
         elif isinstance(response, KeysQueryResponse):
             self.keys_queried = False

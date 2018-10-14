@@ -635,7 +635,7 @@ def matrix_devices_command_cb(data, buffer, args):
             if not parsed_args.subcommand or parsed_args.subcommand == "list":
                 server.devices()
             elif parsed_args.subcommand == "delete":
-                server.delete_device(parsed_args.delete_device)
+                server.delete_device(parsed_args.device_id)
 
             return W.WEECHAT_RC_OK
 
