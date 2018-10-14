@@ -380,7 +380,7 @@ def olm_info_command(server, args):
     def print_devices(
         device_store,
         filter_regex,
-        device_category="Device",
+        device_category="All",
         predicate=None,
     ):
         user_strings = []
@@ -424,23 +424,18 @@ def olm_info_command(server, args):
             W.prnt(server.server_buffer, message)
             return
 
-        W.prnt(server.server_buffer,
-               "{}matrix: {} devices:\n".format(
-                   W.prefix("network"),
-                   device_category
-               ))
+        server.info("{} devices:\n".format(device_category))
         W.prnt(server.server_buffer, "\n".join(user_strings))
 
     olm = server.client.olm
 
     if args.category == "private":
         fp_key = partition_key(olm.account.identity_keys["ed25519"])
-        message = ("{prefix}matrix: Identity keys:\n"
+        message = ("Identity keys:\n"
                    "  - User:        {user_color}{user}{ncolor}\n"
                    "  - Device ID:   {device_color}{device_id}{ncolor}\n"
                    "  - Device key:  {key_color}{fp_key}{ncolor}\n"
                    "").format(
-                       prefix=W.prefix("network"),
                        user_color=W.color("chat_self"),
                        ncolor=W.color("reset"),
                        user=olm.user_id,
@@ -448,7 +443,7 @@ def olm_info_command(server, args):
                        device_id=olm.device_id,
                        key_color=W.color("chat_server"),
                        fp_key=fp_key)
-        W.prnt(server.server_buffer, message)
+        server.info(message)
 
     elif args.category == "all":
         print_devices(olm.device_store, args.filter)
