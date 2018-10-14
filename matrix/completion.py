@@ -199,6 +199,29 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
     return W.WEECHAT_RC_OK
 
 
+@utf8_decode
+def matrix_own_devices_completion_cb(
+    data,
+    completion_item,
+    buffer,
+    completion
+):
+    server = server_from_buffer(buffer)
+
+    if not server:
+        return W.WEECHAT_RC_OK
+
+    olm = server.client.olm
+
+    if not olm:
+        return W.WEECHAT_RC_OK
+
+    W.hook_completion_list_add(
+        completion, olm.device_id, 0, W.WEECHAT_LIST_POS_SORT
+    )
+
+    user = olm.user_id
+
     if user not in olm.device_store.users:
         return W.WEECHAT_RC_OK
 
@@ -290,5 +313,12 @@ def init_completion():
         "matrix_users",
         "Matrix user id completion",
         "matrix_user_completion_cb",
+        "",
+    )
+
+    W.hook_completion(
+        "matrix_own_devices",
+        "Matrix own devices completion",
+        "matrix_own_devices_completion_cb",
         "",
     )

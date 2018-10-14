@@ -91,6 +91,17 @@ class WeechatCommandParser(object):
         return WeechatCommandParser._run_parser(parser, args)
 
     @staticmethod
+    def devices(args):
+        parser = WeechatArgParse(prog="devices")
+        subparsers = parser.add_subparsers(dest="subcommand")
+        subparsers.add_parser("list")
+
+        delete_parser = subparsers.add_parser("delete")
+        delete_parser.add_argument("device_id")
+
+        return WeechatCommandParser._run_parser(parser, args)
+
+    @staticmethod
     def olm(args):
         parser = WeechatArgParse(prog="olm")
         subparsers = parser.add_subparsers(dest="subcommand")
@@ -290,6 +301,23 @@ def hook_commands():
         "",
         # Callback
         "matrix_part_command_cb",
+        "",
+    )
+
+    W.hook_command(
+        # Command name and short description
+        "devices",
+        "list or delete matrix devices",
+        # Synopsis
+        ("list ||"
+         "delete <device-id>"),
+        # Description
+        ("device-id: device id of the device to delete"),
+        # Completions
+        ("list ||"
+         "delete %(matrix_own_devices)"),
+        # Callback
+        "matrix_devices_command_cb",
         "",
     )
 
@@ -589,6 +617,29 @@ def matrix_olm_command_cb(data, buffer, args):
             return command(server, data, buffer, args)
 
     W.prnt("", "{prefix}matrix: command \"olm\" must be executed on a "
+           "matrix buffer (server or channel)".format(
+               prefix=W.prefix("error")
+           ))
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_devices_command_cb(data, buffer, args):
+    for server in SERVERS.values():
+        if buffer in server.buffers.values() or buffer == server.server_buffer:
+            parsed_args = WeechatCommandParser.devices(args)
+            if not parsed_args:
+                return W.WEECHAT_RC_OK
+
+            if not parsed_args.subcommand or parsed_args.subcommand == "list":
+                server.devices()
+            elif parsed_args.subcommand == "delete":
+                server.delete_device(parsed_args.delete_device)
+
+            return W.WEECHAT_RC_OK
+
+    W.prnt("", "{prefix}matrix: command \"devices\" must be executed on a "
            "matrix buffer (server or channel)".format(
                prefix=W.prefix("error")
            ))

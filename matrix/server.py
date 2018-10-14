@@ -36,6 +36,7 @@ from nio import (
     ShareGroupSessionResponse,
     KeysQueryResponse,
     KeysClaimResponse,
+    DevicesResponse,
     TransportResponse,
     TransportType,
     RoomMessagesResponse,
@@ -582,6 +583,14 @@ class MatrixServer(object):
 
         W.prnt(self.server_buffer, msg)
 
+    def devices(self):
+        _, request = self.client.devices()
+        self.send_or_queue(request)
+
+    def delete_device(self, device_id):
+        # TODO implement this
+        return
+
     def room_send_state(self, room_buffer, body, event_type):
         if room_buffer.room.encrypted:
             return
@@ -730,6 +739,43 @@ class MatrixServer(object):
         room_buffer = self.find_room_from_id(room_id)
 
         room_buffer.handle_backlog(response)
+
+    def handle_devices_response(self, response):
+        if not response.devices:
+            m = "{}{}: No devices found for this account".format(
+                    W.prefix("error"),
+                    SCRIPT_NAME)
+            W.prnt(self.server_buffer, m)
+
+        header = (W.prefix("network") + SCRIPT_NAME + ": devices for "
+                  "server {}{}{}:\n"
+                  "  Device ID         Device Name                  "
+                  "Last Seen").format(
+                      W.color("chat_server"),
+                      self.name,
+                      W.color("reset")
+                  )
+        W.prnt(self.server_buffer, header)
+
+        lines = []
+        for device in response.devices:
+            last_seen = "{ip} @ {date}".format(
+                ip=device.last_seen_ip,
+                date=device.last_seen_date.strftime("%Y/%m/%d %H:%M")
+            )
+            device_color = ("chat_self" if device.id == self.device_id else
+                            W.info_get("nick_color_name", device.id))
+            bold = W.color("bold") if device.id == self.device_id else ""
+            line = "  {}{}{:<18}{}{:<29}{:<}".format(
+                bold,
+                W.color(device_color),
+                device.id,
+                W.color("resetcolor"),
+                device.display_name,
+                last_seen
+                )
+            lines.append(line)
+        W.prnt(self.server_buffer, "\n".join(lines))
 
     def _handle_login(self, response):
         self.access_token = response.access_token
@@ -898,6 +944,9 @@ class MatrixServer(object):
 
         elif isinstance(response, RoomMessagesResponse):
             self.handle_backlog_response(response)
+
+        elif isinstance(response, DevicesResponse):
+            self.handle_devices_response(response)
 
         elif isinstance(response, KeysQueryResponse):
             self.keys_queried = False
