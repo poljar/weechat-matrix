@@ -765,9 +765,9 @@ class MatrixServer(object):
                     SCRIPT_NAME)
             W.prnt(self.server_buffer, m)
 
-        header = (W.prefix("network") + SCRIPT_NAME + ": devices for "
+        header = (W.prefix("network") + SCRIPT_NAME + ": Devices for "
                   "server {}{}{}:\n"
-                  "  Device ID         Device Name                  "
+                  "  Device ID         Device Name                       "
                   "Last Seen").format(
                       W.color("chat_server"),
                       self.name,
@@ -784,7 +784,7 @@ class MatrixServer(object):
             device_color = ("chat_self" if device.id == self.device_id else
                             W.info_get("nick_color_name", device.id))
             bold = W.color("bold") if device.id == self.device_id else ""
-            line = "  {}{}{:<18}{}{:<29}{:<}".format(
+            line = "  {}{}{:<18}{}{:<34}{:<}".format(
                 bold,
                 W.color(device_color),
                 device.id,
