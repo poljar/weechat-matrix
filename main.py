@@ -223,7 +223,7 @@ def try_ssl_handshake(server):
 
             return False
 
-        except (ssl.SSLError, socket.error) as error:
+        except (ssl.SSLError, ssl.CertificateError, socket.error) as error:
             try:
                 str_error = error.reason if error.reason else "Unknown error"
             except AttributeError:
