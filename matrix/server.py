@@ -852,15 +852,12 @@ class MatrixServer(object):
             room_buffer = self.find_room_from_id(room_id)
             room_buffer.handle_left_room(info)
 
-        should_lazy_hook = False
-
         for room_id, info in response.rooms.join.items():
             if room_id not in self.buffers:
                 self.create_room_buffer(room_id, info.timeline.prev_batch)
 
             room_buffer = self.find_room_from_id(room_id)
             room_buffer.handle_joined_room(info)
-
 
     def add_unhandled_users(self, rooms, n):
         # type: (List[RoomBuffer], int) -> bool
@@ -912,9 +909,10 @@ class MatrixServer(object):
 
             for room_buffer in self.room_buffers.values():
                 if room_buffer.unhandled_users:
-                    hook = W.hook_timer(1 * 100, 0, 0, "matrix_load_users_cb",
-                                        self.name)
-                    self.lazy_load_hook = hook
+                    if not self.lazy_load_hook:
+                        hook = W.hook_timer(1 * 1000, 0, 0,
+                                            "matrix_load_users_cb", self.name)
+                        self.lazy_load_hook = hook
                     break
 
             self.next_batch = response.next_batch
