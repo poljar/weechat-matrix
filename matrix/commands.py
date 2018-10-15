@@ -754,8 +754,8 @@ def hook_page_up():
 def matrix_command_buf_clear_cb(data, buffer, command):
     for server in SERVERS.values():
         if buffer in server.buffers.values():
-            room_id = key_from_value(server.buffers, buffer)
-            server.rooms[room_id].prev_batch = server.next_batch
+            room_buffer = server.find_room_from_ptr(buffer)
+            room_buffer.room.prev_batch = server.next_batch
 
             return W.WEECHAT_RC_OK
 
