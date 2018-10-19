@@ -17,6 +17,7 @@
 
 from __future__ import unicode_literals
 
+import os
 import socket
 import ssl
 import textwrap
@@ -143,6 +144,10 @@ def wrap_socket(server, file_descriptor):
 
     temp_socket = socket.fromfd(file_descriptor, socket.AF_INET,
                                 socket.SOCK_STREAM)
+
+    # fromfd() duplicates the file descriptor, we can close the one we got from
+    # weechat now since we use the one from our socket when calling hook_fd()
+    os.close(file_descriptor)
 
     # For python 2.7 wrap_socket() doesn't work with sockets created from an
     # file descriptor because fromfd() doesn't return a wrapped socket, the bug
