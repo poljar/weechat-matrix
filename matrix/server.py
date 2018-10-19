@@ -459,8 +459,12 @@ class MatrixServer(object):
         if self.socket:
             try:
                 self.socket.shutdown(socket.SHUT_RDWR)
-                self.socket.close()
             except socket.error:
+                pass
+
+            try:
+                self.socket.close()
+            except OSError:
                 pass
 
     def disconnect(self, reconnect=True):
