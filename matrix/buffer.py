@@ -33,6 +33,7 @@ from nio import (
     RoomMessage,
     RoomMessageEmote,
     RoomMessageMedia,
+    RoomEncryptedMedia,
     RoomMessageNotice,
     RoomMessageText,
     RoomMessageUnknown,
@@ -1143,6 +1144,31 @@ class RoomBuffer(object):
 
             description = "/{}".format(event.body) if event.body else ""
             data = "{url}{desc}".format(url=url, desc=description)
+
+            extra_prefix = (self.warning_prefix if event.decrypted
+                            and not event.verified else "")
+
+            self.weechat_buffer.message(
+                nick, data, date, self.get_event_tags(event), extra_prefix
+            )
+
+        elif isinstance(event, RoomEncryptedMedia):
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.server_timestamp)
+            http_url = Api.encrypted_mxc_to_plumb(
+                event.url,
+                event.key["k"],
+                event.hashes["sha256"],
+                event.iv
+            )
+            url = http_url if http_url else event.url
+
+            description = "{}".format(event.body) if event.body else "file"
+            data = ("{del_color}<{ncolor}{desc}{del_color}>{ncolor} "
+                    "{del_color}[{ncolor}{url}{del_color}]{ncolor}").format(
+                        del_color=W.color("chat_delimiters"),
+                        ncolor=W.color("reset"),
+                        desc=description, url=url)
 
             extra_prefix = (self.warning_prefix if event.decrypted
                             and not event.verified else "")
