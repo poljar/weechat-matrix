@@ -94,7 +94,7 @@ def room_buffer_input_cb(server_name, buffer, input_data):
         server.room_send_message(room_buffer, formatted_data, "m.text")
     except OlmTrustError as e:
         m = ("Untrusted devices found in room: {}".format(e))
-        server.error(m)
+        room_buffer.error(m)
         pass
 
     return W.WEECHAT_RC_OK
