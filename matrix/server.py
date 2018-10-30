@@ -1035,6 +1035,17 @@ class MatrixServer(object):
             W.bar_item_update("buffer_modes")
             W.bar_item_update("matrix_modes")
 
+            for user_id, device_dict in response.changed.items():
+                for device in device_dict.values():
+                    message = {
+                        "user_id": user_id,
+                        "device_id": device.id,
+                        "ed25519": device.ed25519,
+                        "curve25519": device.curve25519,
+                        "deleted": str(device.deleted)
+                    }
+                    W.hook_hsignal_send("matrix_device_changed", message)
+
         elif isinstance(response, JoinedMembersResponse):
             self.member_request_list.remove(response.room_id)
             room_buffer = self.room_buffers[response.room_id]
