@@ -847,6 +847,10 @@ class RoomBuffer(object):
             # yet to come, so do nothing
             return
 
+        # User is already added don't add him again.
+        if user_id in self.displayed_nicks:
+            return
+
         short_name = shorten_sender(user.user_id)
 
         # TODO handle this special case for discord bridge users and
