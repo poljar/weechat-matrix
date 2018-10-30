@@ -1062,7 +1062,8 @@ class MatrixServer(object):
                 )
             except OlmTrustError as e:
                 m = ("Untrusted devices found in room: {}".format(e))
-                self.error(m)
+                room_buffer = self.find_room_from_id(response.room_id)
+                room_buffer.error(m)
                 return
 
             self.send(request)
