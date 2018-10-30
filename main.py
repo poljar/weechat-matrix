@@ -461,6 +461,35 @@ class WeechatHandler(StreamHandler):
         W.prnt(buf, item)
 
 
+def lazy_fetch_members_signal(_, _signal, buffer_ptr):
+    """ Fetch room members on a buffer switch signal.
+    This function is called every time we switch a buffer. The pointer of
+    the new buffer is given to us by weechat. If it is one of our room buffers
+    we check if the members for the room aren't fetched and fetch them now if
+    they aren't.
+    """
+    for server in SERVERS.values():
+        if buffer_ptr == server.server_buffer:
+            return W.WEECHAT_RC_OK
+
+        if buffer_ptr not in server.buffers.values():
+            continue
+
+        room_buffer = server.find_room_from_ptr(buffer_ptr)
+        if not room_buffer:
+            continue
+
+        if room_buffer.members_fetched:
+            return W.WEECHAT_RC_OK
+
+        room_id = room_buffer.room.room_id
+        server.get_joined_members(room_id)
+
+        break
+
+    return W.WEECHAT_RC_OK
+
+
 if __name__ == "__main__":
     if W.register(WEECHAT_SCRIPT_NAME, WEECHAT_SCRIPT_AUTHOR,
                   WEECHAT_SCRIPT_VERSION, WEECHAT_SCRIPT_LICENSE,
@@ -482,6 +511,8 @@ if __name__ == "__main__":
         hook_commands()
         init_bar_items()
         init_completion()
+
+        hook = W.hook_signal("buffer_switch", "lazy_fetch_members_signal", "")
 
         if not SERVERS:
             create_default_server(G.CONFIG)

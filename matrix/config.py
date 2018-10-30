@@ -385,6 +385,17 @@ class MatrixConfig(WeechatConfig):
                 "off",
                 ("Use a separate buffer for debug logs."),
             ),
+            Option(
+                "lazy_load_room_users",
+                "boolean",
+                "",
+                0,
+                0,
+                "off",
+                ("If on, room users wont be loaded background proactively "
+                 "they will be loaded when the buffer becomes active. This "
+                 "only affects non encrypted rooms."),
+            ),
         ]
 
         color_options = [

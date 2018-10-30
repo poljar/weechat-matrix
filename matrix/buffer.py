@@ -805,6 +805,7 @@ class RoomBuffer(object):
         self.prev_batch = prev_batch
         self.joined = True
         self.leave_event_id = None  # type: Optional[str]
+        self.members_fetched = False
         self.unhandled_users = []   # type: List[str]
 
         buffer_name = "{}.{}".format(server_name, room.room_id)

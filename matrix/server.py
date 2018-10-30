@@ -252,6 +252,7 @@ class MatrixServer(object):
             # type: DefaultDict[str, Deque[EncrytpionQueueItem]]
         self.backlog_queue = dict()      # type: Dict[str, str]
 
+        self.member_request_list = []         # type: List[str]
         self.rooms_with_missing_members = []  # type: List[str]
         self.lazy_load_hook = None       # type: Optional[str]
         self.partial_sync_hook = None    # type: Optional[str]
@@ -483,6 +484,7 @@ class MatrixServer(object):
 
         self.send_buffer = b""
         self.transport_type = None
+        self.member_request_list.clear()
 
         if self.client:
             try:
@@ -733,6 +735,10 @@ class MatrixServer(object):
         self.send_or_queue(request)
 
     def get_joined_members(self, room_id):
+        if room_id in self.member_request_list:
+            return
+
+        self.member_request_list.append(room_id)
         _, request = self.client.joined_members(room_id)
         self.send(request)
 
@@ -928,10 +934,14 @@ class MatrixServer(object):
                 self.keys_query()
 
             for room_buffer in self.room_buffers.values():
+                # It's our initial sync, we need to fetch room members, so add
+                # the room to the missing members queue.
                 if not self.next_batch:
-                    self.rooms_with_missing_members.append(
-                        room_buffer.room.room_id
-                    )
+                    if (not G.CONFIG.network.lazy_load_room_users
+                            or room_buffer.room.encrypted):
+                        self.rooms_with_missing_members.append(
+                            room_buffer.room.room_id
+                        )
                 if room_buffer.unhandled_users:
                     self._hook_lazy_user_adding()
                     break
@@ -1023,12 +1033,14 @@ class MatrixServer(object):
             self.keys_queried = False
 
         elif isinstance(response, JoinedMembersResponse):
+            self.member_request_list.remove(response.room_id)
             room_buffer = self.room_buffers[response.room_id]
             users = [user.user_id for user in response.members]
 
             # Don't add the users directly use the lazy load hook.
             room_buffer.unhandled_users += users
             self._hook_lazy_user_adding()
+            room_buffer.members_fetched = True
 
             # Fetch the users for the next room.
             if self.rooms_with_missing_members:
