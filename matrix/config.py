@@ -396,6 +396,18 @@ class MatrixConfig(WeechatConfig):
                  "they will be loaded when the buffer becomes active. This "
                  "only affects non encrypted rooms."),
             ),
+            Option(
+                "max_nicklist_users",
+                "integer",
+                "",
+                100,
+                20000,
+                "5000",
+                ("Limit the number of users that are added to the nicklist. "
+                 "Active users and users with a higher power level are always."
+                 " Inactive users will be removed from the nicklist after a "
+                 "day of inactivity."),
+            ),
         ]
 
         color_options = [

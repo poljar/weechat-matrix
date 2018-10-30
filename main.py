@@ -34,9 +34,14 @@ from logbook import Logger, StreamHandler
 from nio import RemoteProtocolError, RemoteTransportError, TransportType
 
 from matrix import globals as G
-from matrix.bar_items import (init_bar_items, matrix_bar_item_buffer_modes,
-                              matrix_bar_item_lag, matrix_bar_item_name,
-                              matrix_bar_item_plugin)
+from matrix.bar_items import (
+    init_bar_items,
+    matrix_bar_item_buffer_modes,
+    matrix_bar_item_lag,
+    matrix_bar_item_name,
+    matrix_bar_item_plugin,
+    matrix_bar_nicklist_count
+)
 from matrix.buffer import room_buffer_close_cb, room_buffer_input_cb
 # Weechat searches for the registered callbacks in the scope of the main script
 # file, import the callbacks here so weechat can find them.

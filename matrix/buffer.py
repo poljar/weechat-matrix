@@ -692,7 +692,7 @@ class WeechatChannelBuffer(object):
         message = self._membership_message(user, "invite")
         self.print_date_tags(message, date, tags + (extra_tags or []))
 
-    def _remove_user_from_nicklist(self, user):
+    def remove_user_from_nicklist(self, user):
         # type: (WeechatUser) -> None
         nick_pointer = W.nicklist_search_nick(self._ptr, "", user.nick)
 
@@ -702,7 +702,7 @@ class WeechatChannelBuffer(object):
     def _leave(self, nick, date, message, leave_type, extra_tags=None):
         # type: (str, int, bool, str, List[str]) -> None
         user = self._get_user(nick)
-        self._remove_user_from_nicklist(user)
+        self.remove_user_from_nicklist(user)
 
         if len(self.users) <= 2:
             W.buffer_set(self._ptr, "localvar_set_type", "private")
@@ -807,6 +807,7 @@ class RoomBuffer(object):
         self.leave_event_id = None  # type: Optional[str]
         self.members_fetched = False
         self.unhandled_users = []   # type: List[str]
+        self.inactive_users = []
 
         buffer_name = "{}.{}".format(server_name, room.room_id)
 
@@ -840,7 +841,11 @@ class RoomBuffer(object):
 
         return user_id
 
-    def add_user(self, user_id, date, is_state):
+    def add_user(self, user_id, date, is_state, force_add=False):
+        # User is already added don't add him again.
+        if user_id in self.displayed_nicks:
+            return
+
         try:
             user = self.room.users[user_id]
         except KeyError:
@@ -848,9 +853,24 @@ class RoomBuffer(object):
             # yet to come, so do nothing
             return
 
-        # User is already added don't add him again.
-        if user_id in self.displayed_nicks:
-            return
+        # Adding users to the nicklist is a O(1) + search time
+        # operation (the nicks are added to a linked list sorted).
+        # The search time is O(N * min(a,b)) where N is the number
+        # of nicks already added and a/b are the length of
+        # the strings that are compared at every itteration.
+        # Because the search time get's increasingly longer we're
+        # going to stop adding inactive users, they will be lazily added if
+        # they become active.
+        if is_state and not force_add and user.power_level <= 0:
+            if (len(self.displayed_nicks) >=
+                    G.CONFIG.network.max_nicklist_users):
+                self.inactive_users.append(user_id)
+                return
+
+        try:
+            self.inactive_users.remove(user_id)
+        except ValueError:
+            pass
 
         short_name = shorten_sender(user.user_id)
 
@@ -882,28 +902,13 @@ class RoomBuffer(object):
         date = server_ts_to_weechat(event.server_timestamp)
 
         if event.content["membership"] == "join":
-            if event.state_key not in self.displayed_nicks:
-                # Adding users to the nicklist is a O(1) + search time
-                # operation (the nicks are added to a linked list sorted).
-                # The search time is O(N * min(a,b)) where N is the number
-                # of nicks already added and a/b are the length of
-                # the strings that are compared at every itteration.
-                # Because the search time get's increasingly longer we're
-                # going to add nicks later in a timer hook.
-                if (len(self.displayed_nicks) > 100
-                        and is_state):
-                    # Always add users with a high power level
-                    try:
-                        user = self.room.users[event.state_key]
-                    except KeyError:
-                        self.unhandled_users.append(event.state_key)
-                    else:
-                        if user.power_level > 0:
-                            self.add_user(event.state_key, date, is_state)
-                        else:
-                            self.unhandled_users.append(event.state_key)
-                else:
-                    self.add_user(event.state_key, date, is_state)
+            if (event.state_key not in self.displayed_nicks
+                    and event.state_key not in self.inactive_users):
+                if len(self.room.users) > 100:
+                    self.unhandled_users.append(event.state_key)
+                    return
+
+                self.add_user(event.state_key, date, is_state)
             else:
                 # TODO print out profile changes
                 return
@@ -1062,7 +1067,7 @@ class RoomBuffer(object):
 
                 # There is no way to change the group of a user without
                 # removing him from the nicklist
-                self.weechat_buffer._remove_user_from_nicklist(user)
+                self.weechat_buffer.remove_user_from_nicklist(user)
                 self.weechat_buffer._add_user_to_nicklist(user)
 
     def handle_state_event(self, event):
@@ -1087,7 +1092,7 @@ class RoomBuffer(object):
                 except ValueError:
                     pass
 
-                self.add_user(event.sender, 0, True)
+                self.add_user(event.sender, 0, True, True)
 
         if isinstance(event, RoomMemberEvent):
             self.handle_membership_events(event, False)

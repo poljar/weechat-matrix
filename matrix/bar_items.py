@@ -117,9 +117,26 @@ def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
     return ""
 
 
+@utf8_decode
+def matrix_bar_nicklist_count(data, item, window, buffer, extra_info):
+    # pylint: disable=unused-argument
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            room_buffer = server.find_room_from_ptr(buffer)
+            room = room_buffer.room
+            return str(len(room.users))
+
+    return ""
+
+
 def init_bar_items():
     W.bar_item_new("(extra)buffer_plugin", "matrix_bar_item_plugin", "")
     W.bar_item_new("(extra)buffer_name", "matrix_bar_item_name", "")
     W.bar_item_new("(extra)lag", "matrix_bar_item_lag", "")
+    W.bar_item_new(
+        "(extra)buffer_nicklist_count",
+        "matrix_bar_nicklist_count",
+        ""
+    )
     W.bar_item_new("(extra)buffer_modes", "matrix_bar_item_buffer_modes", "")
     W.bar_item_new("(extra)matrix_modes", "matrix_bar_item_buffer_modes", "")

@@ -252,6 +252,7 @@ class MatrixServer(object):
             # type: DefaultDict[str, Deque[EncrytpionQueueItem]]
         self.backlog_queue = dict()      # type: Dict[str, str]
 
+        self.user_gc_time = time.time()    # type: float
         self.member_request_list = []         # type: List[str]
         self.rooms_with_missing_members = []  # type: List[str]
         self.lazy_load_hook = None       # type: Optional[str]
@@ -1101,6 +1102,53 @@ class MatrixServer(object):
         room_buffer = self.room_buffers[room_id]
         return room_buffer
 
+    def garbage_collect_users(self):
+        """ Remove inactive users.
+        This tries to keep the number of users added to the nicklist less than
+            the configuration option matrix.network.max_nicklist_users. It
+            removes users that have not been active for a day until there are
+            less than max_nicklist_users or no users are left for removal.
+            It never removes users that have a bigger power level than the
+            default one.
+        This function is run every hour by the server timer callback"""
+
+        now = time.time()
+        self.user_gc_time = now
+
+        def day_passed(t1, t2):
+            return (t2 - t1) > 86400
+
+        for room_buffer in self.room_buffers.values():
+            to_remove = max(
+                (len(room_buffer.displayed_nicks) -
+                    G.CONFIG.network.max_nicklist_users),
+                0
+            )
+
+            if not to_remove:
+                continue
+
+            removed = 0
+            removed_user_ids = []
+
+            for user_id, nick in room_buffer.displayed_nicks.items():
+                user = room_buffer.weechat_buffer.users[nick]
+
+                if (not user.speaking_time or
+                        day_passed(user.speaking_time, now)):
+                    room_buffer.weechat_buffer.part(nick, 0, False)
+                    removed_user_ids.append(user_id)
+                    removed += 1
+
+                if removed >= to_remove:
+                    break
+
+            for user_id in removed_user_ids:
+                W.prnt("", "Garbage collected {}".format(user_id))
+                del room_buffer.displayed_nicks[user_id]
+
+            pass
+
     def buffer_merge(self):
         if not self.server_buffer:
             return
@@ -1267,8 +1315,8 @@ def matrix_timer_cb(server_name, remaining_calls):
         }
         server.sync(timeout, sync_filter)
 
-    if not server.next_batch:
-        return W.WEECHAT_RC_OK
+    if current_time > (server.user_gc_time + 3600):
+        server.garbage_collect_users()
 
     return W.WEECHAT_RC_OK
 
