@@ -1032,6 +1032,8 @@ class MatrixServer(object):
 
         elif isinstance(response, KeysQueryResponse):
             self.keys_queried = False
+            W.bar_item_update("buffer_modes")
+            W.bar_item_update("matrix_modes")
 
         elif isinstance(response, JoinedMembersResponse):
             self.member_request_list.remove(response.room_id)
