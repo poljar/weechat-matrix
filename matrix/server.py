@@ -485,7 +485,7 @@ class MatrixServer(object):
 
         self.send_buffer = b""
         self.transport_type = None
-        self.member_request_list.clear()
+        self.member_request_list = []
 
         if self.client:
             try:
