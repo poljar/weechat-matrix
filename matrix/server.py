@@ -1076,6 +1076,7 @@ class MatrixServer(object):
                 m = ("Untrusted devices found in room: {}".format(e))
                 room_buffer = self.find_room_from_id(response.room_id)
                 room_buffer.error(m)
+                self.encryption_queue[response.room_id].clear()
                 return
 
             self.send(request)
@@ -1095,6 +1096,7 @@ class MatrixServer(object):
                         self.encryption_queue[room_id].appendleft(message)
                         break
                 except OlmTrustError:
+                    self.encryption_queue[room_id].clear()
                     break
 
     def create_room_buffer(self, room_id, prev_batch):
