@@ -949,6 +949,7 @@ class MatrixServer(object):
 
             self.next_batch = response.next_batch
             self.schedule_sync()
+            W.bar_item_update("matrix_typing_notice")
 
             if self.rooms_with_missing_members:
                 self.get_joined_members(self.rooms_with_missing_members.pop())

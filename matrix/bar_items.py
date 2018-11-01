@@ -16,6 +16,7 @@
 
 from __future__ import unicode_literals
 
+from . import globals as G
 from .globals import SERVERS, W
 from .utf import utf8_decode
 
@@ -129,6 +130,41 @@ def matrix_bar_nicklist_count(data, item, window, buffer, extra_info):
     return ""
 
 
+@utf8_decode
+def matrix_bar_typing_notices_cb(data, item, window, buffer, extra_info):
+    """Update a status bar item showing users currently typing.
+       This function is called by weechat every time a buffer is switched or
+       W.bar_item_update(<item>) is explicitly called. The bar item shows
+       currently typing users for the current buffer."""
+    # pylint: disable=unused-argument
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            room_buffer = server.find_room_from_ptr(buffer)
+            room = room_buffer.room
+
+            if room.typing_users:
+                nicks = []
+
+                for user_id in room.typing_users:
+                    nick = room_buffer.displayed_nicks.get(user_id, user_id)
+                    nicks.append(nick)
+
+                msg = "{}{}".format(
+                    G.CONFIG.look.bar_item_typing_notice_prefix,
+                    ", ".join(sorted(nicks))
+                )
+
+                max_len = G.CONFIG.look.max_typing_notice_item_length
+                if len(msg) > max_len:
+                    msg[:max_len - 3] + "..."
+
+                return msg
+
+            return ""
+
+    return ""
+
+
 def init_bar_items():
     W.bar_item_new("(extra)buffer_plugin", "matrix_bar_item_plugin", "")
     W.bar_item_new("(extra)buffer_name", "matrix_bar_item_name", "")
@@ -136,6 +172,11 @@ def init_bar_items():
     W.bar_item_new(
         "(extra)buffer_nicklist_count",
         "matrix_bar_nicklist_count",
+        ""
+    )
+    W.bar_item_new(
+        "(extra)matrix_typing_notice",
+        "matrix_bar_typing_notices_cb",
         ""
     )
     W.bar_item_new("(extra)buffer_modes", "matrix_bar_item_buffer_modes", "")

@@ -322,6 +322,24 @@ class MatrixConfig(WeechatConfig):
                 ServerBufferType,
                 config_server_buffer_cb,
             ),
+            Option(
+                "max_typing_notice_item_length",
+                "integer",
+                "",
+                10,
+                1000,
+                "50",
+                ("Limit the length of the typing notice bar item."),
+            ),
+            Option(
+                "bar_item_typing_notice_prefix",
+                "string",
+                "",
+                0,
+                0,
+                "Typing: ",
+                ("Prefix for the typing notice bar item."),
+            ),
         ]
 
         network_options = [

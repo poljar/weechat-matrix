@@ -40,7 +40,8 @@ from matrix.bar_items import (
     matrix_bar_item_lag,
     matrix_bar_item_name,
     matrix_bar_item_plugin,
-    matrix_bar_nicklist_count
+    matrix_bar_nicklist_count,
+    matrix_bar_typing_notices_cb
 )
 from matrix.buffer import room_buffer_close_cb, room_buffer_input_cb
 # Weechat searches for the registered callbacks in the scope of the main script
