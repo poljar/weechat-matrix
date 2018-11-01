@@ -363,41 +363,36 @@ def connect_cb(data, status, gnutls_rc, sock, error, ip_address):
         return W.WEECHAT_RC_OK
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_ADDRESS_NOT_FOUND:
-        W.prnt(
-            server.server_buffer,
-            '{address} not found'.format(address=ip_address))
+        server.error('{address} not found'.format(address=ip_address))
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_IP_ADDRESS_NOT_FOUND:
-        W.prnt(server.server_buffer, 'IP address not found')
+        server.error('IP address not found')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_CONNECTION_REFUSED:
-        W.prnt(server.server_buffer, 'Connection refused')
+        server.error('Connection refused')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_PROXY_ERROR:
-        W.prnt(server.server_buffer,
-               'Proxy fails to establish connection to server')
+        server.error('Proxy fails to establish connection to server')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_LOCAL_HOSTNAME_ERROR:
-        W.prnt(server.server_buffer, 'Unable to set local hostname')
+        server.error('Unable to set local hostname')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_GNUTLS_INIT_ERROR:
-        W.prnt(server.server_buffer, 'TLS init error')
+        server.error('TLS init error')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_GNUTLS_HANDSHAKE_ERROR:
-        W.prnt(server.server_buffer, 'TLS Handshake failed')
+        server.error('TLS Handshake failed')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_MEMORY_ERROR:
-        W.prnt(server.server_buffer, 'Not enough memory')
+        server.error('Not enough memory')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_TIMEOUT:
-        W.prnt(server.server_buffer, 'Timeout')
+        server.error('Timeout')
 
     elif status_value == W.WEECHAT_HOOK_CONNECT_SOCKET_ERROR:
-        W.prnt(server.server_buffer, 'Unable to create socket')
+        server.error('Unable to create socket')
     else:
-        W.prnt(
-            server.server_buffer,
-            'Unexpected error: {status}'.format(status=status_value))
+        server.error('Unexpected error: {status}'.format(status=status_value))
 
     server.disconnect(reconnect=True)
     return W.WEECHAT_RC_OK
