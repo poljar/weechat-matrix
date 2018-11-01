@@ -1317,8 +1317,7 @@ def matrix_timer_cb(server_name, remaining_calls):
     server.lag_done = False
     W.bar_item_update("lag")
 
-    # TODO print out message, make timeout configurable
-    if server.lag > 300000:
+    if server.lag > G.CONFIG.network.lag_reconnect * 1000:
         server.disconnect()
         return W.WEECHAT_RC_OK
 

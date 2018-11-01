@@ -426,6 +426,16 @@ class MatrixConfig(WeechatConfig):
                  " Inactive users will be removed from the nicklist after a "
                  "day of inactivity."),
             ),
+            Option(
+                "lag_reconnect",
+                "integer",
+                "",
+                5,
+                604800,
+                "90",
+                ("Reconnect to the server if the lag is greater than this "
+                 "value (in seconds)"),
+            ),
         ]
 
         color_options = [
