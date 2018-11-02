@@ -556,7 +556,7 @@ class WeechatChannelBuffer(object):
         user.update_speaking_time(date)
         self.unmask_smart_filtered_nick(nick)
 
-    def _print_action(self, user, message, date, tags, extra_prefix):
+    def _print_action(self, user, message, date, tags, extra_prefix=""):
         nick_prefix = (
             ""
             if not user.prefix
