@@ -612,6 +612,9 @@ def matrix_olm_command_cb(data, buffer, args):
                 prefix=W.prefix("error")))
             W.prnt(server.server_buffer, message)
 
+        W.bar_item_update("buffer_modes")
+        W.bar_item_update("matrix_modes")
+
         return W.WEECHAT_RC_OK
 
     for server in SERVERS.values():
