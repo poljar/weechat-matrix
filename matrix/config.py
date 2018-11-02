@@ -410,9 +410,9 @@ class MatrixConfig(WeechatConfig):
                 0,
                 0,
                 "off",
-                ("If on, room users wont be loaded background proactively "
-                 "they will be loaded when the buffer becomes active. This "
-                 "only affects non encrypted rooms."),
+                ("If on, room users won't be loaded in the background "
+                 "proactively, they will be loaded when the user switches to "
+                 "the room buffer. This only affects non-encrypted rooms."),
             ),
             Option(
                 "max_nicklist_users",
