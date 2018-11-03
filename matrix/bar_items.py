@@ -105,7 +105,9 @@ def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
 
             if (server.client
                     and server.client.room_contains_unverified(room.room_id)):
-                modes.append("⚠️ ")
+                modes.append(
+                    G.CONFIG.look.encryption_warning_sign,
+                )
 
             if not server.connected:
                 modes.append("❌")

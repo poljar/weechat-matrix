@@ -178,6 +178,10 @@ def logbook_category(value):
     return "all"
 
 
+def eval_cast(string):
+    return W.string_eval_expression(string, {}, {}, {})
+
+
 class WeechatConfig(object):
     def __init__(self, sections):
         self._ptr = W.config_new(
@@ -268,6 +272,8 @@ class ConfigSection(object):
             return bool(W.config_boolean(self._option_ptrs[name]))
 
         def str_getter(self):
+            if cast_func:
+                return cast_func(W.config_string(self._option_ptrs[name]))
             return W.config_string(self._option_ptrs[name])
 
         def str_evaluate_getter(self):
@@ -339,6 +345,17 @@ class MatrixConfig(WeechatConfig):
                 0,
                 "Typing: ",
                 ("Prefix for the typing notice bar item."),
+            ),
+            Option(
+                "encryption_warning_sign",
+                "string",
+                "",
+                0,
+                0,
+                "⚠️ ",
+                ("A sign that is used to signal trust issues in encrypted "
+                 "rooms (note: content is evaluated, see /help eval)"),
+                eval_cast,
             ),
         ]
 
