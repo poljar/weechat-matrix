@@ -57,6 +57,7 @@ OwnMessages = NamedTuple(
         ("sender", str),
         ("age", int),
         ("event_id", str),
+        ("uuid", str),
         ("room_id", str),
         ("formatted_message", Formatted),
     ],
@@ -1242,7 +1243,10 @@ class RoomBuffer(object):
         # type: (OwnMessage) -> None
         nick = self.find_nick(self.room.own_user_id)
         data = message.formatted_message.to_weechat()
-        tags = [SCRIPT_NAME + "_id_{}".format(message.event_id)]
+        if message.event_id:
+            tags = [SCRIPT_NAME + "_id_{}".format(message.event_id)]
+        else:
+            tags = [SCRIPT_NAME + "_uuid_{}".format(message.uuid)]
         date = message.age
 
         self.weechat_buffer.self_message(nick, data, date, tags)
@@ -1251,11 +1255,59 @@ class RoomBuffer(object):
         # type: (OwnMessage) -> None
         nick = self.find_nick(self.room.own_user_id)
         date = message.age
-        tags = [SCRIPT_NAME + "_id_{}".format(message.event_id)]
+        if message.event_id:
+            tags = [SCRIPT_NAME + "_id_{}".format(message.event_id)]
+        else:
+            tags = [SCRIPT_NAME + "_uuid_{}".format(message.uuid)]
 
         self.weechat_buffer.self_action(
             nick, message.formatted_message.to_weechat(), date, tags
         )
+
+    @staticmethod
+    def _find_by_uuid_predicate(uuid, line):
+        uuid_tag = SCRIPT_NAME + "_uuid_{}".format(uuid)
+        tags = line.tags
+
+        if uuid_tag in tags:
+            return True
+        return False
+
+    def mark_message_as_unsent(self, uuid, _):
+        """Append to already printed lines that are greyed out an error
+        message"""
+        lines = self.weechat_buffer.find_lines(
+            partial(self._find_by_uuid_predicate, uuid)
+        )
+        last_line = lines[-1]
+
+        message = last_line.message
+        message += (" {del_color}<{ncolor}{error_color}Error sending "
+                    "message{del_color}>{ncolor}").format(
+            del_color=W.color("chat_delimiters"),
+            ncolor=W.color("reset"),
+            error_color=W.color(G.CONFIG.color.error_message))
+
+        last_line.message = message
+
+    def replace_printed_line_by_uuid(self, uuid, new_message):
+        """Replace already printed lines that are greyed out with real ones"""
+        lines = self.weechat_buffer.find_lines(
+            partial(self._find_by_uuid_predicate, uuid)
+        )
+
+        new_lines = new_message.formatted_message.to_weechat().split("\n")
+
+        for i, line in enumerate(lines):
+            line.message = new_lines[i]
+            tags = line.tags
+
+            new_tags = [
+                tag for tag in tags
+                if not tag.startswith(SCRIPT_NAME + "_uuid_")
+            ]
+            new_tags.append(SCRIPT_NAME + "_id_ " + new_message.event_id)
+            line.tags = new_tags
 
     def old_redacted(self, event):
         tags = [

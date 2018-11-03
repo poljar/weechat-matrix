@@ -61,7 +61,7 @@ from .globals import SCRIPT_NAME, SERVERS, W, MAX_EVENTS
 from .utf import utf8_decode
 from .utils import create_server_buffer, key_from_value, server_buffer_prnt
 
-from .colors import Formatted
+from .colors import Formatted, FormattedString, DEFAULT_ATRIBUTES
 
 
 try:
@@ -248,6 +248,7 @@ class MatrixServer(object):
         self.device_deletion_queue = dict()
 
         self.own_message_queue = dict()  # type: Dict[str, OwnMessage]
+        self.print_before_ack_queue = []  # type: List[UUID]
         self.encryption_queue = defaultdict(deque)  \
             # type: DefaultDict[str, Deque[EncrytpionQueueItem]]
         self.backlog_queue = dict()      # type: Dict[str, str]
@@ -719,11 +720,32 @@ class MatrixServer(object):
             message_class = OwnMessage
 
         own_message = message_class(
-            self.user_id, 0, "", room.room_id, formatted
+            self.user_id, 0, "", uuid, room.room_id, formatted
         )
 
         self.own_message_queue[uuid] = own_message
         self.send_or_queue(request)
+
+        if G.CONFIG.network.print_unconfirmed_messages:
+            self.print_before_ack_queue.append(uuid)
+            plain_message = formatted.to_weechat()
+            plain_message = W.string_remove_color(plain_message, "")
+            attributes = DEFAULT_ATRIBUTES.copy()
+            attributes["fgcolor"] = G.CONFIG.color.unconfirmed_message
+            new_formatted = Formatted([FormattedString(
+                plain_message,
+                attributes
+            )])
+
+            own_message = message_class(
+                self.user_id, 0, "", uuid, room.room_id, new_formatted
+            )
+
+            if isinstance(own_message, OwnAction):
+                room_buffer.self_action(own_message)
+            elif isinstance(own_message, OwnMessage):
+                room_buffer.self_message(own_message)
+
         return True
 
     def keys_upload(self):
@@ -758,10 +780,24 @@ class MatrixServer(object):
         server_buffer_prnt(self, pprint.pformat(message.request.payload))
         server_buffer_prnt(self, pprint.pformat(message.response.body))
 
+    def handle_own_messages_error(self, response):
+        message = self.own_message_queue.pop(response.uuid)
+        if response.uuid not in self.print_before_ack_queue:
+            return
+
+        room_buffer = self.room_buffers[message.room_id]
+        room_buffer.mark_message_as_unsent(response.uuid, message)
+
     def handle_own_messages(self, response):
         message = self.own_message_queue.pop(response.uuid)
         room_buffer = self.room_buffers[message.room_id]
         message = message._replace(event_id=response.event_id)
+
+        # We already printed the message, just modify it to contain the proper
+        # colors and formatting.
+        if response.uuid in self.print_before_ack_queue:
+            room_buffer.replace_printed_line_by_uuid(response.uuid, message)
+            return
 
         if isinstance(message, OwnAction):
             room_buffer.self_action(message)
@@ -990,6 +1026,8 @@ class MatrixServer(object):
         elif isinstance(response, JoinedMembersError):
             self.rooms_with_missing_members.append(response.room_id)
             self.get_joined_members(self.rooms_with_missing_members.pop())
+        elif isinstance(response, RoomSendResponse):
+            self.handle_own_messages_error(response)
 
     def handle_response(self, response):
         # type: (Response) -> None

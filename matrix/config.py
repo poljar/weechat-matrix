@@ -453,6 +453,17 @@ class MatrixConfig(WeechatConfig):
                 ("Reconnect to the server if the lag is greater than this "
                  "value (in seconds)"),
             ),
+            Option(
+                "print_unconfirmed_messages",
+                "boolean",
+                "",
+                0,
+                0,
+                "on",
+                ("If off, messages are only printed after the server confirms"
+                 "their receival. If on, messages are immediately printed but "
+                 "colored differently until receival is confirmed."),
+            ),
         ]
 
         color_options = [
@@ -464,7 +475,28 @@ class MatrixConfig(WeechatConfig):
                 0,
                 "lightgreen",
                 ("Color for matrix style blockquotes"),
-            )
+            ),
+            Option(
+                "error_message",
+                "color",
+                "",
+                0,
+                0,
+                "darkgray",
+                ("Color for error messages that appear inside a room buffer ("
+                 "e.g. when a message errors out when sending or when a "
+                 "message is redacted)"),
+            ),
+            Option(
+                "unconfirmed_message",
+                "color",
+                "",
+                0,
+                0,
+                "darkgray",
+                ("Color for messages that are printed out but the server "
+                 "hasn't confirmed the that he received them."),
+            ),
         ]
 
         sections = [
