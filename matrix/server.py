@@ -247,8 +247,6 @@ class MatrixServer(object):
 
         self.device_deletion_queue = dict()
 
-        self.own_message_queue = dict()  # type: Dict[str, OwnMessage]
-        self.print_before_ack_queue = []  # type: List[UUID]
         self.encryption_queue = defaultdict(deque)  \
             # type: DefaultDict[str, Deque[EncrytpionQueueItem]]
         self.backlog_queue = dict()      # type: Dict[str, str]
@@ -723,11 +721,11 @@ class MatrixServer(object):
             self.user_id, 0, "", uuid, room.room_id, formatted
         )
 
-        self.own_message_queue[uuid] = own_message
+        room_buffer.sent_messages_queue[uuid] = own_message
         self.send_or_queue(request)
 
         if G.CONFIG.network.print_unconfirmed_messages:
-            self.print_before_ack_queue.append(uuid)
+            room_buffer.printed_before_ack_queue.append(uuid)
             plain_message = formatted.to_weechat()
             plain_message = W.string_remove_color(plain_message, "")
             attributes = DEFAULT_ATRIBUTES.copy()
@@ -781,22 +779,24 @@ class MatrixServer(object):
         server_buffer_prnt(self, pprint.pformat(message.response.body))
 
     def handle_own_messages_error(self, response):
-        message = self.own_message_queue.pop(response.uuid)
-        if response.uuid not in self.print_before_ack_queue:
+        room_buffer = self.room_buffers[response.room_id]
+
+        if response.uuid not in room_buffer.printed_before_ack_queue:
             return
 
-        room_buffer = self.room_buffers[message.room_id]
+        message = room_buffer.sent_messages_queue.pop(response.uuid)
         room_buffer.mark_message_as_unsent(response.uuid, message)
+        room_buffer.printed_before_ack_queue.remove(response.uuid)
 
     def handle_own_messages(self, response):
-        message = self.own_message_queue.pop(response.uuid)
-        room_buffer = self.room_buffers[message.room_id]
+        room_buffer = self.room_buffers[response.room_id]
+        message = room_buffer.sent_messages_queue.pop(response.uuid)
         message = message._replace(event_id=response.event_id)
-
         # We already printed the message, just modify it to contain the proper
         # colors and formatting.
-        if response.uuid in self.print_before_ack_queue:
+        if response.uuid in room_buffer.printed_before_ack_queue:
             room_buffer.replace_printed_line_by_uuid(response.uuid, message)
+            room_buffer.printed_before_ack_queue.remove(response.uuid)
             return
 
         if isinstance(message, OwnAction):

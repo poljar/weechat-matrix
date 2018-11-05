@@ -21,6 +21,7 @@ import time
 from builtins import super
 from functools import partial
 from typing import Dict, List, NamedTuple, Optional, Set
+from uuid import UUID
 
 from nio import (
     Api,
@@ -810,6 +811,9 @@ class RoomBuffer(object):
         self.unhandled_users = []   # type: List[str]
         self.inactive_users = []
 
+        self.sent_messages_queue = dict()  # type: Dict[UUID, OwnMessage]
+        self.printed_before_ack_queue = list()  # type: List[UUID]
+
         buffer_name = "{}.{}".format(server_name, room.room_id)
 
         # This dict remembers the connection from a user_id to the name we
@@ -1081,6 +1085,36 @@ class RoomBuffer(object):
         elif isinstance(event, RoomEncryptionEvent):
             pass
 
+    def handle_own_message_in_timeline(self, event):
+        """Check if our own message is already printed if not print it.
+        This function is called for messages that contain a transaction id
+        indicating that they were sent out using our own client. If we sent out
+        a message but never got a valid server response (e.g. due to
+        disconnects) this function prints them out using data from the next
+        sync response"""
+        uuid = UUID(event.transaction_id)
+        message = self.sent_messages_queue.pop(uuid, None)
+
+        # We already got a response to the room_send_message() API call and
+        # handled the message, no need to print it out again
+        if not message:
+            return
+
+        message = message._replace(event_id=event.event_id)
+        if uuid in self.printed_before_ack_queue:
+            self.replace_printed_line_by_uuid(
+                event.transaction_id,
+                message
+            )
+            self.printed_before_ack_queue.remove(uuid)
+            return
+
+        if isinstance(message, OwnAction):
+            self.self_action(message)
+        elif isinstance(message, OwnMessage):
+            self.self_message(message)
+        return
+
     def handle_timeline_event(self, event):
         # TODO this should be done for every messagetype that gets printed in
         # the buffer
@@ -1094,6 +1128,10 @@ class RoomBuffer(object):
                     pass
 
                 self.add_user(event.sender, 0, True, True)
+
+        if event.transaction_id:
+            self.handle_own_message_in_timeline(event)
+            return
 
         if isinstance(event, RoomMemberEvent):
             self.handle_membership_events(event, False)
