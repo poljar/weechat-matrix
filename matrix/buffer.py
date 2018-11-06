@@ -835,6 +835,12 @@ class RoomBuffer(object):
         except ValueError:
             pass
 
+        W.buffer_set(
+            self.weechat_buffer._ptr,
+            "localvar_set_room_id",
+            room.room_id
+        )
+
     @property
     def backlog_pending(self):
         return self._backlog_pending
