@@ -1094,6 +1094,7 @@ class MatrixServer(object):
             room_buffer.unhandled_users += users
             self._hook_lazy_user_adding()
             room_buffer.members_fetched = True
+            room_buffer.update_buffer_name()
 
             # Fetch the users for the next room.
             if self.rooms_with_missing_members:

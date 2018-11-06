@@ -962,6 +962,9 @@ class RoomBuffer(object):
             self.weechat_buffer.invite(event.state_key, date)
             return
 
+        self.update_buffer_name()
+
+    def update_buffer_name(self):
         room_name = self.room.display_name()
         self.weechat_buffer.short_name = room_name
 
@@ -1099,6 +1102,8 @@ class RoomBuffer(object):
             self._handle_topic(event, True)
         elif isinstance(event, PowerLevelsEvent):
             self._handle_power_level(event)
+        elif isinstance(event, (RoomNameEvent, RoomAliasEvent)):
+            self.update_buffer_name()
         elif isinstance(event, RoomEncryptionEvent):
             pass
 
@@ -1154,8 +1159,7 @@ class RoomBuffer(object):
             self.handle_membership_events(event, False)
 
         elif isinstance(event, (RoomNameEvent, RoomAliasEvent)):
-            room_name = self.room.display_name()
-            self.weechat_buffer.short_name = room_name
+            self.update_buffer_name()
 
         elif isinstance(event, RoomTopicEvent):
             self._handle_topic(event, False)
@@ -1498,8 +1502,7 @@ class RoomBuffer(object):
         # We didn't handle all joined users, the room display name might still
         # be outdated because of that, update it now.
         if self.unhandled_users:
-            room_name = self.room.display_name()
-            self.weechat_buffer.short_name = room_name
+            self.update_buffer_name()
 
     def handle_left_room(self, info):
         self.joined = False
