@@ -820,9 +820,20 @@ class RoomBuffer(object):
         # displayed in the buffer
         self.displayed_nicks = {}
         user = shorten_sender(self.room.own_user_id)
+
         self.weechat_buffer = WeechatChannelBuffer(
             buffer_name, server_name, user
         )
+
+        try:
+            _, room_domain = room.room_id.split(":", 1)
+            W.buffer_set(
+                self.weechat_buffer._ptr,
+                "localvar_set_domain",
+                room_domain
+            )
+        except ValueError:
+            pass
 
     @property
     def backlog_pending(self):
