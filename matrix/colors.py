@@ -266,36 +266,33 @@ class Formatted(object):
     def to_weechat(self):
         # TODO BG COLOR
         def add_attribute(string, name, value):
-            if name == "bold" and value:
+            if not value:
+                return string
+            elif name == "bold":
                 return "{bold_on}{text}{bold_off}".format(
                     bold_on=W.color("bold"),
                     text=string,
                     bold_off=W.color("-bold"),
                 )
-
-            if name == "italic" and value:
+            elif name == "italic":
                 return "{italic_on}{text}{italic_off}".format(
                     italic_on=W.color("italic"),
                     text=string,
                     italic_off=W.color("-italic"),
                 )
-
-            if name == "underline" and value:
+            elif name == "underline":
                 return "{underline_on}{text}{underline_off}".format(
                     underline_on=W.color("underline"),
                     text=string,
                     underline_off=W.color("-underline"),
                 )
-
-            if name == "strikethrough" and value:
+            elif name == "strikethrough":
                 return string_strikethrough(string)
-
-            if name == "quote" and value:
+            elif name == "quote":
                 return self.textwrapper.fill(
                     W.string_remove_color(string.replace("\n", ""), "")
                 )
-
-            if name == "code" and value:
+            elif name == "code":
                 try:
                     lexer = get_lexer_by_name(value)
                 except ClassNotFound:
@@ -304,22 +301,20 @@ class Formatted(object):
                 # highlight adds a newline to the end of the string, remove it
                 # from the output
                 return highlight(string, lexer, WeechatFormatter())[:-1]
-
-            if name == "fgcolor" and value:
+            elif name == "fgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color(value),
                     text=string,
                     color_off=W.color("resetcolor"),
                 )
-
-            if name == "bgcolor" and value:
+            elif name == "bgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color("," + value),
                     text=string,
                     color_off=W.color("resetcolor"),
                 )
-
-            return string
+            else:
+                return string
 
         def format_string(formatted_string):
             text = formatted_string.text
