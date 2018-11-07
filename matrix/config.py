@@ -365,7 +365,6 @@ class MatrixConfig(WeechatConfig):
                 0,
                 "native",
                 "Pygments style to use for highlighting source code blocks",
-                eval_cast,
             ),
         ]
 
