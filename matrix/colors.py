@@ -29,7 +29,7 @@ from typing import List
 
 import webcolors
 from pygments import highlight
-from pygments.formatter import Formatter
+from pygments.formatter import Formatter, get_style_by_name
 from pygments.lexers import get_lexer_by_name, guess_lexer
 from pygments.util import ClassNotFound
 
@@ -62,7 +62,7 @@ class Formatted(object):
     def is_formatted(self):
         # type: (Formatted) -> bool
         for string in self.substrings:
-            if string.attributes != DEFAULT_ATRIBUTES:
+            if string.attributes != DEFAULT_ATTRIBUTES:
                 return True
         return False
 
@@ -76,7 +76,7 @@ class Formatted(object):
         """
         text = ""  # type: str
         substrings = []  # type: List[FormattedString]
-        attributes = DEFAULT_ATRIBUTES.copy()
+        attributes = DEFAULT_ATTRIBUTES.copy()
 
         i = 0
         while i < len(line):
@@ -165,7 +165,7 @@ class Formatted(object):
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
                 # Reset all the attributes
-                attributes = DEFAULT_ATRIBUTES.copy()
+                attributes = DEFAULT_ATTRIBUTES.copy()
                 i = i + 1
             # Italic
             elif line[i] == "\x1D":
@@ -266,60 +266,61 @@ class Formatted(object):
     def to_weechat(self):
         # TODO BG COLOR
         def add_attribute(string, name, value):
-            if name == "bold" and value:
+            if not value:
+                return string
+            elif name == "bold":
                 return "{bold_on}{text}{bold_off}".format(
                     bold_on=W.color("bold"),
                     text=string,
                     bold_off=W.color("-bold"),
                 )
-
-            if name == "italic" and value:
+            elif name == "italic":
                 return "{italic_on}{text}{italic_off}".format(
                     italic_on=W.color("italic"),
                     text=string,
                     italic_off=W.color("-italic"),
                 )
-
-            if name == "underline" and value:
+            elif name == "underline":
                 return "{underline_on}{text}{underline_off}".format(
                     underline_on=W.color("underline"),
                     text=string,
                     underline_off=W.color("-underline"),
                 )
-
-            if name == "strikethrough" and value:
+            elif name == "strikethrough":
                 return string_strikethrough(string)
-
-            if name == "quote" and value:
+            elif name == "quote":
                 return self.textwrapper.fill(
                     W.string_remove_color(string.replace("\n", ""), "")
                 )
-
-            if name == "code" and value:
+            elif name == "code":
                 try:
                     lexer = get_lexer_by_name(value)
                 except ClassNotFound:
                     lexer = guess_lexer(string)
 
+                try:
+                    style = get_style_by_name(G.CONFIG.look.pygments_style)
+                except ClassNotFound:
+                    style = "native"
+
                 # highlight adds a newline to the end of the string, remove it
                 # from the output
-                return highlight(string, lexer, WeechatFormatter())[:-1]
-
-            if name == "fgcolor" and value:
+                return highlight(string, lexer,
+                                 WeechatFormatter(style=style))[:-1]
+            elif name == "fgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color(value),
                     text=string,
                     color_off=W.color("resetcolor"),
                 )
-
-            if name == "bgcolor" and value:
+            elif name == "bgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color("," + value),
                     text=string,
                     color_off=W.color("resetcolor"),
                 )
-
-            return string
+            else:
+                return string
 
         def format_string(formatted_string):
             text = formatted_string.text
@@ -370,7 +371,7 @@ class Formatted(object):
 
 
 # TODO this should be a typed dict.
-DEFAULT_ATRIBUTES = {
+DEFAULT_ATTRIBUTES = {
     "bold": False,
     "italic": False,
     "underline": False,
@@ -389,7 +390,7 @@ class MatrixHtmlParser(HTMLParser):
         HTMLParser.__init__(self)
         self.text = ""  # type: str
         self.substrings = []  # type: List[FormattedString]
-        self.attributes = DEFAULT_ATRIBUTES.copy()
+        self.attributes = DEFAULT_ATTRIBUTES.copy()
 
     def unescape(self, text):
         """Shim to unescape HTML in both Python 2 and 3.
@@ -441,13 +442,13 @@ class MatrixHtmlParser(HTMLParser):
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
             self.text = "\n"
-            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.add_substring(self.text, DEFAULT_ATTRIBUTES.copy())
             self.text = ""
         elif tag == "br":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
             self.text = "\n"
-            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.add_substring(self.text, DEFAULT_ATTRIBUTES.copy())
             self.text = ""
         elif tag == "font":
             for key, value in attrs:
@@ -481,7 +482,7 @@ class MatrixHtmlParser(HTMLParser):
         elif tag == "blockquote":
             self._toggle_attribute("quote")
             self.text = "\n"
-            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.add_substring(self.text, DEFAULT_ATTRIBUTES.copy())
             self.text = ""
         elif tag == "font":
             if self.text:
