@@ -154,6 +154,12 @@ def buffer_set(*_, **__):
     return
 
 
+def buffer_get_string(_ptr, property):
+    if property == "localvar_type":
+        return "channel"
+    return ""
+
+
 def nicklist_add_group(*_, **__):
     return
 
