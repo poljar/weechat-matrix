@@ -29,7 +29,7 @@ from typing import List
 
 import webcolors
 from pygments import highlight
-from pygments.formatter import Formatter
+from pygments.formatter import Formatter, get_style_by_name
 from pygments.lexers import get_lexer_by_name, guess_lexer
 from pygments.util import ClassNotFound
 
@@ -298,9 +298,15 @@ class Formatted(object):
                 except ClassNotFound:
                     lexer = guess_lexer(string)
 
+                try:
+                    style = get_style_by_name(G.CONFIG.look.pygments_style)
+                except ClassNotFound:
+                    style = "native"
+
                 # highlight adds a newline to the end of the string, remove it
                 # from the output
-                return highlight(string, lexer, WeechatFormatter())[:-1]
+                return highlight(string, lexer,
+                                 WeechatFormatter(style=style))[:-1]
             elif name == "fgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color(value),

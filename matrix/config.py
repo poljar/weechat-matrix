@@ -357,6 +357,16 @@ class MatrixConfig(WeechatConfig):
                  "rooms (note: content is evaluated, see /help eval)"),
                 eval_cast,
             ),
+            Option(
+                "pygments_style",
+                "string",
+                "",
+                0,
+                0,
+                "native",
+                "Pygments style to use for highlighting source code blocks",
+                eval_cast,
+            ),
         ]
 
         network_options = [
