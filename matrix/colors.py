@@ -43,7 +43,13 @@ except ImportError:
     from html.parser import HTMLParser
 
 
-FormattedString = namedtuple("FormattedString", ["text", "attributes"])
+class FormattedString:
+    __slots__ = ("text", "attributes")
+
+    def __init__(self, text, attributes):
+        self.attributes = DEFAULT_ATTRIBUTES.copy()
+        self.attributes.update(attributes)
+        self.text = text
 
 
 class Formatted(object):
