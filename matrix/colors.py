@@ -62,7 +62,7 @@ class Formatted(object):
     def is_formatted(self):
         # type: (Formatted) -> bool
         for string in self.substrings:
-            if string.attributes != DEFAULT_ATRIBUTES:
+            if string.attributes != DEFAULT_ATTRIBUTES:
                 return True
         return False
 
@@ -76,7 +76,7 @@ class Formatted(object):
         """
         text = ""  # type: str
         substrings = []  # type: List[FormattedString]
-        attributes = DEFAULT_ATRIBUTES.copy()
+        attributes = DEFAULT_ATTRIBUTES.copy()
 
         i = 0
         while i < len(line):
@@ -165,7 +165,7 @@ class Formatted(object):
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
                 # Reset all the attributes
-                attributes = DEFAULT_ATRIBUTES.copy()
+                attributes = DEFAULT_ATTRIBUTES.copy()
                 i = i + 1
             # Italic
             elif line[i] == "\x1D":
@@ -371,7 +371,7 @@ class Formatted(object):
 
 
 # TODO this should be a typed dict.
-DEFAULT_ATRIBUTES = {
+DEFAULT_ATTRIBUTES = {
     "bold": False,
     "italic": False,
     "underline": False,
@@ -390,7 +390,7 @@ class MatrixHtmlParser(HTMLParser):
         HTMLParser.__init__(self)
         self.text = ""  # type: str
         self.substrings = []  # type: List[FormattedString]
-        self.attributes = DEFAULT_ATRIBUTES.copy()
+        self.attributes = DEFAULT_ATTRIBUTES.copy()
 
     def unescape(self, text):
         """Shim to unescape HTML in both Python 2 and 3.
@@ -442,13 +442,13 @@ class MatrixHtmlParser(HTMLParser):
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
             self.text = "\n"
-            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.add_substring(self.text, DEFAULT_ATTRIBUTES.copy())
             self.text = ""
         elif tag == "br":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
             self.text = "\n"
-            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.add_substring(self.text, DEFAULT_ATTRIBUTES.copy())
             self.text = ""
         elif tag == "font":
             for key, value in attrs:
@@ -482,7 +482,7 @@ class MatrixHtmlParser(HTMLParser):
         elif tag == "blockquote":
             self._toggle_attribute("quote")
             self.text = "\n"
-            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.add_substring(self.text, DEFAULT_ATTRIBUTES.copy())
             self.text = ""
         elif tag == "font":
             if self.text:

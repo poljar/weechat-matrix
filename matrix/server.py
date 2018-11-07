@@ -61,7 +61,7 @@ from .globals import SCRIPT_NAME, SERVERS, W, MAX_EVENTS
 from .utf import utf8_decode
 from .utils import create_server_buffer, key_from_value, server_buffer_prnt
 
-from .colors import Formatted, FormattedString, DEFAULT_ATRIBUTES
+from .colors import Formatted, FormattedString, DEFAULT_ATTRIBUTES
 
 
 try:
@@ -728,7 +728,7 @@ class MatrixServer(object):
             room_buffer.printed_before_ack_queue.append(uuid)
             plain_message = formatted.to_weechat()
             plain_message = W.string_remove_color(plain_message, "")
-            attributes = DEFAULT_ATRIBUTES.copy()
+            attributes = DEFAULT_ATTRIBUTES.copy()
             attributes["fgcolor"] = G.CONFIG.color.unconfirmed_message
             new_formatted = Formatted([FormattedString(
                 plain_message,
