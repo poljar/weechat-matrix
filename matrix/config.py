@@ -14,6 +14,15 @@
 # CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+"""weechat-matrix Configuration module.
+
+This module contains abstractions on top of weechats configuration files and
+the main script configuration class.
+
+To add configuration options refer to MatrixConfig.
+Server specific configuration options are handled in server.py
+"""
+
 from builtins import super
 from collections import namedtuple
 from enum import Enum, unique
@@ -60,6 +69,12 @@ class Option(
         ],
     )
 ):
+    """A class representing a new configuration option.
+
+    An option object is consumed by the ConfigSection class adding
+    configuration options to weechat.
+    """
+
     __slots__ = ()
 
     def __new__(
@@ -74,6 +89,25 @@ class Option(
         cast=None,
         change_callback=None,
     ):
+        """
+        Parameters:
+            name (str): Name of the configuration option
+            type (str): Type of the configuration option, can be one of the
+                supported weechat types: string, boolean, integer, color
+            string_values: (str): A list of string values that the option can
+            accept seprated by |
+            min (int): Minimal value of the option, only used if the type of
+                the option is integer
+            max (int): Maximal value of the option, only used if the type of
+                the option is integer
+            description (str): Description of the configuration option
+            cast (callable): A callable function taking a single value and
+                returning a modified value. Useful to turn the configuration
+                option into an enum while reading it.
+            change_callback(callable): A function that will be called
+                by weechat every time the configuration option is changed.
+        """
+
         return super().__new__(
             cls,
             name,
@@ -94,6 +128,11 @@ def matrix_config_reload_cb(data, config_file):
 
 
 def change_log_level(category, level):
+    """Change the log level of the underlying nio lib
+
+    Called every time the user changes the log level or log category
+    configuration option."""
+
     if category == "all":
         nio.logger_group.level = level
     elif category == "http":
@@ -110,6 +149,10 @@ def change_log_level(category, level):
 
 @utf8_decode
 def config_server_buffer_cb(data, option):
+    """Callback for the look.server_buffer option.
+    Is called when the option is changed and merges/splits the server
+    buffer"""
+
     for server in SERVERS.values():
         server.buffer_merge()
     return 1
@@ -117,6 +160,7 @@ def config_server_buffer_cb(data, option):
 
 @utf8_decode
 def config_log_level_cb(data, option):
+    """Callback for the network.debug_level option."""
     change_log_level(
         G.CONFIG.network.debug_category, G.CONFIG.network.debug_level
     )
@@ -125,6 +169,7 @@ def config_log_level_cb(data, option):
 
 @utf8_decode
 def config_log_category_cb(data, option):
+    """Callback for the network.debug_category option."""
     change_log_level(G.CONFIG.debug_category, logbook.ERROR)
     G.CONFIG.debug_category = G.CONFIG.network.debug_category
     change_log_level(
@@ -135,6 +180,8 @@ def config_log_category_cb(data, option):
 
 @utf8_decode
 def config_pgup_cb(data, option):
+    """Callback for the network.fetch_backlog_on_pgup option.
+    Enables or disables the hook that is run when /window page_up is called"""
     if G.CONFIG.network.fetch_backlog_on_pgup:
         if not G.CONFIG.page_up_hook:
             G.CONFIG.page_up_hook = W.hook_command_run(
@@ -179,11 +226,28 @@ def logbook_category(value):
 
 
 def eval_cast(string):
+    """A function that passes a string to weechat which evaluates it using its
+    expression evaluation syntax.
+    Can only be used with strings, useful for passwords or options that contain
+    a formatted string to e.g. add colors.
+    More info here:
+        https://weechat.org/files/doc/stable/weechat_plugin_api.en.html#_string_eval_expression"""
+
     return W.string_eval_expression(string, {}, {}, {})
 
 
 class WeechatConfig(object):
+    """A class representing a weechat configuration file
+    Wraps weechats configuration creation functionality"""
+
     def __init__(self, sections):
+        """Create a new weechat configuration file, expects the global
+        SCRIPT_NAME to be defined and a reload callback
+
+        Parameters:
+            sections (List[Tuple[str, List[Option]]]): List of config sections
+                that will be created for the configuration file.
+        """
         self._ptr = W.config_new(
             SCRIPT_NAME, SCRIPT_NAME + "_config_reload_cb", ""
         )
@@ -194,6 +258,8 @@ class WeechatConfig(object):
             setattr(self, name, section_class(name, self._ptr, options))
 
     def free(self):
+        """Free all the config sections and their options as well as the
+        configuration file. Should be called when the script is unloaded."""
         for section in [
             getattr(self, a)
             for a in dir(self)
@@ -204,6 +270,7 @@ class WeechatConfig(object):
         W.config_free(self._ptr)
 
     def read(self):
+        """Read the config file"""
         return_code = W.config_read(self._ptr)
         if return_code == W.WEECHAT_CONFIG_READ_OK:
             return True
@@ -215,6 +282,9 @@ class WeechatConfig(object):
 
 
 class ConfigSection(object):
+    """A class representing a weechat config section.
+    Should not be used on its own, the WeechatConfig class uses this to build
+    config sections."""
     @classmethod
     def build(cls, name, options):
         def constructor(self, name, config_ptr, options):
@@ -268,6 +338,12 @@ class ConfigSection(object):
 
     @staticmethod
     def option_property(name, option_type, evaluate=False, cast_func=None):
+        """Create a property for this class that makes the reading of config
+        option values pythonic. The option will be available as a property with
+        the name of the option.
+        If a cast function was defined for the option the property will pass
+        the option value to the cast function and return its result."""
+
         def bool_getter(self):
             return bool(W.config_boolean(self._option_ptrs[name]))
 
@@ -297,8 +373,27 @@ class ConfigSection(object):
 
 
 class MatrixConfig(WeechatConfig):
-    def __init__(self):
+    """Main matrix configuration file.
+    This class defines all the global matrix configuration options.
+    New global options should be added to the constructor of this class under
+    the appropriate section.
 
+    There are three main sections defined:
+        Look: This section is for options that change the way matrix messages
+            are shown or the way the buffers are shown.
+        Color: This section should mainly be for color options, options that
+            change color schemes or themes should go to the look section.
+        Network: This section is for options that change the way the script
+            behaves, e.g. the way it communicates with the server, it handles
+            responses or any other behavioural change that doesn't fit in the
+            previous sections.
+
+    There is a special section called server defined which contains per server
+    configuration options. Server options aren't defined here, they need to be
+    added in server.py
+    """
+
+    def __init__(self):
         self.debug_buffer = ""
         self.debug_category = "all"
         self.page_up_hook = None
