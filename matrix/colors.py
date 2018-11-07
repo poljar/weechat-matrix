@@ -624,20 +624,20 @@ def color_line_to_weechat(color_string):
     return line_colors[color_string]
 
 
-# The functions colour_dist_sq(), colour_to_6cube(), and colour_find_rgb
+# The functions color_dist_sq(), color_to_6cube(), and color_find_rgb
 # are python ports of the same named functions from the tmux
 # source, they are under the copyright of Nicholas Marriott, and Avi Halachmi
 # under the ISC license.
 # More info: https://github.com/tmux/tmux/blob/master/colour.c
 
 
-def colour_dist_sq(R, G, B, r, g, b):
+def color_dist_sq(R, G, B, r, g, b):
     # pylint: disable=invalid-name,too-many-arguments
     # type: (int, int, int, int, int, int) -> int
     return (R - r) * (R - r) + (G - g) * (G - g) + (B - b) * (B - b)
 
 
-def colour_to_6cube(v):
+def color_to_6cube(v):
     # pylint: disable=invalid-name
     # type: (int) -> int
     if v < 48:
@@ -647,15 +647,15 @@ def colour_to_6cube(v):
     return (v - 35) // 40
 
 
-def colour_find_rgb(r, g, b):
+def color_find_rgb(r, g, b):
     # type: (int, int, int) -> int
-    """Convert an RGB triplet to the xterm(1) 256 colour palette.
+    """Convert an RGB triplet to the xterm(1) 256 color palette.
 
-       xterm provides a 6x6x6 colour cube (16 - 231) and 24 greys (232 - 255).
-       We map our RGB colour to the closest in the cube, also work out the
+       xterm provides a 6x6x6 color cube (16 - 231) and 24 greys (232 - 255).
+       We map our RGB color to the closest in the cube, also work out the
        closest grey, and use the nearest of the two.
 
-       Note that the xterm has much lower resolution for darker colours (they
+       Note that the xterm has much lower resolution for darker colors (they
        are not evenly spread out), so our 6 levels are not evenly spread: 0x0,
        0x5f (95), 0x87 (135), 0xaf (175), 0xd7 (215) and 0xff (255). Greys are
        more evenly spread (8, 18, 28 ... 238).
@@ -664,15 +664,15 @@ def colour_find_rgb(r, g, b):
     q2c = [0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff]
 
     # Map RGB to 6x6x6 cube.
-    qr = colour_to_6cube(r)
-    qg = colour_to_6cube(g)
-    qb = colour_to_6cube(b)
+    qr = color_to_6cube(r)
+    qg = color_to_6cube(g)
+    qb = color_to_6cube(b)
 
     cr = q2c[qr]
     cg = q2c[qg]
     cb = q2c[qb]
 
-    # If we have hit the colour exactly, return early.
+    # If we have hit the color exactly, return early.
     if cr == r and cg == g and cb == b:
         return 16 + (36 * qr) + (6 * qg) + qb
 
@@ -686,10 +686,10 @@ def colour_find_rgb(r, g, b):
 
     grey = 8 + (10 * grey_idx)
 
-    # Is grey or 6x6x6 colour closest?
-    d = colour_dist_sq(cr, cg, cb, r, g, b)
+    # Is grey or 6x6x6 color closest?
+    d = color_dist_sq(cr, cg, cb, r, g, b)
 
-    if colour_dist_sq(grey, grey, grey, r, g, b) < d:
+    if color_dist_sq(grey, grey, grey, r, g, b) < d:
         idx = 232 + grey_idx
     else:
         idx = 16 + (36 * qr) + (6 * qg) + qb
@@ -728,7 +728,7 @@ def color_html_to_weechat(color):
     if rgb_color in weechat_basic_colors:
         return weechat_basic_colors[rgb_color]
 
-    return str(colour_find_rgb(*rgb_color))
+    return str(color_find_rgb(*rgb_color))
 
 
 def color_weechat_to_html(color):
