@@ -1365,7 +1365,7 @@ class RoomBuffer(object):
                 tag for tag in tags
                 if not tag.startswith(SCRIPT_NAME + "_uuid_")
             ]
-            new_tags.append(SCRIPT_NAME + "_id_ " + new_message.event_id)
+            new_tags.append(SCRIPT_NAME + "_id_" + new_message.event_id)
             line.tags = new_tags
 
     def old_redacted(self, event):
