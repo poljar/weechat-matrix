@@ -313,7 +313,7 @@ class Formatted(object):
                 # highlight adds a newline to the end of the string, remove it
                 # from the output
                 return highlight(string, lexer,
-                                 WeechatFormatter(style=style))[:-1]
+                                 WeechatFormatter(style=style)).rstrip()
             elif name == "fgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color(value),
