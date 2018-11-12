@@ -35,7 +35,9 @@ from pygments.util import ClassNotFound
 
 from . import globals as G
 from .globals import W
-from .utils import string_strikethrough, string_color_and_reset
+from .utils import (string_strikethrough,
+                    string_color_and_reset,
+                    color_pair)
 
 try:
     from HTMLParser import HTMLParser
@@ -59,10 +61,12 @@ class Formatted(object):
 
     @property
     def textwrapper(self):
+        quote_pair = color_pair(G.CONFIG.color.quote_fg,
+                                G.CONFIG.color.quote_bg)
         return textwrap.TextWrapper(
             width=67,
-            initial_indent="{}> ".format(W.color(G.CONFIG.color.quote)),
-            subsequent_indent="{}> ".format(W.color(G.CONFIG.color.quote)),
+            initial_indent="{}> ".format(W.color(quote_pair)),
+            subsequent_indent="{}> ".format(W.color(quote_pair)),
         )
 
     def is_formatted(self):
@@ -302,8 +306,10 @@ class Formatted(object):
                 try:
                     lexer = get_lexer_by_name(value)
                 except ClassNotFound:
-                    return string_color_and_reset(string,
-                                                  G.CONFIG.color.untagged_code)
+                    return string_color_and_reset(
+                        string,
+                        color_pair(G.CONFIG.color.untagged_code_fg,
+                                   G.CONFIG.color.untagged_code_bg))
 
                 try:
                     style = get_style_by_name(G.CONFIG.look.pygments_style)
@@ -361,11 +367,11 @@ class Formatted(object):
 
                 # If we're quoted code add quotation marks now.
                 if key == "code" and attributes["quote"]:
+                    fg = G.CONFIG.color.quote_fg
+                    bg = G.CONFIG.color.quote_bg
                     text = indent(
                         text,
-                        "{}>{} ".format(
-                            W.color(G.CONFIG.color.quote), W.color("reset")
-                        ),
+                        string_color_and_reset(">", color_pair(fg, bg)) + " ",
                     )
 
             # If we're code don't remove multiple newlines blindly

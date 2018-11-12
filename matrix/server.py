@@ -798,7 +798,8 @@ class MatrixServer(object):
             plain_message = formatted.to_weechat()
             plain_message = W.string_remove_color(plain_message, "")
             attributes = DEFAULT_ATTRIBUTES.copy()
-            attributes["fgcolor"] = G.CONFIG.color.unconfirmed_message
+            attributes["fgcolor"] = G.CONFIG.color.unconfirmed_message_fg
+            attributes["bgcolor"] = G.CONFIG.color.unconfirmed_message_bg
             new_formatted = Formatted([FormattedString(
                 plain_message,
                 attributes

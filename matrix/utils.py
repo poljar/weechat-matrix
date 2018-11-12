@@ -123,3 +123,12 @@ def string_color(string, color):
     lines = ("{}{}{}".format(W.color(color), line, W.color("resetcolor"))
              for line in lines)
     return "\n".join(lines)
+
+
+def color_pair(color_fg, color_bg):
+    """Make a color pair from a pair of colors."""
+
+    if color_bg:
+        return "{},{}".format(color_fg, color_bg)
+    else:
+        return color_fg
