@@ -1200,10 +1200,7 @@ class MatrixServer(object):
                     break
 
             for user_id in removed_user_ids:
-                W.prnt("", "Garbage collected {}".format(user_id))
                 del room_buffer.displayed_nicks[user_id]
-
-            pass
 
     def buffer_merge(self):
         if not self.server_buffer:
