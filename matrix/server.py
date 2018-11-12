@@ -245,7 +245,7 @@ class MatrixServer(object):
         self.send_buffer = b""                           # type: bytes
         self.device_check_timestamp = None               # type: Optional[int]
 
-        self.device_deletion_queue = dict()
+        self.device_deletion_queue = dict()              # type: Dict[str, str]
 
         self.encryption_queue = defaultdict(deque)  \
             # type: DefaultDict[str, Deque[EncrytpionQueueItem]]
@@ -257,8 +257,8 @@ class MatrixServer(object):
         self.lazy_load_hook = None       # type: Optional[str]
         self.partial_sync_hook = None    # type: Optional[str]
 
-        self.keys_claimed = defaultdict(bool)
-        self.group_session_shared = defaultdict(bool)
+        self.keys_claimed = defaultdict(bool)          # type: Dict[str, bool]
+        self.group_session_shared = defaultdict(bool)  # type: Dict[str, bool]
 
         self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
