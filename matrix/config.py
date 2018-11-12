@@ -671,6 +671,16 @@ class MatrixConfig(WeechatConfig):
                 ("Color for messages that are printed out but the server "
                  "hasn't confirmed the that he received them."),
             ),
+            Option(
+                "untagged_code",
+                "color",
+                "",
+                0,
+                0,
+                "blue",
+                ("Color for code without a language specifier. Also used for "
+                 "`inline code`."),
+            ),
         ]
 
         sections = [
