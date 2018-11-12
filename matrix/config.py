@@ -642,44 +642,80 @@ class MatrixConfig(WeechatConfig):
 
         color_options = [
             Option(
-                "quote",
+                "quote_fg",
                 "color",
                 "",
                 0,
                 0,
                 "lightgreen",
-                ("Color for matrix style blockquotes"),
+                "Foreground color for matrix style blockquotes",
             ),
             Option(
-                "error_message",
+                "quote_bg",
+                "color",
+                "",
+                0,
+                0,
+                "default",
+                "Background counterpart of quote_fg",
+            ),
+            Option(
+                "error_message_fg",
                 "color",
                 "",
                 0,
                 0,
                 "darkgray",
-                ("Color for error messages that appear inside a room buffer ("
-                 "e.g. when a message errors out when sending or when a "
-                 "message is redacted)"),
+                ("Foreground color for error messages that appear inside a "
+                 "room buffer (e.g. when a message errors out when sending or "
+                 "when a message is redacted)"),
             ),
             Option(
-                "unconfirmed_message",
+                "error_message_bg",
+                "color",
+                "",
+                0,
+                0,
+                "default",
+                "Background counterpart of error_message_fg.",
+            ),
+            Option(
+                "unconfirmed_message_fg",
                 "color",
                 "",
                 0,
                 0,
                 "darkgray",
-                ("Color for messages that are printed out but the server "
-                 "hasn't confirmed the that he received them."),
+                ("Foreground color for messages that are printed out but the "
+                 "server hasn't confirmed the that he received them."),
             ),
             Option(
-                "untagged_code",
+                "unconfirmed_message_bg",
+                "color",
+                "",
+                0,
+                0,
+                "default",
+                "Background counterpart of unconfirmed_message_fg."
+            ),
+            Option(
+                "untagged_code_fg",
                 "color",
                 "",
                 0,
                 0,
                 "blue",
-                ("Color for code without a language specifier. Also used for "
-                 "`inline code`."),
+                ("Foreground color for code without a language specifier. "
+                 "Also used for `inline code`."),
+            ),
+            Option(
+                "untagged_code_bg",
+                "color",
+                "",
+                0,
+                0,
+                "default",
+                "Background counterpart of untagged_code_fg",
             ),
         ]
 
