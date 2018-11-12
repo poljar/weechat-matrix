@@ -568,6 +568,15 @@ class MatrixConfig(WeechatConfig):
                  "their receival. If on, messages are immediately printed but "
                  "colored differently until receival is confirmed."),
             ),
+            Option(
+                "lag_min_show",
+                "integer",
+                "",
+                1,
+                604800,
+                "500",
+                ("minimum lag to show (in milliseconds)"),
+            ),
         ]
 
         color_options = [

@@ -74,7 +74,7 @@ def matrix_bar_item_lag(data, item, window, buffer, extra_info):
     # pylint: disable=unused-argument
     for server in SERVERS.values():
         if buffer in server.buffers.values() or buffer == server.server_buffer:
-            if server.lag >= 500:
+            if server.lag >= G.CONFIG.network.lag_min_show:
                 color = W.color("irc.color.item_lag_counting")
                 if server.lag_done:
                     color = W.color("irc.color.item_lag_finished")
