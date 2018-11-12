@@ -105,3 +105,21 @@ def shorten_sender(sender):
 
 def string_strikethrough(string):
     return "".join(["{}\u0336".format(c) for c in string])
+
+
+def string_color_and_reset(string, color):
+    """Color string with color, then reset all attributes."""
+
+    lines = string.split('\n')
+    lines = ("{}{}{}".format(W.color(color), line, W.color("reset"))
+             for line in lines)
+    return "\n".join(lines)
+
+
+def string_color(string, color):
+    """Color string with color, then reset the color attribute."""
+
+    lines = string.split('\n')
+    lines = ("{}{}{}".format(W.color(color), line, W.color("resetcolor"))
+             for line in lines)
+    return "\n".join(lines)

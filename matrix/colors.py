@@ -30,12 +30,12 @@ from typing import List
 import webcolors
 from pygments import highlight
 from pygments.formatter import Formatter, get_style_by_name
-from pygments.lexers import get_lexer_by_name, guess_lexer
+from pygments.lexers import get_lexer_by_name
 from pygments.util import ClassNotFound
 
 from . import globals as G
 from .globals import W
-from .utils import string_strikethrough
+from .utils import string_strikethrough, string_color_and_reset
 
 try:
     from HTMLParser import HTMLParser
@@ -302,7 +302,8 @@ class Formatted(object):
                 try:
                     lexer = get_lexer_by_name(value)
                 except ClassNotFound:
-                    lexer = guess_lexer(string)
+                    return string_color_and_reset(string,
+                                                  G.CONFIG.color.untagged_code)
 
                 try:
                     style = get_style_by_name(G.CONFIG.look.pygments_style)
@@ -345,14 +346,21 @@ class Formatted(object):
                 return prefix + text.replace("\n", "\n{}".format(prefix))
 
             for key, value in attributes.items():
-                # Don't use textwrap to quote the code
-                if attributes["code"] and key == "quote" and value:
+                if not value:
                     continue
+
+                # Don't use textwrap to quote the code
+                if key == "quote" and attributes["code"]:
+                    continue
+
+                # Reflow inline code blocks
+                if key == "code" and not attributes["preformatted"]:
+                    text = text.strip().replace('\n', ' ')
 
                 text = add_attribute(text, key, value)
 
                 # If we're quoted code add quotation marks now.
-                if attributes["quote"] and key == "code" and value:
+                if key == "code" and attributes["quote"]:
                     text = indent(
                         text,
                         "{}>{} ".format(
@@ -382,6 +390,7 @@ DEFAULT_ATTRIBUTES = {
     "italic": False,
     "underline": False,
     "strikethrough": False,
+    "preformatted": False,
     "quote": False,
     "code": None,
     "fgcolor": None,
@@ -430,6 +439,8 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("strikethrough")
         elif tag == "blockquote":
             self._toggle_attribute("quote")
+        elif tag == "pre":
+            self._toggle_attribute("preformatted")
         elif tag == "code":
             lang = None
 
@@ -480,6 +491,8 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("underline")
         elif tag == "del":
             self._toggle_attribute("strikethrough")
+        elif tag == "pre":
+            self._toggle_attribute("preformatted")
         elif tag == "code":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
