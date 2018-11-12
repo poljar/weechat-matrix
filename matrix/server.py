@@ -1357,7 +1357,7 @@ def matrix_timer_cb(server_name, remaining_calls):
         server.disconnect()
         return W.WEECHAT_RC_OK
 
-    if server.sync_time and current_time > (server.sync_time + 2):
+    if server.sync_time and current_time > server.sync_time:
         timeout = 0 if server.transport_type == TransportType.HTTP else 30000
         sync_filter = {
             "room": {
