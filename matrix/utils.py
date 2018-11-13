@@ -14,7 +14,7 @@
 # CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-from __future__ import unicode_literals
+from __future__ import unicode_literals, division
 
 import time
 from typing import Any, Dict, List
@@ -132,3 +132,36 @@ def color_pair(color_fg, color_bg):
         return "{},{}".format(color_fg, color_bg)
     else:
         return color_fg
+
+
+def text_block(text, margin=0):
+    """
+    Pad block of text with whitespace to form a regular block, optionally
+    adding a margin.
+    """
+
+    # add vertical margin
+    vertical_margin = margin // 2
+    text = "{}{}{}".format(
+        "\n" * vertical_margin,
+        text,
+        "\n" * vertical_margin
+    )
+
+    lines = text.split("\n")
+    longest_len = max(len(l) for l in lines) + margin
+
+    # pad block and add horizontal margin
+    text = "\n".join(
+        "{pre}{line}{post}".format(
+            pre=" " * margin,
+            line=l,
+            post=" " * (longest_len - len(l)))
+        for l in lines)
+
+    return text
+
+
+def colored_text_block(text, margin=0, color_pair=""):
+    """ Like text_block, but also colors it."""
+    return string_color_and_reset(text_block(text, margin=margin), color_pair)

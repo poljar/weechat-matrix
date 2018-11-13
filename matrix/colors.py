@@ -37,7 +37,9 @@ from . import globals as G
 from .globals import W
 from .utils import (string_strikethrough,
                     string_color_and_reset,
-                    color_pair)
+                    color_pair,
+                    text_block,
+                    colored_text_block)
 
 try:
     from HTMLParser import HTMLParser
@@ -275,7 +277,7 @@ class Formatted(object):
 
     def to_weechat(self):
         # TODO BG COLOR
-        def add_attribute(string, name, value):
+        def add_attribute(string, name, value, attributes):
             if not value:
                 return string
             elif name == "bold":
@@ -303,23 +305,40 @@ class Formatted(object):
                     W.string_remove_color(string.replace("\n", ""), "")
                 )
             elif name == "code":
-                try:
-                    lexer = get_lexer_by_name(value)
-                except ClassNotFound:
-                    return string_color_and_reset(
-                        string,
-                        color_pair(G.CONFIG.color.untagged_code_fg,
-                                   G.CONFIG.color.untagged_code_bg))
+                code_color_pair = color_pair(
+                    G.CONFIG.color.untagged_code_fg,
+                    G.CONFIG.color.untagged_code_bg
+                )
 
-                try:
-                    style = get_style_by_name(G.CONFIG.look.pygments_style)
-                except ClassNotFound:
-                    style = "native"
+                if attributes["preformatted"]:
+                    # code block
 
-                # highlight adds a newline to the end of the string, remove it
-                # from the output
-                return highlight(string, lexer,
-                                 WeechatFormatter(style=style)).rstrip()
+                    try:
+                        lexer = get_lexer_by_name(value)
+                    except ClassNotFound:
+                        return colored_text_block(
+                            string,
+                            margin=2,
+                            color_pair=code_color_pair)
+
+                    try:
+                        style = get_style_by_name(G.CONFIG.look.pygments_style)
+                    except ClassNotFound:
+                        style = "native"
+
+                    code_block = text_block(string, margin=2)
+
+                    # highlight adds a newline to the end of the string, remove it
+                    # from the output
+                    highlighted_code = highlight(
+                        code_block,
+                        lexer,
+                        WeechatFormatter(style=style)
+                    ).rstrip()
+
+                    return highlighted_code
+                else:
+                    return string_color_and_reset(string, code_color_pair)
             elif name == "fgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color(value),
@@ -344,7 +363,10 @@ class Formatted(object):
             # terminal, but doing it the other way around results in garbage.
             if "strikethrough" in attributes:
                 text = add_attribute(
-                    text, "strikethrough", attributes["strikethrough"]
+                    text,
+                    "strikethrough",
+                    attributes["strikethrough"],
+                    attributes
                 )
                 attributes.pop("strikethrough")
 
@@ -363,7 +385,7 @@ class Formatted(object):
                 if key == "code" and not attributes["preformatted"]:
                     text = text.strip().replace('\n', ' ')
 
-                text = add_attribute(text, key, value)
+                text = add_attribute(text, key, value, attributes)
 
                 # If we're quoted code add quotation marks now.
                 if key == "code" and attributes["quote"]:
