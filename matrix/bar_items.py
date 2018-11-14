@@ -101,7 +101,9 @@ def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
             modes = []
 
             if room.encrypted:
-                modes.append("🔐")
+                modes.append(
+                    G.CONFIG.look.encrypted_room_sign
+                )
 
             if (server.client
                     and server.client.room_contains_unverified(room.room_id)):

@@ -465,6 +465,18 @@ class MatrixConfig(WeechatConfig):
                 eval_cast,
             ),
             Option(
+                "encrypted_room_sign",
+                "string",
+                "",
+                0,
+                0,
+                "🔐",
+                ("A sign that is used to show that the current room is "
+                 "encrypted "
+                 "(note: content is evaluated, see /help eval)"),
+                eval_cast,
+            ),
+            Option(
                 "pygments_style",
                 "string",
                 "",
