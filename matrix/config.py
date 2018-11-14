@@ -453,6 +453,18 @@ class MatrixConfig(WeechatConfig):
                 eval_cast,
             ),
             Option(
+                "busy_sign",
+                "string",
+                "",
+                0,
+                0,
+                "⏳",
+                ("A sign that is used to signal that the client is busy e.g. "
+                 "when the room backlog is fetching"
+                 " (note: content is evaluated, see /help eval)"),
+                eval_cast,
+            ),
+            Option(
                 "pygments_style",
                 "string",
                 "",

@@ -113,7 +113,9 @@ def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
                 modes.append("❌")
 
             if room_buffer.backlog_pending or server.busy:
-                modes.append("⏳")
+                modes.append(
+                    G.CONFIG.look.busy_sign
+                )
 
             return "".join(modes)
 
