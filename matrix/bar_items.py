@@ -101,23 +101,17 @@ def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
             modes = []
 
             if room.encrypted:
-                modes.append(
-                    G.CONFIG.look.encrypted_room_sign
-                )
+                modes.append(G.CONFIG.look.encrypted_room_sign)
 
             if (server.client
                     and server.client.room_contains_unverified(room.room_id)):
-                modes.append(
-                    G.CONFIG.look.encryption_warning_sign,
-                )
+                modes.append(G.CONFIG.look.encryption_warning_sign)
 
             if not server.connected:
-                modes.append("❌")
+                modes.append(G.CONFIG.look.disconnect_sign)
 
             if room_buffer.backlog_pending or server.busy:
-                modes.append(
-                    G.CONFIG.look.busy_sign
-                )
+                modes.append(G.CONFIG.look.busy_sign)
 
             return "".join(modes)
 

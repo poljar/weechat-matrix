@@ -477,6 +477,17 @@ class MatrixConfig(WeechatConfig):
                 eval_cast,
             ),
             Option(
+                "disconnect_sign",
+                "string",
+                "",
+                0,
+                0,
+                "❌",
+                ("A sign that is used to show that the server is disconnected "
+                 "(note: content is evaluated, see /help eval)"),
+                eval_cast,
+            ),
+            Option(
                 "pygments_style",
                 "string",
                 "",
