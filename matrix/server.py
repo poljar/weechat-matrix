@@ -1034,13 +1034,6 @@ class MatrixServer(object):
     def handle_response(self, response):
         # type: (Response) -> None
         self.lag = response.elapsed * 1000
-
-        # If the response was a sync response and contained a timeout the
-        # timeout is expected and should be removed from the lag.
-        # TODO the timeout isn't a constant
-        if isinstance(response, SyncResponse):
-            self.lag = max(0, self.lag - (30000))
-
         self.lag_done = True
         W.bar_item_update("lag")
 
