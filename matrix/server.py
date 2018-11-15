@@ -756,6 +756,8 @@ class MatrixServer(object):
         self.send_or_queue(request)
 
     def get_joined_members(self, room_id):
+        if not self.connected:
+            return
         if room_id in self.member_request_list:
             return
 
