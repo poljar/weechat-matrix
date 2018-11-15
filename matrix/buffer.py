@@ -558,7 +558,7 @@ class WeechatChannelBuffer(object):
         user.update_speaking_time(date)
         self.unmask_smart_filtered_nick(nick)
 
-    def _print_action(self, user, message, date, tags, extra_prefix=""):
+    def _format_action(self, user, message):
         nick_prefix = (
             ""
             if not user.prefix
@@ -570,16 +570,22 @@ class WeechatChannelBuffer(object):
         )
 
         data = (
-            "{extra_prefix}{prefix}{nick_prefix}{nick_color}{author}"
+            "{nick_prefix}{nick_color}{author}"
             "{ncolor} {msg}").format(
-            extra_prefix=extra_prefix,
-            prefix=W.prefix("action"),
             nick_prefix=nick_prefix,
             nick_color=W.color(user.color),
             author=user.nick,
             ncolor=W.color("reset"),
             msg=message,
         )
+        return data
+
+    def _print_action(self, user, message, date, tags, extra_prefix=""):
+        data = self._format_action(user, message)
+        data = "{extra_prefix}{prefix}{data}".format(
+            extra_prefix=extra_prefix,
+            prefix=W.prefix("action"),
+            data=data)
 
         self.print_date_tags(data, date, tags)
 
@@ -1355,7 +1361,16 @@ class RoomBuffer(object):
             partial(self._find_by_uuid_predicate, uuid)
         )
 
-        new_lines = new_message.formatted_message.to_weechat().split("\n")
+        if isinstance(new_message, OwnAction):
+            displayed_nick = self.displayed_nicks[self.room.own_user_id]
+            user = self.weechat_buffer._get_user(displayed_nick)
+            data = self.weechat_buffer._format_action(
+                user,
+                new_message.formatted_message.to_weechat()
+            )
+            new_lines = data.split("\n")
+        else:
+            new_lines = new_message.formatted_message.to_weechat().split("\n")
 
         for i, line in enumerate(lines):
             line.message = new_lines[i]
