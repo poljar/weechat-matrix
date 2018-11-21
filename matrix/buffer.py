@@ -354,9 +354,6 @@ class WeechatChannelBuffer(object):
 
         W.buffer_set(self._ptr, "localvar_set_server", server_name)
 
-        # short_name = strip_matrix_server(room_id)
-        # W.buffer_set(self._ptr, "short_name", short_name)
-
         W.nicklist_add_group(
             self._ptr, "", "000|o", "weechat.color.nicklist_group", 1
         )
