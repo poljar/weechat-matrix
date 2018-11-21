@@ -52,6 +52,7 @@ from nio import (
     LoginError,
     JoinedMembersResponse,
     JoinedMembersError,
+    RoomKeyEvent
 )
 
 from . import globals as G
@@ -963,6 +964,20 @@ class MatrixServer(object):
             return
 
         self._handle_room_info(response)
+
+        for event in response.to_device_events:
+            if not isinstance(event, RoomKeyEvent):
+                continue
+
+            message = {
+                "sender": event.sender,
+                "sender_key": event.sender_key,
+                "room_id": event.room_id,
+                "session_id": event.session_id,
+                "algorithm": event.algorithm,
+                "server": self.name,
+            }
+            W.hook_hsignal_send("matrix_room_key_received", message)
 
         # Full sync response handle everything.
         if isinstance(response, SyncResponse):
