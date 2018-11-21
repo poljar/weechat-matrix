@@ -1083,6 +1083,10 @@ class RoomBuffer(object):
         tags = [SCRIPT_NAME + "_id_{}".format(event.event_id)]
         if event.sender_key:
             tags.append(SCRIPT_NAME + "_senderkey_{}".format(event.sender_key))
+        if event.session_id:
+            tags.append(SCRIPT_NAME + "_session_id_{}".format(
+                event.session_id
+            ))
 
         return tags
 
