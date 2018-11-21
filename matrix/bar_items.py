@@ -125,7 +125,7 @@ def matrix_bar_nicklist_count(data, item, window, buffer, extra_info):
         if buffer in server.buffers.values():
             room_buffer = server.find_room_from_ptr(buffer)
             room = room_buffer.room
-            return str(len(room.users))
+            return str(room.member_count)
 
     return ""
 
