@@ -957,6 +957,28 @@ class MatrixServer(object):
                                 "matrix_load_users_cb", self.name)
             self.lazy_load_hook = hook
 
+    def decrypt_printed_messages(self, key_event):
+        """Decrypt already printed messages and send them to the buffer"""
+        try:
+            room_buffer = self.find_room_from_id(key_event.room_id)
+        except KeyError:
+            return
+
+        decrypted_events = []
+
+        for undecrypted_event in room_buffer.undecrypted_events:
+            if undecrypted_event.session_id != key_event.session_id:
+                continue
+
+            event = self.client.decrypt_event(undecrypted_event)
+            if event:
+                decrypted_events.append((undecrypted_event, event))
+
+        for event_pair in decrypted_events:
+            undecrypted_event, event = event_pair
+            room_buffer.undecrypted_events.remove(undecrypted_event)
+            room_buffer.replace_undecrypted_line(event)
+
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
         if self.next_batch == response.next_batch:
@@ -978,6 +1000,10 @@ class MatrixServer(object):
                 "server": self.name,
             }
             W.hook_hsignal_send("matrix_room_key_received", message)
+
+            # TODO try to decrypt some cached undecrypted messages with the
+            # new key
+            # self.decrypt_printed_messages(event)
 
         # Full sync response handle everything.
         if isinstance(response, SyncResponse):

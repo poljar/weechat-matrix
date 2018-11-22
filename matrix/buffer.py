@@ -20,6 +20,7 @@ from __future__ import unicode_literals
 import time
 from builtins import super
 from functools import partial
+from collections import deque
 from typing import Dict, List, NamedTuple, Optional, Set
 from uuid import UUID
 
@@ -816,6 +817,7 @@ class RoomBuffer(object):
 
         self.sent_messages_queue = dict()  # type: Dict[UUID, OwnMessage]
         self.printed_before_ack_queue = list()  # type: List[UUID]
+        self.undecrypted_events = deque(maxlen=5000)
 
         buffer_name = "{}.{}".format(server_name, room.room_id)
 
@@ -1300,6 +1302,8 @@ class RoomBuffer(object):
                 self.get_event_tags(event) + [session_id_tag]
             )
 
+            self.undecrypted_events.append(event)
+
         else:
             W.prnt(
                 "", "Unhandled event of type {}.".format(type(event).__name__)
@@ -1383,6 +1387,43 @@ class RoomBuffer(object):
             ]
             new_tags.append(SCRIPT_NAME + "_id_" + new_message.event_id)
             line.tags = new_tags
+
+    def replace_undecrypted_line(self, event):
+        """Find a undecrypted message in the buffer and replace it with the now
+        decrypted event."""
+        # TODO different messages need different formatting
+        # To implement this, refactor out the different formatting code
+        # snippets to a Formatter class and reuse them here.
+        if not isinstance(event, RoomMessageText):
+            return
+
+        def predicate(event_id, line):
+            event_tag = SCRIPT_NAME + "_id_{}".format(event_id)
+            if event_tag in line.tags:
+                return True
+            return False
+
+        lines = self.weechat_buffer.find_lines(
+            partial(predicate, event.event_id)
+        )
+
+        if not lines:
+            return
+
+        formatted = None
+        if event.formatted_body:
+            formatted = Formatted.from_html(event.formatted_body)
+
+        data = formatted.to_weechat() if formatted else event.body
+        # TODO this isn't right if the data has multiple lines, that is
+        # everything is printed on a signle line and newlines are shown as a
+        # space.
+        # Weechat should support deleting lines and printing new ones at an
+        # arbitrary position.
+        # To implement this without weechat support either only handle single
+        # line messages or edit the first line in place, print new ones at the
+        # bottom and sort the buffer lines.
+        lines[0].message = data
 
     def old_redacted(self, event):
         tags = [
