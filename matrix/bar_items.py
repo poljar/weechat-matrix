@@ -146,8 +146,14 @@ def matrix_bar_typing_notices_cb(data, item, window, buffer, extra_info):
                 nicks = []
 
                 for user_id in room.typing_users:
+                    if user_id == room.own_user_id:
+                        continue
+
                     nick = room_buffer.displayed_nicks.get(user_id, user_id)
                     nicks.append(nick)
+
+                if not nicks:
+                    return ""
 
                 msg = "{}{}".format(
                     G.CONFIG.look.bar_item_typing_notice_prefix,
