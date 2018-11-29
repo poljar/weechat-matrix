@@ -901,7 +901,7 @@ class RoomBuffer(object):
 
     def find_nick(self, user_id):
         # type: (str) -> str
-        """Find a suitable nick from a user_id"""
+        """Find a suitable nick from a user_id."""
         if user_id in self.displayed_nicks:
             return self.displayed_nicks[user_id]
 
