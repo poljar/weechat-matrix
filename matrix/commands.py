@@ -141,6 +141,18 @@ class WeechatCommandParser(object):
 
         return WeechatCommandParser._run_parser(parser, args)
 
+    @staticmethod
+    def room(args):
+        parser = WeechatArgParse(prog="room")
+        subparsers = parser.add_subparsers(dest="subcommand")
+        typing_notification = subparsers.add_parser("typing-notifications")
+        typing_notification.add_argument(
+            "state",
+            choices=["enable", "disable", "toggle"]
+        )
+
+        return WeechatCommandParser._run_parser(parser, args)
+
 
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
@@ -358,6 +370,22 @@ def hook_commands():
         # Function name
         'matrix_olm_command_cb',
         '')
+
+    W.hook_command(
+        # Command name and short description
+        "room",
+        "change room state",
+        # Synopsis
+        ("typing-notifications <state>"
+         ),
+        # Description
+        ("state: one of enable, disable or toggle\n"),
+        # Completions
+        ("typing-notifications enable|disable|toggle"),
+        # Callback
+        "matrix_room_command_cb",
+        "",
+    )
 
     W.hook_command_run("/buffer clear", "matrix_command_buf_clear_cb", "")
 
@@ -853,6 +881,39 @@ def matrix_invite_command_cb(data, buffer, args):
 
         server.room_invite(room, user_id)
         break
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_room_command_cb(data, buffer, args):
+    parsed_args = WeechatCommandParser.room(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
+
+    for server in SERVERS.values():
+        if buffer == server.server_buffer:
+            server.error(
+                'command "room" must be ' "executed on a Matrix room buffer"
+            )
+            return W.WEECHAT_RC_OK
+
+        room = server.find_room_from_ptr(buffer)
+        if not room:
+            continue
+
+        if not parsed_args.subcommand or parsed_args.subcommand == "list":
+            server.error("command no subcommand found")
+            return W.WEECHAT_RC_OK
+
+        if parsed_args.subcommand == "typing-notifications":
+            if parsed_args.state == "enable":
+                room.typing_enabled = True
+            elif parsed_args.state == "disable":
+                room.typing_enabled = False
+            elif parsed_args.state == "toggle":
+                room.typing_enabled = not room.typing_enabled
+            break
 
     return W.WEECHAT_RC_OK
 
