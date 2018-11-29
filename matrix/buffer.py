@@ -49,7 +49,7 @@ from nio import (
 from . import globals as G
 from .colors import Formatted
 from .config import RedactType
-from .globals import SCRIPT_NAME, SERVERS, W
+from .globals import SCRIPT_NAME, SERVERS, W, TYPING_NOTICE_TIMEOUT
 from .utf import utf8_decode
 from .utils import server_ts_to_weechat, shorten_sender, string_strikethrough
 
@@ -413,6 +413,12 @@ class WeechatChannelBuffer(object):
                 break
 
         self.remove_smart_filtered_nick(nick)
+
+    @property
+    def input(self):
+        # type: () -> str
+        """Get the bar item input text of the buffer."""
+        return W.buffer_get_string(self._ptr, "input")
 
     @property
     def lines(self):
@@ -819,6 +825,9 @@ class RoomBuffer(object):
         self.printed_before_ack_queue = list()  # type: List[UUID]
         self.undecrypted_events = deque(maxlen=5000)
 
+        self.typing_notice_time = None
+        self._typing = False
+
         buffer_name = "{}.{}".format(server_name, room.room_id)
 
         # This dict remembers the connection from a user_id to the name we
@@ -859,6 +868,35 @@ class RoomBuffer(object):
     @property
     def warning_prefix(self):
         return "⚠️ "
+
+    @property
+    def typing(self):
+        # type: () -> bool
+        """Return our typing status."""
+        return self._typing
+
+    @typing.setter
+    def typing(self, value):
+        self._typing = value
+        if value:
+            self.typing_notice_time = time.time()
+        else:
+            self.typing_notice_time = None
+
+    @property
+    def typing_notice_expired(self):
+        # type: () -> bool
+        """Check if the typing notice has expired.
+
+        Returns true if a new typing notice should be sent.
+        """
+        if not self.typing_notice_time:
+            return True
+
+        now = time.time()
+        if (now - self.typing_notice_time) > (TYPING_NOTICE_TIMEOUT / 1000):
+            return True
+        return False
 
     def find_nick(self, user_id):
         # type: (str) -> str

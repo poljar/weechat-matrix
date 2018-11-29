@@ -491,6 +491,25 @@ def lazy_fetch_members_signal(_, _signal, buffer_ptr):
     return W.WEECHAT_RC_OK
 
 
+def typing_notification_cb(data, signal, buffer_ptr):
+    """Send out typing notifications if the user is typing.
+
+    This function is called every time the input text is changed.
+    It checks if we are on a buffer we own, and if we are sends out a typing
+    notification if the room is configured to send them out.
+    """
+    for server in SERVERS.values():
+        room_buffer = server.find_room_from_ptr(buffer_ptr)
+        if room_buffer:
+            server.room_send_typing_notice(room_buffer)
+            return W.WEECHAT_RC_OK
+
+        if buffer_ptr == server.server_buffer:
+            return W.WEECHAT_RC_OK
+
+    return W.WEECHAT_RC_OK
+
+
 if __name__ == "__main__":
     if W.register(WEECHAT_SCRIPT_NAME, WEECHAT_SCRIPT_AUTHOR,
                   WEECHAT_SCRIPT_VERSION, WEECHAT_SCRIPT_LICENSE,
@@ -513,7 +532,8 @@ if __name__ == "__main__":
         init_bar_items()
         init_completion()
 
-        hook = W.hook_signal("buffer_switch", "lazy_fetch_members_signal", "")
+        W.hook_signal("buffer_switch", "lazy_fetch_members_signal", "")
+        W.hook_signal("input_text_changed", "typing_notification_cb", "")
 
         if not SERVERS:
             create_default_server(G.CONFIG)

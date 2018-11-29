@@ -56,7 +56,7 @@ from nio import (
 from . import globals as G
 from .buffer import OwnAction, OwnMessage, RoomBuffer
 from .config import ConfigSection, Option, ServerBufferType
-from .globals import SCRIPT_NAME, SERVERS, W, MAX_EVENTS
+from .globals import SCRIPT_NAME, SERVERS, W, MAX_EVENTS, TYPING_NOTICE_TIMEOUT
 from .utf import utf8_decode
 from .utils import create_server_buffer, key_from_value, server_buffer_prnt
 
@@ -672,6 +672,49 @@ class MatrixServer(object):
         room_buffer.backlog_pending = True
         self.backlog_queue[uuid] = room_id
         self.send_or_queue(request)
+
+    def room_send_typing_notice(self, room_buffer):
+        """Send a typing notice for the provided room.
+
+        Args:
+            room_buffer(RoomBuffer): the room for which the typing notice needs
+                to be sent.
+        """
+        if not self.connected:
+            return
+
+        input = room_buffer.weechat_buffer.input
+
+        # Don't send a typing notice if the user is typing in a weechat command
+        if input.startswith("/") and not input.startswith("//"):
+            return
+
+        # Don't send a typing notice if we only typed a couple of letters.
+        elif len(input) < 4 and not room_buffer.typing:
+            return
+
+        # If we were typing already and our input bar now has no letters or
+        # only a couple of letters stop the typing notice.
+        elif len(input) < 4:
+            _, request = self.client.room_typing(
+                room_buffer.room.room_id,
+                typing_state=False)
+            room_buffer.typing = False
+            self.send(request)
+            return
+
+        # Don't send out a typing notice if we already sent one out and it
+        # didn't expire yet.
+        if not room_buffer.typing_notice_expired:
+            return
+
+        _, request = self.client.room_typing(
+            room_buffer.room.room_id,
+            typing_state=True,
+            timeout=TYPING_NOTICE_TIMEOUT)
+
+        room_buffer.typing = True
+        self.send(request)
 
     def room_send_message(
         self,
