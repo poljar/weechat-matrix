@@ -685,6 +685,16 @@ class MatrixServer(object):
 
         input = room_buffer.weechat_buffer.input
 
+        typing_enabled = bool(int(W.string_eval_expression(
+            G.CONFIG.network.typing_notice_conditions,
+            {},
+            {"typing_enabled": str(int(room_buffer.typing_enabled))},
+            {"type": "condition"}
+        )))
+
+        if not typing_enabled:
+            return
+
         # Don't send a typing notice if the user is typing in a weechat command
         if input.startswith("/") and not input.startswith("//"):
             return

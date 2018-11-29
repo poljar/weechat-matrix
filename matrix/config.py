@@ -612,6 +612,19 @@ class MatrixConfig(WeechatConfig):
                 "500",
                 ("minimum lag to show (in milliseconds)"),
             ),
+            Option(
+                "typing_notice_conditions",
+                "string",
+                "",
+                0,
+                0,
+                "${typing_enabled}",
+                ("conditions to send typing notifications (note: content is "
+                 "evaluated, see /help eval); besides the buffer and window "
+                 "variables the typing_enabled variable is also expanded; "
+                 "the typing_enabled variable can be manipulated with the "
+                 "/room command, see /help room"),
+            ),
         ]
 
         color_options = [

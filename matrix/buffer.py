@@ -827,6 +827,7 @@ class RoomBuffer(object):
 
         self.typing_notice_time = None
         self._typing = False
+        self.typing_enabled = True
 
         buffer_name = "{}.{}".format(server_name, room.room_id)
 
