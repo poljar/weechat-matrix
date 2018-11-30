@@ -945,7 +945,7 @@ class RoomBuffer(object):
         if (user.user_id.startswith("@_discord_") or
                 user.user_id.startswith("@_slack_")):
             if user.display_name:
-                short_name = user.display_name
+                short_name = user.display_name[0:50]
         elif user.user_id.startswith("@freenode_"):
             short_name = shorten_sender(user.user_id[9:])
 
