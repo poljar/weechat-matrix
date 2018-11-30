@@ -942,7 +942,8 @@ class RoomBuffer(object):
 
         # TODO handle this special case for discord bridge users and
         # freenode bridge users better
-        if user.user_id.startswith("@_discord_"):
+        if (user.user_id.startswith("@_discord_") or
+                user.user_id.startswith("@_slack_")):
             if user.display_name:
                 short_name = user.display_name
         elif user.user_id.startswith("@freenode_"):
