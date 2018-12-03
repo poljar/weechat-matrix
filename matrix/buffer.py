@@ -43,7 +43,8 @@ from nio import (
     RoomTopicEvent,
     MegolmEvent,
     Event,
-    OlmTrustError
+    OlmTrustError,
+    UnknownEvent
 )
 
 from . import globals as G
@@ -1388,6 +1389,9 @@ class RoomBuffer(object):
             )
 
             self.undecrypted_events.append(event)
+
+        elif isinstance(event, UnknownEvent):
+            pass
 
         else:
             W.prnt(
