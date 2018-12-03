@@ -463,12 +463,16 @@ class WeechatHandler(StreamHandler):
         W.prnt(buf, item)
 
 
-def lazy_fetch_members_signal(_, _signal, buffer_ptr):
-    """ Fetch room members on a buffer switch signal.
+def buffer_switch_cb(_, _signal, buffer_ptr):
+    """Do some buffer operations when we switch buffers.
+
     This function is called every time we switch a buffer. The pointer of
-    the new buffer is given to us by weechat. If it is one of our room buffers
-    we check if the members for the room aren't fetched and fetch them now if
-    they aren't.
+    the new buffer is given to us by weechat.
+
+    If it is one of our room buffers we check if the members for the room
+    aren't fetched and fetch them now if they aren't.
+
+    Read receipts are send out from here as well.
     """
     for server in SERVERS.values():
         if buffer_ptr == server.server_buffer:
@@ -480,6 +484,9 @@ def lazy_fetch_members_signal(_, _signal, buffer_ptr):
         room_buffer = server.find_room_from_ptr(buffer_ptr)
         if not room_buffer:
             continue
+
+        if room_buffer.should_send_read_marker:
+            server.room_send_read_marker(room_buffer)
 
         if room_buffer.members_fetched:
             return W.WEECHAT_RC_OK
@@ -533,7 +540,7 @@ if __name__ == "__main__":
         init_bar_items()
         init_completion()
 
-        W.hook_signal("buffer_switch", "lazy_fetch_members_signal", "")
+        W.hook_signal("buffer_switch", "buffer_switch_cb", "")
         W.hook_signal("input_text_changed", "typing_notification_cb", "")
 
         if not SERVERS:

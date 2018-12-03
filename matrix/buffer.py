@@ -829,6 +829,9 @@ class RoomBuffer(object):
         self._typing = False
         self.typing_enabled = True
 
+        self.last_read_event = None
+        self._read_markers_enabled = True
+
         buffer_name = "{}.{}".format(server_name, room.room_id)
 
         # This dict remembers the connection from a user_id to the name we
@@ -898,6 +901,48 @@ class RoomBuffer(object):
         if (now - self.typing_notice_time) > (TYPING_NOTICE_TIMEOUT / 1000):
             return True
         return False
+
+    @property
+    def should_send_read_marker(self):
+        # type () -> bool
+        """Check if we need to send out a read receipt."""
+        if not self.read_markers_enabled:
+            return False
+
+        if not self.last_read_event:
+            return True
+
+        if self.last_read_event == self.last_event_id:
+            return False
+
+        return True
+
+    @property
+    def last_event_id(self):
+        # type () -> str
+        """Get the event id of the last shown matrix event."""
+        for line in self.weechat_buffer.lines:
+            for tag in line.tags:
+                if tag.startswith("matrix_id"):
+                    event_id = tag[10:]
+                    return event_id
+
+        return ""
+
+    @property
+    def read_markers_enabled(self):
+        # type: () -> bool
+        """Check if read receipts are enabled for this room."""
+        return bool(int(W.string_eval_expression(
+            G.CONFIG.network.read_markers_conditions,
+            {},
+            {"markers_enabled": str(int(self._read_markers_enabled))},
+            {"type": "condition"}
+        )))
+
+    @read_markers_enabled.setter
+    def read_markers_enabled(self, value):
+        self._read_markers_enabled = value
 
     def find_nick(self, user_id):
         # type: (str) -> str

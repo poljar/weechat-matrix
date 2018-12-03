@@ -151,6 +151,12 @@ class WeechatCommandParser(object):
             choices=["enable", "disable", "toggle"]
         )
 
+        read_markers = subparsers.add_parser("read-markers")
+        read_markers.add_argument(
+            "state",
+            choices=["enable", "disable", "toggle"]
+        )
+
         return WeechatCommandParser._run_parser(parser, args)
 
 
@@ -376,12 +382,15 @@ def hook_commands():
         "room",
         "change room state",
         # Synopsis
-        ("typing-notifications <state>"
+        ("typing-notifications <state>||"
+         "read-markers <state>"
          ),
         # Description
         ("state: one of enable, disable or toggle\n"),
         # Completions
-        ("typing-notifications enable|disable|toggle"),
+        ("typing-notifications enable|disable|toggle||"
+         "read-markers enable|disable|toggle"
+        ),
         # Callback
         "matrix_room_command_cb",
         "",
@@ -913,6 +922,15 @@ def matrix_room_command_cb(data, buffer, args):
                 room.typing_enabled = False
             elif parsed_args.state == "toggle":
                 room.typing_enabled = not room.typing_enabled
+            break
+
+        elif parsed_args.subcommand == "read-markers":
+            if parsed_args.state == "enable":
+                room.read_markers_enabled = True
+            elif parsed_args.state == "disable":
+                room.read_markers_enabled = False
+            elif parsed_args.state == "toggle":
+                room.read_markers_enabled = not room.read_markers_enabled
             break
 
     return W.WEECHAT_RC_OK

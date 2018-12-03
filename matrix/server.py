@@ -673,6 +673,26 @@ class MatrixServer(object):
         self.backlog_queue[uuid] = room_id
         self.send_or_queue(request)
 
+    def room_send_read_marker(self, room_buffer):
+        """Send read markers for the provided room.
+
+        Args:
+            room_buffer(RoomBuffer): the room for which the read markers should
+                be sent.
+        """
+        if not self.connected:
+            return
+
+        event_id = room_buffer.last_event_id
+
+        _, request = self.client.room_read_markers(
+            room_buffer.room.room_id,
+            fully_read_event=event_id,
+            read_event=event_id)
+        self.send(request)
+
+        room_buffer.last_read_event = event_id
+
     def room_send_typing_notice(self, room_buffer):
         """Send a typing notice for the provided room.
 

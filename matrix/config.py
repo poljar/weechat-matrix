@@ -625,6 +625,19 @@ class MatrixConfig(WeechatConfig):
                  "the typing_enabled variable can be manipulated with the "
                  "/room command, see /help room"),
             ),
+            Option(
+                "read_markers_conditions",
+                "string",
+                "",
+                0,
+                0,
+                "${markers_enabled}",
+                ("conditions to send read markers (note: content is "
+                 "evaluated, see /help eval); besides the buffer and window "
+                 "variables the markers_enabled variable is also expanded; "
+                 "the markers_enabled variable can be manipulated with the "
+                 "/room command, see /help room"),
+            ),
         ]
 
         color_options = [
