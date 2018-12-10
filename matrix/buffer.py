@@ -44,7 +44,8 @@ from nio import (
     MegolmEvent,
     Event,
     OlmTrustError,
-    UnknownEvent
+    UnknownEvent,
+    FullyReadEvent,
 )
 
 from . import globals as G
@@ -1644,6 +1645,12 @@ class RoomBuffer(object):
 
         for event in timeline_events:
             self.handle_timeline_event(event)
+
+        for event in info.account_data:
+            if isinstance(event, FullyReadEvent):
+                if event.event_id == self.last_event_id:
+                    W.buffer_set(self.weechat_buffer._ptr, "unread", "")
+                    W.buffer_set(self.weechat_buffer._ptr, "hotlist", "-1")
 
         # We didn't handle all joined users, the room display name might still
         # be outdated because of that, update it now.
