@@ -1649,6 +1649,11 @@ class RoomBuffer(object):
         for event in info.account_data:
             if isinstance(event, FullyReadEvent):
                 if event.event_id == self.last_event_id:
+                    current_buffer = W.buffer_search("", "")
+
+                    if self.weechat_buffer._ptr == current_buffer:
+                        continue
+
                     W.buffer_set(self.weechat_buffer._ptr, "unread", "")
                     W.buffer_set(self.weechat_buffer._ptr, "hotlist", "-1")
 
