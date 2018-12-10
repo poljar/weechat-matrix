@@ -673,25 +673,22 @@ class MatrixServer(object):
         self.backlog_queue[uuid] = room_id
         self.send_or_queue(request)
 
-    def room_send_read_marker(self, room_buffer):
+    def room_send_read_marker(self, room_id, event_id):
         """Send read markers for the provided room.
 
         Args:
-            room_buffer(RoomBuffer): the room for which the read markers should
+            room_id(str): the room for which the read markers should
                 be sent.
+            event_id(str): the event id where to set the marker
         """
         if not self.connected:
             return
 
-        event_id = room_buffer.last_event_id
-
         _, request = self.client.room_read_markers(
-            room_buffer.room.room_id,
+            room_id,
             fully_read_event=event_id,
             read_event=event_id)
         self.send(request)
-
-        room_buffer.last_read_event = event_id
 
     def room_send_typing_notice(self, room_buffer):
         """Send a typing notice for the provided room.
@@ -863,6 +860,13 @@ class MatrixServer(object):
         room_buffer.printed_before_ack_queue.remove(response.uuid)
 
     def handle_own_messages(self, response):
+        def send_marker():
+            if not room_buffer.read_markers_enabled:
+                return
+
+            self.room_send_read_marker(response.room_id, response.event_id)
+            room_buffer.last_read_event = response.event_id
+
         room_buffer = self.room_buffers[response.room_id]
         message = room_buffer.sent_messages_queue.pop(response.uuid)
         message = message._replace(event_id=response.event_id)
@@ -871,13 +875,16 @@ class MatrixServer(object):
         if response.uuid in room_buffer.printed_before_ack_queue:
             room_buffer.replace_printed_line_by_uuid(response.uuid, message)
             room_buffer.printed_before_ack_queue.remove(response.uuid)
+            send_marker()
             return
 
         if isinstance(message, OwnAction):
             room_buffer.self_action(message)
+            send_marker()
             return
         if isinstance(message, OwnMessage):
             room_buffer.self_message(message)
+            send_marker()
             return
 
         raise NotImplementedError(

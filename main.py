@@ -486,7 +486,10 @@ def buffer_switch_cb(_, _signal, buffer_ptr):
             continue
 
         if room_buffer.should_send_read_marker:
-            server.room_send_read_marker(room_buffer)
+            event_id = room_buffer.last_event_id
+            server.room_send_read_marker(
+                room_buffer.room.room_id, event_id)
+            room_buffer.last_read_event = event_id
 
         if room_buffer.members_fetched:
             return W.WEECHAT_RC_OK
