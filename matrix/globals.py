@@ -18,6 +18,7 @@ from __future__ import unicode_literals
 
 import sys
 from typing import Dict, Optional
+from logbook import Logger
 
 from .utf import WeechatWrapper
 
@@ -41,3 +42,4 @@ ENCRYPTION = True  # type: bool
 SCRIPT_NAME = "matrix"  # type: str
 MAX_EVENTS = 100
 TYPING_NOTICE_TIMEOUT = 4000  # 4 seconds typing notice lifetime
+LOGGER = Logger("weechat-matrix")
