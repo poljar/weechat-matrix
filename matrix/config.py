@@ -395,6 +395,7 @@ class MatrixConfig(WeechatConfig):
 
     def __init__(self):
         self.debug_buffer = ""
+        self.upload_buffer = ""
         self.debug_category = "all"
         self.page_up_hook = None
 

@@ -23,10 +23,11 @@ from collections import defaultdict
 
 from . import globals as G
 from .colors import Formatted
-from .globals import SERVERS, W
+from .globals import SERVERS, W, UPLOADS
 from .server import MatrixServer
 from .utf import utf8_decode
 from .utils import key_from_value, tags_from_line_data
+from .uploads import UploadsBuffer, Upload
 
 
 class ParseError(Exception):
@@ -157,6 +158,23 @@ class WeechatCommandParser(object):
             choices=["enable", "disable", "toggle"]
         )
 
+        return WeechatCommandParser._run_parser(parser, args)
+
+    @staticmethod
+    def uploads(args):
+        parser = WeechatArgParse(prog="uploads")
+        subparsers = parser.add_subparsers(dest="subcommand")
+        subparsers.add_parser("list")
+        subparsers.add_parser("listfull")
+        subparsers.add_parser("up")
+        subparsers.add_parser("down")
+
+        return WeechatCommandParser._run_parser(parser, args)
+
+    @staticmethod
+    def upload(args):
+        parser = WeechatArgParse(prog="upload")
+        parser.add_argument("file")
         return WeechatCommandParser._run_parser(parser, args)
 
 
@@ -393,6 +411,39 @@ def hook_commands():
         ),
         # Callback
         "matrix_room_command_cb",
+        "",
+    )
+
+    # W.hook_command(
+    #     # Command name and short description
+    #     "uploads",
+    #     "Open the uploads buffer or list uploads in the core buffer",
+    #     # Synopsis
+    #     ("list||"
+    #      "listfull"
+    #      ),
+    #     # Description
+    #     (""),
+    #     # Completions
+    #     ("list ||"
+    #      "listfull"),
+    #     # Callback
+    #     "matrix_uploads_command_cb",
+    #     "",
+    # )
+
+    W.hook_command(
+        # Command name and short description
+        "upload",
+        "Upload a file to a room",
+        # Synopsis
+        ("<file>"),
+        # Description
+        (""),
+        # Completions
+        ("%(filename)"),
+        # Callback
+        "matrix_upload_command_cb",
         "",
     )
 
@@ -932,6 +983,72 @@ def matrix_room_command_cb(data, buffer, args):
             elif parsed_args.state == "toggle":
                 room.read_markers_enabled = not room.read_markers_enabled
             break
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_uploads_command_cb(data, buffer, args):
+    if not args:
+        if not G.CONFIG.upload_buffer:
+            G.CONFIG.upload_buffer = UploadsBuffer()
+        G.CONFIG.upload_buffer.display()
+        return W.WEECHAT_RC_OK
+
+    parsed_args = WeechatCommandParser.uploads(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
+
+    if parsed_args.subcommand == "list":
+        pass
+    elif parsed_args.subcommand == "listfull":
+        pass
+    elif parsed_args.subcommand == "up":
+        if G.CONFIG.upload_buffer:
+            G.CONFIG.upload_buffer.move_line_up()
+    elif parsed_args.subcommand == "down":
+        if G.CONFIG.upload_buffer:
+            G.CONFIG.upload_buffer.move_line_down()
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_upload_command_cb(data, buffer, args):
+    parsed_args = WeechatCommandParser.upload(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
+
+    for server in SERVERS.values():
+        if buffer == server.server_buffer:
+            server.error(
+                'command "upload" must be ' "executed on a Matrix room buffer"
+            )
+            return W.WEECHAT_RC_OK
+
+        room_buffer = server.find_room_from_ptr(buffer)
+        if not room_buffer:
+            continue
+
+        if room_buffer.room.encrypted:
+            room_buffer.error("Uploading to encrypted rooms is "
+                              "not yet implemented")
+            return W.WEECHAT_RC_OK
+
+        upload = Upload(
+            server.name,
+            server.config.address,
+            server.client.access_token,
+            room_buffer.room.room_id,
+            parsed_args.file,
+            room_buffer.room.encrypted
+        )
+        UPLOADS[upload.uuid] = upload
+
+        if G.CONFIG.upload_buffer:
+            G.CONFIG.upload_buffer.render()
+
+        break
 
     return W.WEECHAT_RC_OK
 

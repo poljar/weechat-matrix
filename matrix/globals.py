@@ -19,12 +19,14 @@ from __future__ import unicode_literals
 import sys
 from typing import Dict, Optional
 from logbook import Logger
+from collections import OrderedDict
 
 from .utf import WeechatWrapper
 
 if False:
     from .server import MatrixServer
     from .config import MatrixConfig
+    from .uploads import Upload
 
 
 try:
@@ -43,3 +45,4 @@ SCRIPT_NAME = "matrix"  # type: str
 MAX_EVENTS = 100
 TYPING_NOTICE_TIMEOUT = 4000  # 4 seconds typing notice lifetime
 LOGGER = Logger("weechat-matrix")
+UPLOADS = OrderedDict()  # type: Dict[str, Upload]

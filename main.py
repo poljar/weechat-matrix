@@ -53,7 +53,8 @@ from matrix.commands import (hook_commands, hook_page_up,
                              matrix_me_command_cb, matrix_part_command_cb,
                              matrix_redact_command_cb, matrix_topic_command_cb,
                              matrix_olm_command_cb, matrix_devices_command_cb,
-                             matrix_room_command_cb)
+                             matrix_room_command_cb, matrix_uploads_command_cb,
+                             matrix_upload_command_cb)
 from matrix.completion import (init_completion, matrix_command_completion_cb,
                                matrix_debug_completion_cb,
                                matrix_message_completion_cb,
@@ -75,6 +76,8 @@ from matrix.server import (MatrixServer, create_default_server,
                            matrix_partial_sync_cb)
 from matrix.utf import utf8_decode
 from matrix.utils import server_buffer_prnt, server_buffer_set_title
+
+from matrix.uploads import UploadsBuffer, upload_cb
 
 # yapf: disable
 WEECHAT_SCRIPT_NAME = SCRIPT_NAME

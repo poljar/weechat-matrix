@@ -28,6 +28,7 @@ from typing import Any, Deque, Dict, Optional, List, NamedTuple, DefaultDict
 from uuid import UUID
 
 from nio import (
+    Api,
     HttpClient,
     LocalProtocolError,
     LoginResponse,
@@ -746,18 +747,70 @@ class MatrixServer(object):
         room_buffer.typing = True
         self.send(request)
 
+    def room_send_upload(
+        self,
+        upload
+    ):
+        """Send a room message containing the mxc URI of an upload."""
+        try:
+            room_buffer = self.find_room_from_id(upload.room_id)
+        except (ValueError, KeyError):
+            return False
 
-    def _room_send_message(
+        assert self.client
+
+        if room_buffer.room.encrypted:
+            room_buffer.error("Uploading to encrypted rooms is "
+                              "not yet implemented")
+            return False
+
+        # TODO the content is different if the room is encrypted.
+        content = {
+            "msgtype": Api.mimetype_to_msgtype(upload.mimetype),
+            "body": upload.file_name,
+            "url": upload.content_uri,
+        }
+
+        try:
+            uuid = self.room_send_event(upload.room_id, content)
+        except (EncryptionError, GroupEncryptionError):
+            # TODO put the message in a queue to resend after group sessions
+            # are shared
+            # message = EncrytpionQueueItem(msgtype, formatted)
+            # self.encryption_queue[room.room_id].append(message)
+            return False
+
+        http_url = Api.mxc_to_http(upload.content_uri)
+        description = ("/{}".format(upload.file_name) if upload.file_name
+                       else "")
+
+        attributes = DEFAULT_ATTRIBUTES.copy()
+        formatted = Formatted([FormattedString(
+            "{url}{desc}".format(url=http_url, desc=description),
+            attributes
+        )])
+
+        own_message = OwnMessage(
+            self.user_id, 0, "", uuid, upload.room_id, formatted
+        )
+
+        room_buffer.sent_messages_queue[uuid] = own_message
+        self.print_unconfirmed_message(room_buffer, own_message)
+
+        return True
+
+    def room_send_event(
         self,
         room_id,    # type: str
         content,    # type: Dict[str, str]
+        event_type="m.room.message"
     ):
         # type: (...) -> UUID
         assert self.client
 
         try:
             uuid, request = self.client.room_send(
-                room_id, "m.room.message", content
+                room_id, event_type, content
             )
             self.send(request)
             return uuid
@@ -794,7 +847,7 @@ class MatrixServer(object):
             content["formatted_body"] = formatted.to_html()
 
         try:
-            uuid = self._room_send_message(room.room_id, content)
+            uuid = self.room_send_event(room.room_id, content)
         except (EncryptionError, GroupEncryptionError):
             message = EncrytpionQueueItem(msgtype, formatted)
             self.encryption_queue[room.room_id].append(message)
