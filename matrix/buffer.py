@@ -18,6 +18,7 @@
 from __future__ import unicode_literals
 
 import time
+import attr
 from builtins import super
 from functools import partial
 from collections import deque
@@ -55,17 +56,15 @@ from .globals import SCRIPT_NAME, SERVERS, W, TYPING_NOTICE_TIMEOUT
 from .utf import utf8_decode
 from .utils import server_ts_to_weechat, shorten_sender, string_strikethrough
 
-OwnMessages = NamedTuple(
-    "OwnMessages",
-    [
-        ("sender", str),
-        ("age", int),
-        ("event_id", str),
-        ("uuid", str),
-        ("room_id", str),
-        ("formatted_message", Formatted),
-    ],
-)
+
+@attr.s
+class OwnMessages(object):
+    sender = attr.ib(type=str)
+    age = attr.ib(type=int)
+    event_id = attr.ib(type=str)
+    uuid = attr.ib(type=str)
+    room_id = attr.ib(type=str)
+    formatted_message = attr.ib(type=Formatted)
 
 
 class OwnMessage(OwnMessages):
@@ -1218,7 +1217,7 @@ class RoomBuffer(object):
         if not message:
             return
 
-        message = message._replace(event_id=event.event_id)
+        message.event_id = event.event_id
         if uuid in self.printed_before_ack_queue:
             self.replace_printed_line_by_uuid(
                 event.transaction_id,

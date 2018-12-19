@@ -21,8 +21,11 @@ import pprint
 import socket
 import ssl
 import time
+import copy
 from collections import defaultdict, deque
 from typing import Any, Deque, Dict, Optional, List, NamedTuple, DefaultDict
+
+from uuid import UUID
 
 from nio import (
     HttpClient,
@@ -743,6 +746,36 @@ class MatrixServer(object):
         room_buffer.typing = True
         self.send(request)
 
+
+    def _room_send_message(
+        self,
+        room_id,    # type: str
+        content,    # type: Dict[str, str]
+    ):
+        # type: (...) -> UUID
+        assert self.client
+
+        try:
+            uuid, request = self.client.room_send(
+                room_id, "m.room.message", content
+            )
+            self.send(request)
+            return uuid
+        except GroupEncryptionError:
+            try:
+                if not self.group_session_shared[room_id]:
+                    _, request = self.client.share_group_session(room_id)
+                    self.group_session_shared[room_id] = True
+                    self.send(request)
+                raise
+
+            except EncryptionError:
+                if not self.keys_claimed[room_id]:
+                    _, request = self.client.keys_claim(room_id)
+                    self.keys_claimed[room_id] = True
+                    self.send(request)
+                raise
+
     def room_send_message(
         self,
         room_buffer,  # type: RoomBuffer
@@ -754,31 +787,17 @@ class MatrixServer(object):
 
         assert self.client
 
-        body = {"msgtype": msgtype, "body": formatted.to_plain()}
+        content = {"msgtype": msgtype, "body": formatted.to_plain()}
 
         if formatted.is_formatted():
-            body["format"] = "org.matrix.custom.html"
-            body["formatted_body"] = formatted.to_html()
+            content["format"] = "org.matrix.custom.html"
+            content["formatted_body"] = formatted.to_html()
 
         try:
-            uuid, request = self.client.room_send(
-                room.room_id, "m.room.message", body
-            )
-        except GroupEncryptionError:
-            request = None
-            try:
-                if not self.group_session_shared[room.room_id]:
-                    _, request = self.client.share_group_session(room.room_id)
-                    self.group_session_shared[room.room_id] = True
-            except EncryptionError:
-                if not self.keys_claimed[room.room_id]:
-                    _, request = self.client.keys_claim(room.room_id)
-                    self.keys_claimed[room.room_id] = True
-
+            uuid = self._room_send_message(room.room_id, content)
+        except (EncryptionError, GroupEncryptionError):
             message = EncrytpionQueueItem(msgtype, formatted)
             self.encryption_queue[room.room_id].append(message)
-            if request:
-                self.send_or_queue(request)
             return False
 
         if msgtype == "m.emote":
@@ -791,11 +810,26 @@ class MatrixServer(object):
         )
 
         room_buffer.sent_messages_queue[uuid] = own_message
-        self.send_or_queue(request)
+        self.print_unconfirmed_message(room_buffer, own_message)
 
+        return True
+
+    def print_unconfirmed_message(self, room_buffer, message):
+        """Print an outoing message before getting a recieve confirmation.
+
+        The message is printed out greyed out and only printed out if the
+        client is configured to do so. The message needs to be later modified
+        to contain proper coloring, this is done in the
+        replace_printed_line_by_uuid() method of the RoomBuffer class.
+
+        Args:
+            room_buffer(RoomBuffer): the buffer of the room where the message
+                needs to be printed out
+            message(OwnMessages): the message that should be printed out
+        """
         if G.CONFIG.network.print_unconfirmed_messages:
-            room_buffer.printed_before_ack_queue.append(uuid)
-            plain_message = formatted.to_weechat()
+            room_buffer.printed_before_ack_queue.append(message.uuid)
+            plain_message = message.formatted_message.to_weechat()
             plain_message = W.string_remove_color(plain_message, "")
             attributes = DEFAULT_ATTRIBUTES.copy()
             attributes["fgcolor"] = G.CONFIG.color.unconfirmed_message
@@ -804,16 +838,13 @@ class MatrixServer(object):
                 attributes
             )])
 
-            own_message = message_class(
-                self.user_id, 0, "", uuid, room.room_id, new_formatted
-            )
+            new_message = copy.copy(message)
+            new_message.formatted_message = new_formatted
 
-            if isinstance(own_message, OwnAction):
-                room_buffer.self_action(own_message)
-            elif isinstance(own_message, OwnMessage):
-                room_buffer.self_message(own_message)
-
-        return True
+            if isinstance(new_message, OwnAction):
+                room_buffer.self_action(new_message)
+            elif isinstance(new_message, OwnMessage):
+                room_buffer.self_message(new_message)
 
     def keys_upload(self):
         _, request = self.client.keys_upload()
@@ -869,7 +900,7 @@ class MatrixServer(object):
 
         room_buffer = self.room_buffers[response.room_id]
         message = room_buffer.sent_messages_queue.pop(response.uuid)
-        message = message._replace(event_id=response.event_id)
+        message.event_id = response.event_id
         # We already printed the message, just modify it to contain the proper
         # colors and formatting.
         if response.uuid in room_buffer.printed_before_ack_queue:
