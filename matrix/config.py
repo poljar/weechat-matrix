@@ -497,6 +497,17 @@ class MatrixConfig(WeechatConfig):
                 "Pygments style to use for highlighting source code blocks",
             ),
             Option(
+                "code_blocks",
+                "boolean",
+                "",
+                0,
+                0,
+                "on",
+                ("Display preformatted code blocks as rectangular areas by "
+                 "padding them with whitespace up to the length of the longest "
+                 "line (with optional margin)"),
+            ),
+            Option(
                 "code_block_margin",
                 "integer",
                 "",
