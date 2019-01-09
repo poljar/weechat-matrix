@@ -310,6 +310,8 @@ class Formatted(object):
                     G.CONFIG.color.untagged_code_bg
                 )
 
+                margin = G.CONFIG.look.code_block_margin
+
                 if attributes["preformatted"]:
                     # code block
 
@@ -318,7 +320,7 @@ class Formatted(object):
                     except ClassNotFound:
                         return colored_text_block(
                             string,
-                            margin=2,
+                            margin=margin,
                             color_pair=code_color_pair)
 
                     try:
@@ -326,10 +328,10 @@ class Formatted(object):
                     except ClassNotFound:
                         style = "native"
 
-                    code_block = text_block(string, margin=2)
+                    code_block = text_block(string, margin=margin)
 
-                    # highlight adds a newline to the end of the string, remove it
-                    # from the output
+                    # highlight adds a newline to the end of the string, remove
+                    # it from the output
                     highlighted_code = highlight(
                         code_block,
                         lexer,
