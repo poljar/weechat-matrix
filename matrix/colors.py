@@ -318,17 +318,24 @@ class Formatted(object):
                     try:
                         lexer = get_lexer_by_name(value)
                     except ClassNotFound:
-                        return colored_text_block(
-                            string,
-                            margin=margin,
-                            color_pair=code_color_pair)
+                        if G.CONFIG.look.code_blocks:
+                            return colored_text_block(
+                                string,
+                                margin=margin,
+                                color_pair=code_color_pair)
+                        else:
+                            return string_color_and_reset(string,
+                                                          code_color_pair)
 
                     try:
                         style = get_style_by_name(G.CONFIG.look.pygments_style)
                     except ClassNotFound:
                         style = "native"
 
-                    code_block = text_block(string, margin=margin)
+                    if G.CONFIG.look.code_blocks:
+                        code_block = text_block(string, margin=margin)
+                    else:
+                        code_block = string
 
                     # highlight adds a newline to the end of the string, remove
                     # it from the output
