@@ -28,8 +28,12 @@ import sys
 
 # pylint: disable=redefined-builtin
 from builtins import bytes, str
-from collections import Iterable, Mapping
 from functools import wraps
+
+if sys.version_info.major == 3 and sys.version_info.minor >= 3:
+    from collections.abc import Iterable, Mapping
+else:
+    from collections import Iterable, Mapping
 
 # These functions were written by Trygve Aaberge for wee-slack and are under a
 # MIT License.
