@@ -496,6 +496,16 @@ class MatrixConfig(WeechatConfig):
                 "native",
                 "Pygments style to use for highlighting source code blocks",
             ),
+            Option(
+                "code_block_margin",
+                "integer",
+                "",
+                0,
+                100,
+                "2",
+                ("Number of spaces to add as a margin around around a code "
+                 "block"),
+            ),
         ]
 
         network_options = [
