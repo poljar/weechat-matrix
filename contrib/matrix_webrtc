@@ -1,0 +1,304 @@
+#!/usr/bin/python3 -u
+# Copyright © 2018 Damir Jelić <poljar@termina.org.uk>
+#
+# Permission to use, copy, modify, and/or distribute this software for
+# any purpose with or without fee is hereby granted, provided that the
+# above copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER
+# RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF
+# CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+
+import av
+import os
+import signal
+import asyncio
+import argparse
+import json
+import logging
+import gbulb
+from logbook import SyslogHandler, Logger
+from gi.repository import Gtk
+
+from aiortc import (
+    RTCPeerConnection,
+    RTCSessionDescription,
+    RTCIceCandidate
+)
+
+from aiortc.contrib.media import MediaPlayer, MediaRecorderContext
+from aiortc.sdp import candidate_from_sdp, candidate_to_sdp
+from aiortc.mediastreams import MediaStreamError
+
+
+asyncio.set_event_loop_policy(gbulb.GLibEventLoopPolicy())
+
+SyslogHandler("matrix_webrtc", level="DEBUG").push_application()
+log = Logger("matrix_webrtc")
+
+stdin_buffer = ""
+
+
+class SDLMediaOutput:
+    def __init__(self):
+        self.__video_container = av.open(
+            file="",
+            format="sdl,sdl2",
+            mode='w',
+        )
+        self.__audio_container = av.open(
+            file="",
+            format="alsa",
+            mode='w',
+        )
+        self.__tracks = {}
+
+    def addTrack(self, track):
+        """Add a track to be ouptuted.
+
+        Args:
+            track(Union[AudioStreamTrack, VideoStreamTrack]): a webrtc track
+                that will be added to the output
+        """
+        if track.kind == 'audio':
+            codec_name = 'pcm_s16le'
+            stream = self.__audio_container.add_stream(codec_name)
+        else:
+            stream = self.__video_container.add_stream('rawvideo', rate=30)
+            stream.pix_fmt = 'yuv420p'
+        self.__tracks[track] = MediaRecorderContext(stream)
+
+    async def start(self):
+        """Start recording."""
+        for track, context in self.__tracks.items():
+            if context.task is None:
+                if track.kind == "audio":
+                    context.task = asyncio.ensure_future(
+                        self.__run_audio_track(track, context)
+                    )
+                else:
+                    context.task = asyncio.ensure_future(
+                        self.__run_video_track(track, context)
+                    )
+
+    async def stop(self):
+        """Stop recording."""
+        if self.__video_container:
+            for track, context in self.__tracks.items():
+                if track.kind == "audio":
+                    continue
+
+                if context.task is not None:
+                    context.task.cancel()
+                    context.task = None
+                    for packet in context.stream.encode(None):
+                        self.__video_container.mux(packet)
+
+        if self.__audio_container:
+            for track, context in self.__tracks.items():
+                if track.kind == "video":
+                    continue
+
+                if context.task is not None:
+                    context.task.cancel()
+                    context.task = None
+                    for packet in context.stream.encode(None):
+                        self.__audio_container.mux(packet)
+
+        self.__tracks = {}
+
+        if self.__video_container:
+            self.__video_container.close()
+            self.__video_container = None
+
+        if self.__audio_container:
+            self.__audio_container.close()
+            self.__audio_container = None
+
+    async def __run_audio_track(self, track, context):
+        while True:
+            try:
+                frame = await track.recv()
+            except MediaStreamError:
+                return
+
+            for packet in context.stream.encode(frame):
+                self.__audio_container.mux(packet)
+
+    async def __run_video_track(self, track, context):
+        while True:
+            try:
+                frame = await track.recv()
+            except MediaStreamError:
+                return
+            for packet in context.stream.encode(frame):
+                self.__video_container.mux(packet)
+
+
+def object_from_string(message_str):
+    message = json.loads(message_str)
+
+    if message["type"] in ["answer", "offer"]:
+        return RTCSessionDescription(**message)
+
+    elif message["type"] == "candidate":
+        candidate = candidate_from_sdp(message["candidate"].split(":", 1)[1])
+        candidate.sdpMid = message["sdpMid"]
+        candidate.sdpMLineIndex = message["sdpMLineIndex"]
+        return candidate
+
+
+def object_to_string(obj):
+    if isinstance(obj, RTCSessionDescription):
+        message = {
+            "sdp": obj.sdp,
+            "type": obj.type
+        }
+
+    elif isinstance(obj, RTCIceCandidate):
+        message = {
+            "candidate": "candidate:" + candidate_to_sdp(obj),
+            "id": obj.sdpMid,
+            "label": obj.sdpMLineIndex,
+            "type": "candidate",
+        }
+
+    else:
+        message = {"type": "bye"}
+
+    return json.dumps(message, sort_keys=True)
+
+
+class StinStdoutSignaling:
+    def __init__(self):
+        self._read_pipe = os.sys.stdin
+        self._read_transport = None
+        self._reader = None
+        self._write_pipe = os.sys.stdout
+
+    async def _connect(self):
+        if self._reader is not None:
+            return
+
+        loop = asyncio.get_event_loop()
+        self._reader = asyncio.StreamReader(loop=loop)
+        self._read_transport, _ = await loop.connect_read_pipe(
+            lambda: asyncio.StreamReaderProtocol(self._reader),
+            self._read_pipe)
+
+    async def close(self):
+        if self._reader is not None:
+            self._read_transport.close()
+            self._reader = None
+
+    async def receive(self):
+        await self._connect()
+        log.info("Waiting for signaling")
+        data = await self._reader.readline()
+        log.info("Received signaling")
+        return object_from_string(data.decode(self._read_pipe.encoding))
+
+    async def send(self, descr):
+        log.info("Sending signaling")
+        self._write_pipe.write(object_to_string(descr) + "\n")
+
+
+async def run(pc, signaling, recorder, role, mediasource):
+    @pc.on("track")
+    def on_track(track):
+        if track.kind == "audio":
+            log.info("Received audio track")
+            recorder.addTrack(track)
+        elif track.kind == "video":
+            log.info("Received video track")
+            recorder.addTrack(track)
+        else:
+            log.info("Received {} track".format(track.kind))
+
+    if role == "offer":
+        # send offer
+        pc.addTrack(mediasource.video)
+        pc.addTrack(mediasource.audio)
+        await pc.setLocalDescription(await pc.createOffer())
+        await signaling.send(pc.localDescription)
+
+    # consume signaling
+    while True:
+        obj = await signaling.receive()
+
+        if isinstance(obj, RTCSessionDescription):
+            await pc.setRemoteDescription(obj)
+            await recorder.start()
+
+            if obj.type == "offer":
+                # send answer
+                if mediasource.video:
+                    pc.addTrack(mediasource.video)
+                if mediasource.audio:
+                    pc.addTrack(mediasource.audio)
+
+                await pc.setLocalDescription(await pc.createAnswer())
+                await signaling.send(pc.localDescription)
+
+        elif isinstance(obj, RTCIceCandidate):
+            pc.addIceCandidate(obj)
+        else:
+            break
+
+
+def quit_handler(signum, frame):
+    loop = asyncio.get_event_loop()
+    loop.stop()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Video stream from the command line"
+    )
+    parser.add_argument("role", choices=["offer", "answer"])
+    args = parser.parse_args()
+
+    signal.signal(signal.SIGQUIT, quit_handler)
+
+    # create signaling and peer connection
+    signaling = StinStdoutSignaling()
+    pc = RTCPeerConnection()
+    recorder = SDLMediaOutput()
+
+    source = MediaPlayer(
+        file=":0.0",
+        format="x11grab",
+    )
+
+    loop = asyncio.get_event_loop()
+
+    log.info("Starting matrix webrtc")
+    # logging.basicConfig(level=logging.DEBUG)
+
+    w = Gtk.Window()
+    w.add(Gtk.Label('hey!'))
+    w.connect('destroy', Gtk.main_quit)
+    w.show_all()
+
+    try:
+        loop.run_until_complete(run(
+            pc=pc,
+            recorder=recorder,
+            role=args.role,
+            signaling=signaling,
+            mediasource=source))
+        loop.run_forever()
+    finally:
+        loop.run_until_complete(recorder.stop())
+        loop.run_until_complete(signaling.close())
+        loop.run_until_complete(pc.close())
+        loop.close()
+
+
+if __name__ == "__main__":
+    main()

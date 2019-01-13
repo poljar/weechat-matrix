@@ -47,12 +47,16 @@ from nio import (
     OlmTrustError,
     UnknownEvent,
     FullyReadEvent,
+    CallInviteEvent,
+    CallCandidatesEvent,
+    CallAnswerEvent,
+    CallHangupEvent
 )
 
 from . import globals as G
 from .colors import Formatted
 from .config import RedactType
-from .globals import SCRIPT_NAME, SERVERS, W, TYPING_NOTICE_TIMEOUT
+from .globals import SCRIPT_NAME, SERVERS, W, TYPING_NOTICE_TIMEOUT, CALLS
 from .utf import utf8_decode
 from .utils import (
     server_ts_to_weechat,
@@ -60,6 +64,7 @@ from .utils import (
     string_strikethrough,
     color_pair,
 )
+from .calls import CallProcess, find_call
 
 
 @attr.s
@@ -823,6 +828,7 @@ class WeechatChannelBuffer(object):
 class RoomBuffer(object):
     def __init__(self, room, server_name, prev_batch):
         self.room = room
+        self.server_name = server_name
         self._backlog_pending = False
         self.prev_batch = prev_batch
         self.joined = True
@@ -1415,6 +1421,32 @@ class RoomBuffer(object):
             )
 
             self.undecrypted_events.append(event)
+
+        elif isinstance(event, CallInviteEvent):
+            if not event.expired:
+                CALLS[event.call_id] = CallProcess(
+                    self.server_name,
+                    self.room.room_id,
+                    event.call_id,
+                    event.version,
+                    event.offer
+                )
+
+        elif isinstance(event, CallCandidatesEvent):
+            call = find_call(event.call_id)
+            if call:
+                for candidate in event.candidates:
+                    call.add_candidate(candidate)
+
+        elif isinstance(event, CallHangupEvent):
+            try:
+                call = CALLS.pop(event.call_id)
+                call.hangup()
+            except KeyError:
+                pass
+
+        elif isinstance(event, CallAnswerEvent):
+            pass
 
         elif isinstance(event, UnknownEvent):
             pass

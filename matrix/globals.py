@@ -27,6 +27,7 @@ if False:
     from .server import MatrixServer
     from .config import MatrixConfig
     from .uploads import Upload
+    from .calls import CallProcess
 
 
 try:
@@ -46,3 +47,4 @@ MAX_EVENTS = 100
 TYPING_NOTICE_TIMEOUT = 4000  # 4 seconds typing notice lifetime
 LOGGER = Logger("weechat-matrix")
 UPLOADS = OrderedDict()  # type: Dict[str, Upload]
+CALLS = dict()  # type: Dict[str, CallProcess]
