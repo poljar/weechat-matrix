@@ -314,17 +314,17 @@ class WeechatChannelBuffer(object):
         ):
             new_data = {}
 
-            if date:
+            if date is not None:
                 new_data["date"] = str(date)
-            if date_printed:
+            if date_printed is not None:
                 new_data["date_printed"] = str(date_printed)
-            if tags:
+            if tags is not None:
                 new_data["tags_array"] = ",".join(tags)
-            if prefix:
+            if prefix is not None:
                 new_data["prefix"] = prefix
-            if message:
+            if message is not None:
                 new_data["message"] = message
-            if highlight:
+            if highlight is not None:
                 new_data["highlight"] = highlight
 
             if new_data:
