@@ -30,12 +30,16 @@ from typing import List
 import webcolors
 from pygments import highlight
 from pygments.formatter import Formatter, get_style_by_name
-from pygments.lexers import get_lexer_by_name, guess_lexer
+from pygments.lexers import get_lexer_by_name
 from pygments.util import ClassNotFound
 
 from . import globals as G
 from .globals import W
-from .utils import string_strikethrough
+from .utils import (string_strikethrough,
+                    string_color_and_reset,
+                    color_pair,
+                    text_block,
+                    colored_text_block)
 
 try:
     from HTMLParser import HTMLParser
@@ -59,10 +63,12 @@ class Formatted(object):
 
     @property
     def textwrapper(self):
+        quote_pair = color_pair(G.CONFIG.color.quote_fg,
+                                G.CONFIG.color.quote_bg)
         return textwrap.TextWrapper(
             width=67,
-            initial_indent="{}> ".format(W.color(G.CONFIG.color.quote)),
-            subsequent_indent="{}> ".format(W.color(G.CONFIG.color.quote)),
+            initial_indent="{}> ".format(W.color(quote_pair)),
+            subsequent_indent="{}> ".format(W.color(quote_pair)),
         )
 
     def is_formatted(self):
@@ -271,7 +277,7 @@ class Formatted(object):
 
     def to_weechat(self):
         # TODO BG COLOR
-        def add_attribute(string, name, value):
+        def add_attribute(string, name, value, attributes):
             if not value:
                 return string
             elif name == "bold":
@@ -299,20 +305,49 @@ class Formatted(object):
                     W.string_remove_color(string.replace("\n", ""), "")
                 )
             elif name == "code":
-                try:
-                    lexer = get_lexer_by_name(value)
-                except ClassNotFound:
-                    lexer = guess_lexer(string)
+                code_color_pair = color_pair(
+                    G.CONFIG.color.untagged_code_fg,
+                    G.CONFIG.color.untagged_code_bg
+                )
 
-                try:
-                    style = get_style_by_name(G.CONFIG.look.pygments_style)
-                except ClassNotFound:
-                    style = "native"
+                margin = G.CONFIG.look.code_block_margin
 
-                # highlight adds a newline to the end of the string, remove it
-                # from the output
-                return highlight(string, lexer,
-                                 WeechatFormatter(style=style))[:-1]
+                if attributes["preformatted"]:
+                    # code block
+
+                    try:
+                        lexer = get_lexer_by_name(value)
+                    except ClassNotFound:
+                        if G.CONFIG.look.code_blocks:
+                            return colored_text_block(
+                                string,
+                                margin=margin,
+                                color_pair=code_color_pair)
+                        else:
+                            return string_color_and_reset(string,
+                                                          code_color_pair)
+
+                    try:
+                        style = get_style_by_name(G.CONFIG.look.pygments_style)
+                    except ClassNotFound:
+                        style = "native"
+
+                    if G.CONFIG.look.code_blocks:
+                        code_block = text_block(string, margin=margin)
+                    else:
+                        code_block = string
+
+                    # highlight adds a newline to the end of the string, remove
+                    # it from the output
+                    highlighted_code = highlight(
+                        code_block,
+                        lexer,
+                        WeechatFormatter(style=style)
+                    ).rstrip()
+
+                    return highlighted_code
+                else:
+                    return string_color_and_reset(string, code_color_pair)
             elif name == "fgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color(value),
@@ -337,7 +372,10 @@ class Formatted(object):
             # terminal, but doing it the other way around results in garbage.
             if "strikethrough" in attributes:
                 text = add_attribute(
-                    text, "strikethrough", attributes["strikethrough"]
+                    text,
+                    "strikethrough",
+                    attributes["strikethrough"],
+                    attributes
                 )
                 attributes.pop("strikethrough")
 
@@ -345,19 +383,26 @@ class Formatted(object):
                 return prefix + text.replace("\n", "\n{}".format(prefix))
 
             for key, value in attributes.items():
-                # Don't use textwrap to quote the code
-                if attributes["code"] and key == "quote" and value:
+                if not value:
                     continue
 
-                text = add_attribute(text, key, value)
+                # Don't use textwrap to quote the code
+                if key == "quote" and attributes["code"]:
+                    continue
+
+                # Reflow inline code blocks
+                if key == "code" and not attributes["preformatted"]:
+                    text = text.strip().replace('\n', ' ')
+
+                text = add_attribute(text, key, value, attributes)
 
                 # If we're quoted code add quotation marks now.
-                if attributes["quote"] and key == "code" and value:
+                if key == "code" and attributes["quote"]:
+                    fg = G.CONFIG.color.quote_fg
+                    bg = G.CONFIG.color.quote_bg
                     text = indent(
                         text,
-                        "{}>{} ".format(
-                            W.color(G.CONFIG.color.quote), W.color("reset")
-                        ),
+                        string_color_and_reset(">", color_pair(fg, bg)) + " ",
                     )
 
             # If we're code don't remove multiple newlines blindly
@@ -382,6 +427,7 @@ DEFAULT_ATTRIBUTES = {
     "italic": False,
     "underline": False,
     "strikethrough": False,
+    "preformatted": False,
     "quote": False,
     "code": None,
     "fgcolor": None,
@@ -430,6 +476,8 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("strikethrough")
         elif tag == "blockquote":
             self._toggle_attribute("quote")
+        elif tag == "pre":
+            self._toggle_attribute("preformatted")
         elif tag == "code":
             lang = None
 
@@ -480,6 +528,8 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("underline")
         elif tag == "del":
             self._toggle_attribute("strikethrough")
+        elif tag == "pre":
+            self._toggle_attribute("preformatted")
         elif tag == "code":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
@@ -624,20 +674,20 @@ def color_line_to_weechat(color_string):
     return line_colors[color_string]
 
 
-# The functions colour_dist_sq(), colour_to_6cube(), and colour_find_rgb
+# The functions color_dist_sq(), color_to_6cube(), and color_find_rgb
 # are python ports of the same named functions from the tmux
 # source, they are under the copyright of Nicholas Marriott, and Avi Halachmi
 # under the ISC license.
 # More info: https://github.com/tmux/tmux/blob/master/colour.c
 
 
-def colour_dist_sq(R, G, B, r, g, b):
+def color_dist_sq(R, G, B, r, g, b):
     # pylint: disable=invalid-name,too-many-arguments
     # type: (int, int, int, int, int, int) -> int
     return (R - r) * (R - r) + (G - g) * (G - g) + (B - b) * (B - b)
 
 
-def colour_to_6cube(v):
+def color_to_6cube(v):
     # pylint: disable=invalid-name
     # type: (int) -> int
     if v < 48:
@@ -647,15 +697,15 @@ def colour_to_6cube(v):
     return (v - 35) // 40
 
 
-def colour_find_rgb(r, g, b):
+def color_find_rgb(r, g, b):
     # type: (int, int, int) -> int
-    """Convert an RGB triplet to the xterm(1) 256 colour palette.
+    """Convert an RGB triplet to the xterm(1) 256 color palette.
 
-       xterm provides a 6x6x6 colour cube (16 - 231) and 24 greys (232 - 255).
-       We map our RGB colour to the closest in the cube, also work out the
+       xterm provides a 6x6x6 color cube (16 - 231) and 24 greys (232 - 255).
+       We map our RGB color to the closest in the cube, also work out the
        closest grey, and use the nearest of the two.
 
-       Note that the xterm has much lower resolution for darker colours (they
+       Note that the xterm has much lower resolution for darker colors (they
        are not evenly spread out), so our 6 levels are not evenly spread: 0x0,
        0x5f (95), 0x87 (135), 0xaf (175), 0xd7 (215) and 0xff (255). Greys are
        more evenly spread (8, 18, 28 ... 238).
@@ -664,15 +714,15 @@ def colour_find_rgb(r, g, b):
     q2c = [0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff]
 
     # Map RGB to 6x6x6 cube.
-    qr = colour_to_6cube(r)
-    qg = colour_to_6cube(g)
-    qb = colour_to_6cube(b)
+    qr = color_to_6cube(r)
+    qg = color_to_6cube(g)
+    qb = color_to_6cube(b)
 
     cr = q2c[qr]
     cg = q2c[qg]
     cb = q2c[qb]
 
-    # If we have hit the colour exactly, return early.
+    # If we have hit the color exactly, return early.
     if cr == r and cg == g and cb == b:
         return 16 + (36 * qr) + (6 * qg) + qb
 
@@ -686,10 +736,10 @@ def colour_find_rgb(r, g, b):
 
     grey = 8 + (10 * grey_idx)
 
-    # Is grey or 6x6x6 colour closest?
-    d = colour_dist_sq(cr, cg, cb, r, g, b)
+    # Is grey or 6x6x6 color closest?
+    d = color_dist_sq(cr, cg, cb, r, g, b)
 
-    if colour_dist_sq(grey, grey, grey, r, g, b) < d:
+    if color_dist_sq(grey, grey, grey, r, g, b) < d:
         idx = 232 + grey_idx
     else:
         idx = 16 + (36 * qr) + (6 * qg) + qb
@@ -728,7 +778,7 @@ def color_html_to_weechat(color):
     if rgb_color in weechat_basic_colors:
         return weechat_basic_colors[rgb_color]
 
-    return str(colour_find_rgb(*rgb_color))
+    return str(color_find_rgb(*rgb_color))
 
 
 def color_weechat_to_html(color):

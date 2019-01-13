@@ -54,7 +54,12 @@ from .colors import Formatted
 from .config import RedactType
 from .globals import SCRIPT_NAME, SERVERS, W, TYPING_NOTICE_TIMEOUT
 from .utf import utf8_decode
-from .utils import server_ts_to_weechat, shorten_sender, string_strikethrough
+from .utils import (
+    server_ts_to_weechat,
+    shorten_sender,
+    string_strikethrough,
+    color_pair,
+)
 
 
 @attr.s
@@ -1445,7 +1450,9 @@ class RoomBuffer(object):
                     "message{del_color}>{ncolor}").format(
             del_color=W.color("chat_delimiters"),
             ncolor=W.color("reset"),
-            error_color=W.color(G.CONFIG.color.error_message))
+            error_color=W.color(color_pair(
+                G.CONFIG.color.error_message_fg,
+                G.CONFIG.color.error_message_bg)))
 
         last_line.message = message
 
