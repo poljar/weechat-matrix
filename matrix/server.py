@@ -1001,9 +1001,11 @@ class MatrixServer(object):
 
         lines = []
         for device in response.devices:
+            last_seen_date = ("?" if not device.last_seen_date else
+                              device.last_seen_date.strftime("%Y/%m/%d %H:%M"))
             last_seen = "{ip} @ {date}".format(
-                ip=device.last_seen_ip,
-                date=device.last_seen_date.strftime("%Y/%m/%d %H:%M")
+                ip=device.last_seen_ip or "?",
+                date=last_seen_date
             )
             device_color = ("chat_self" if device.id == self.device_id else
                             W.info_get("nick_color_name", device.id))
@@ -1013,7 +1015,7 @@ class MatrixServer(object):
                 W.color(device_color),
                 device.id,
                 W.color("resetcolor"),
-                device.display_name,
+                device.display_name or "",
                 last_seen
                 )
             lines.append(line)
