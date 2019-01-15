@@ -807,11 +807,15 @@ class WeechatChannelBuffer(object):
     def short_name(self, name):
         W.buffer_set(self._ptr, "short_name", name)
 
-    def find_lines(self, predicate):
+    def find_lines(self, predicate, max_lines=None):
         lines = []
+        count = 0
         for line in self.lines:
             if predicate(line):
                 lines.append(line)
+                count += 1
+                if max_lines is not None and count == max_lines:
+                    return lines
 
         return lines
 
@@ -1457,11 +1461,7 @@ class RoomBuffer(object):
         last_line.message = message
 
     def replace_printed_line_by_uuid(self, uuid, new_message):
-        """Replace already printed lines that are greyed out with real ones"""
-        lines = self.weechat_buffer.find_lines(
-            partial(self._find_by_uuid_predicate, uuid)
-        )
-
+        """Replace already printed lines that are greyed out with real ones."""
         if isinstance(new_message, OwnAction):
             displayed_nick = self.displayed_nicks[self.room.own_user_id]
             user = self.weechat_buffer._get_user(displayed_nick)
@@ -1472,6 +1472,12 @@ class RoomBuffer(object):
             new_lines = data.split("\n")
         else:
             new_lines = new_message.formatted_message.to_weechat().split("\n")
+
+        line_count = len(new_lines)
+
+        lines = self.weechat_buffer.find_lines(
+            partial(self._find_by_uuid_predicate, uuid), line_count
+        )
 
         for i, line in enumerate(lines):
             line.message = new_lines[i]
