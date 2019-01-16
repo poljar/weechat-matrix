@@ -22,6 +22,74 @@ WEECHAT_BASE_COLORS = {
 }
 
 
+class MockObject(object):
+    pass
+
+class MockConfig(object):
+    config_template = {
+        'debug_buffer': None,
+        'debug_category': None,
+        '_ptr': None,
+        'read': None,
+        'free': None,
+        'page_up_hook': None,
+        'color': {
+            'error_message_bg': "",
+            'error_message_fg': "",
+            'quote_bg': "",
+            'quote_fg': "",
+            'unconfirmed_message_bg': "",
+            'unconfirmed_message_fg': "",
+            'untagged_code_bg': "",
+            'untagged_code_fg': "",
+        },
+        'upload_buffer': {
+            'display': None,
+            'move_line_down': None,
+            'move_line_up': None,
+            'render': None,
+        },
+        'look': {
+            'bar_item_typing_notice_prefix': None,
+            'busy_sign': None,
+            'code_block_margin': None,
+            'code_blocks': None,
+            'disconnect_sign': None,
+            'encrypted_room_sign': None,
+            'encryption_warning_sign': None,
+            'max_typing_notice_item_length': None,
+            'pygments_style': None,
+            'redactions': None,
+            'server_buffer': None,
+        },
+        'network': {
+            'debug_buffer': None,
+            'debug_category': None,
+            'debug_level': None,
+            'fetch_backlog_on_pgup': None,
+            'lag_min_show': None,
+            'lag_reconnect': None,
+            'lazy_load_room_users': None,
+            'max_initial_sync_events': None,
+            'max_nicklist_users': None,
+            'print_unconfirmed_messages': None,
+            'read_markers_conditions': None,
+            'typing_notice_conditions': None,
+        },
+    }
+
+    def __init__(self):
+        for category, options in MockConfig.config_template.items():
+            if options:
+                category_object = MockObject()
+                for option, value in options.items():
+                    setattr(category_object, option, value)
+            else:
+                category_object = options
+
+            setattr(self, category, category_object)
+
+
 def color(color_name):
     # type: (str) -> str
     # yapf: disable
