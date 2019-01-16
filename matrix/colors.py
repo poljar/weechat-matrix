@@ -93,15 +93,29 @@ class Formatted(object):
         i = 0
         while i < len(line):
             # Bold
-            if line[i] == "\x02":
+            if line[i] == "\x02" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
                 attributes["bold"] = not attributes["bold"]
                 i = i + 1
 
+            # Markdown inline code
+            elif line[i] == "`":
+                if text:
+                    # strip leading and trailing spaces from inline code blocks
+                    if attributes["code"]:
+                        text = text.strip()
+
+                    substrings.append(
+                        FormattedString(text, attributes.copy())
+                    )
+                text = ""
+                attributes["code"] = not attributes["code"]
+                i = i + 1
+
             # Markdown emphasis
-            elif line[i] == "*":
+            elif line[i] == "*" and not attributes["code"]:
                 if attributes["italic"] and not line[i - 1].isspace():
                     if text:
                         substrings.append(
@@ -134,7 +148,7 @@ class Formatted(object):
                 i = i + 1
 
             # Color
-            elif line[i] == "\x03":
+            elif line[i] == "\x03" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
@@ -172,7 +186,7 @@ class Formatted(object):
                 else:
                     attributes["bgcolor"] = None
             # Reset
-            elif line[i] == "\x0F":
+            elif line[i] == "\x0F" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
@@ -181,7 +195,7 @@ class Formatted(object):
                 i = i + 1
 
             # Italic
-            elif line[i] == "\x1D":
+            elif line[i] == "\x1D" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
@@ -189,7 +203,7 @@ class Formatted(object):
                 i = i + 1
 
             # Underline
-            elif line[i] == "\x1F":
+            elif line[i] == "\x1F" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
@@ -236,6 +250,10 @@ class Formatted(object):
                     text=string,
                     quote_off="</blockquote>",
                 )
+            if name == "code" and value:
+                return "{code_on}{text}{code_off}".format(
+                    code_on="<code>", text=string, code_off="</code>"
+                )
             if name == "fgcolor" and value:
                 return "{color_on}{text}{color_off}".format(
                     color_on="<font color={color}>".format(
@@ -249,10 +267,23 @@ class Formatted(object):
 
         def format_string(formatted_string):
             text = formatted_string.text
-            attributes = formatted_string.attributes
+            attributes = formatted_string.attributes.copy()
 
-            for key, value in attributes.items():
-                text = add_attribute(text, key, value)
+            if attributes["code"]:
+                if attributes["preformatted"]:
+                    # XXX: This can't really happen since there's no way of
+                    # creating preformatted code blocks in weechat (because
+                    # there is not multiline input), but I'm creating this
+                    # branch as a note that it should be handled once we do
+                    # implement them.
+                    pass
+                else:
+                    text = add_attribute(text, "code", True)
+                    attributes.pop("code")
+            else:
+                for key, value in attributes.items():
+                    text = add_attribute(text, key, value)
+
             return text
 
         html_string = map(format_string, self.substrings)
