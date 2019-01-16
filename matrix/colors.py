@@ -100,7 +100,7 @@ class Formatted(object):
                 attributes["bold"] = not attributes["bold"]
                 i = i + 1
 
-            # Markdown bold
+            # Markdown emphasis
             elif line[i] == "*":
                 if attributes["italic"] and not line[i - 1].isspace():
                     if text:
@@ -179,6 +179,7 @@ class Formatted(object):
                 # Reset all the attributes
                 attributes = DEFAULT_ATTRIBUTES.copy()
                 i = i + 1
+
             # Italic
             elif line[i] == "\x1D":
                 if text:
