@@ -104,9 +104,11 @@ class Formatted(object):
             # Markdown inline code
             elif line[i] == "`":
                 if text:
-                    # strip leading and trailing spaces from inline code blocks
+                    # strip leading and trailing spaces and compress consecutive
+                    # spaces in inline code blocks
                     if attributes["code"]:
                         text = text.strip()
+                        text = re.sub(r"\s+", " ", text)
 
                     substrings.append(
                         FormattedString(text, attributes.copy())
