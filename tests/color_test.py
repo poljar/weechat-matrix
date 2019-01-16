@@ -7,8 +7,11 @@ from collections import OrderedDict
 from hypothesis import given
 from hypothesis.strategies import sampled_from
 
-from matrix.colors import (Formatted, FormattedString,
+from matrix.colors import (G, Formatted, FormattedString,
                            color_html_to_weechat, color_weechat_to_html)
+from matrix._weechat import MockConfig
+
+G.CONFIG = MockConfig()
 
 html_prism = ("<font color=maroon>T</font><font color=red>e</font><font "
               "color=olive>s</font><font color=yellow>t</font>")
@@ -42,3 +45,14 @@ def test_handle_strikethrough_first():
 
     assert f1.to_weechat() == valid_result
     assert f2.to_weechat() == valid_result
+
+
+def test_normalize_spaces_in_inline_code():
+    """Normalize spaces in inline code blocks.
+
+    Strips leading and trailing spaces and compress consecutive infix spaces.
+    """
+    valid_result = '\x1b[0m* a *\x1b[00m'
+
+    formatted = Formatted.from_input_line('`   *    a   *   `')
+    assert formatted.to_weechat() == valid_result
