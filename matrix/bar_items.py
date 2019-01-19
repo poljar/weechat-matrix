@@ -50,7 +50,7 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
             room = room_buffer.room
 
             return "{color}{name}".format(
-                color=W.color(color), name=room.display_name()
+                color=W.color(color), name=room.display_name
             )
 
         if buffer == server.server_buffer:

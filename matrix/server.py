@@ -1062,7 +1062,7 @@ class MatrixServer(object):
                 self.info(
                     "You have been invited to {} {}({}{}{}){}"
                     "{}".format(
-                        room.display_name(),
+                        room.display_name,
                         W.color("chat_delimiters"),
                         W.color("chat_channel"),
                         room_id,

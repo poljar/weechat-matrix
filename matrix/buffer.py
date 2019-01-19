@@ -1065,7 +1065,7 @@ class RoomBuffer(object):
         self.update_buffer_name()
 
     def update_buffer_name(self):
-        room_name = self.room.display_name()
+        room_name = self.room.display_name
         self.weechat_buffer.short_name = room_name
 
     def _redact_line(self, event):
