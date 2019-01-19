@@ -19,6 +19,7 @@ from __future__ import unicode_literals
 from matrix.globals import SERVERS, W
 from matrix.utf import utf8_decode
 from matrix.utils import tags_from_line_data
+from nio import LocalProtocolError
 
 
 def add_servers_to_completion(completion):
@@ -154,12 +155,12 @@ def matrix_olm_user_completion_cb(data, completion_item, buffer, completion):
     if not server:
         return W.WEECHAT_RC_OK
 
-    olm = server.client.olm
-
-    if not olm:
+    try:
+        device_store = server.client.device_store
+    except LocalProtocolError:
         return W.WEECHAT_RC_OK
 
-    for user in olm.device_store.users:
+    for user in device_store.users:
         W.hook_completion_list_add(
             completion, user, 0, W.WEECHAT_LIST_POS_SORT
         )
@@ -174,9 +175,9 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
     if not server:
         return W.WEECHAT_RC_OK
 
-    olm = server.client.olm
-
-    if not olm:
+    try:
+        device_store = server.client.device_store
+    except LocalProtocolError:
         return W.WEECHAT_RC_OK
 
     args = W.hook_completion_get_string(completion, "args")
@@ -188,10 +189,10 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
 
     user = fields[1]
 
-    if user not in olm.device_store.users:
+    if user not in device_store.users:
         return W.WEECHAT_RC_OK
 
-    for device in olm.device_store.active_user_devices(user):
+    for device in device_store.active_user_devices(user):
         W.hook_completion_list_add(
             completion, device.id, 0, W.WEECHAT_LIST_POS_SORT
         )
