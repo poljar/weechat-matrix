@@ -145,7 +145,7 @@ def change_log_level(category, level):
     elif category == "responses":
         nio.responses.logger.level = level
     elif category == "encryption":
-        nio.encryption.logger.level = level
+        nio.crypto.logger.level = level
 
 
 @utf8_decode
