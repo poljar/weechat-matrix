@@ -953,7 +953,14 @@ class MatrixServer(object):
             room_buffer.last_read_event = response.event_id
 
         room_buffer = self.room_buffers[response.room_id]
-        message = room_buffer.sent_messages_queue.pop(response.uuid)
+
+        message = room_buffer.sent_messages_queue.pop(response.uuid, None)
+
+        # The message might have been returned in a sync response before we got
+        # a room send response.
+        if not message:
+            return
+
         message.event_id = response.event_id
         # We already printed the message, just modify it to contain the proper
         # colors and formatting.
