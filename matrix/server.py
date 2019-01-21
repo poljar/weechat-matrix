@@ -904,8 +904,8 @@ class MatrixServer(object):
         _, request = self.client.keys_upload()
         self.send_or_queue(request)
 
-    def keys_query(self, full=False):
-        _, request = self.client.keys_query(full)
+    def keys_query(self):
+        _, request = self.client.keys_query()
         self.keys_queried = True
         self.send_or_queue(request)
 
@@ -1310,7 +1310,8 @@ class MatrixServer(object):
             # We are done adding all the users, do a full key query now since
             # the client knows all the encrypted room members.
             else:
-                self.keys_query(True)
+                if self.client.should_query_keys and not self.keys_queried:
+                    self.keys_query()
 
         elif isinstance(response, KeysClaimResponse):
             self.keys_claimed[response.room_id] = False
