@@ -23,6 +23,7 @@ import ssl
 import time
 import copy
 from collections import defaultdict, deque
+from atomicwrites import atomic_write
 from typing import Any, Deque, Dict, Optional, List, NamedTuple, DefaultDict
 
 from uuid import UUID
@@ -305,7 +306,7 @@ class MatrixServer(object):
         file_name = "{}{}".format(self.config.username, ".device_id")
         path = os.path.join(self.get_session_path(), file_name)
 
-        with open(path, "w") as device_file:
+        with atomic_write(path, overwrite=True) as device_file:
             device_file.write(self.device_id)
 
     def _change_client(self):
