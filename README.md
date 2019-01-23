@@ -1,3 +1,6 @@
+[![#weechat-matrix](https://img.shields.io/badge/matrix-%23weechat--matrix-blue.svg?style=flat-square)](https://matrix.to/#/!twcBhHVdZlQWuuxBhN:termina.org.uk?via=termina.org.uk&via=matrix.org)
+[![license](https://img.shields.io/badge/license-ISC-blue.svg?style=flat-square)](https://github.com/poljar/weechat-matrix/blob/master/LICENSE)
+
 # What is Weechat-Matrix?
 
 [Weechat](https://weechat.org/) is an extensible chat client.
@@ -8,7 +11,8 @@
 
 # Project Status
 
-Weechat-Matrix already supports large parts of the Matrix protocol.  See our [TODO](https://github.com/poljar/weechat-matrix/blob/master/TODO.md) list for more details.  Encryption support is still in the works.
+Weechat-Matrix already supports large parts of the Matrix protocol, end to end encryption
+support is still experimental.
 
 # Installation
 
@@ -21,10 +25,13 @@ The following Python modules must also be available on your system:
 - webcolors
 - http-parser
 - future (Python2 users only, see below)
+- atomicwrite
+- matrix-nio
+- attrs
+- logbook
+- pygments
 
 Note that weechat only supports Python2 OR Python3, and that setting is determined at the time that Weechat is compiled.  Weechat-Matrix can work with either Python2 or Python3, but when you install dependencies you will have to take into account which version of Python your Weechat was built to use.  If you are unsure, Python2 is a good first guess.
-
-When encryption is ready, the plugin will also depend on the [Python bindings](https://github.com/poljar/python-olm) for the OLM encryption library.
 
 # Configuration
 
@@ -65,6 +72,9 @@ Configuration is completed primarily through the Weechat interface.  First start
 # Helpful Commands
 
 `/help matrix` will print information about the `/matrix` command.
+
+`/help olm` will print information about the `/olm` command that is used for
+device verification.
 
 `/matrix help [command]` will print information for subcommands, such as `/matrix help server`
 
