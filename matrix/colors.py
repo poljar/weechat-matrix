@@ -2,7 +2,8 @@
 
 # Copyright © 2008 Nicholas Marriott <nicholas.marriott@gmail.com>
 # Copyright © 2016 Avi Halachmi <avihpit@yahoo.com>
-# Copyright © 2018 Damir Jelić <poljar@termina.org.uk>
+# Copyright © 2018, 2019 Damir Jelić <poljar@termina.org.uk>
+# Copyright © 2018, 2019 Denis Kasak <dkasak@termina.org.uk>
 #
 # Permission to use, copy, modify, and/or distribute this software for
 # any purpose with or without fee is hereby granted, provided that the
@@ -18,39 +19,63 @@
 
 from __future__ import unicode_literals
 
+import html
+import re
+import textwrap
+
 # pylint: disable=redefined-builtin
 from builtins import str
 from collections import namedtuple
-from matrix.globals import W
-from matrix.utils import string_strikethrough
+from typing import List
 
-import textwrap
 import webcolors
+from pygments import highlight
+from pygments.formatter import Formatter, get_style_by_name
+from pygments.lexers import get_lexer_by_name
+from pygments.util import ClassNotFound
+
+from . import globals as G
+from .globals import W
+from .utils import (string_strikethrough,
+                    string_color_and_reset,
+                    color_pair,
+                    text_block,
+                    colored_text_block)
 
 try:
     from HTMLParser import HTMLParser
 except ImportError:
     from html.parser import HTMLParser
 
-import html
-from html.entities import name2codepoint
 
-FormattedString = namedtuple('FormattedString', ['text', 'attributes'])
+class FormattedString:
+    __slots__ = ("text", "attributes")
 
-quote_wrapper = textwrap.TextWrapper(
-    initial_indent="> ", subsequent_indent="> ")
+    def __init__(self, text, attributes):
+        self.attributes = DEFAULT_ATTRIBUTES.copy()
+        self.attributes.update(attributes)
+        self.text = text
 
 
-class Formatted():
-
+class Formatted(object):
     def __init__(self, substrings):
         # type: (List[FormattedString]) -> None
         self.substrings = substrings
 
+    @property
+    def textwrapper(self):
+        quote_pair = color_pair(G.CONFIG.color.quote_fg,
+                                G.CONFIG.color.quote_bg)
+        return textwrap.TextWrapper(
+            width=67,
+            initial_indent="{}> ".format(W.color(quote_pair)),
+            subsequent_indent="{}> ".format(W.color(quote_pair)),
+        )
+
     def is_formatted(self):
         # type: (Formatted) -> bool
         for string in self.substrings:
-            if string.attributes != DEFAULT_ATRIBUTES:
+            if string.attributes != DEFAULT_ATTRIBUTES:
                 return True
         return False
 
@@ -64,35 +89,52 @@ class Formatted():
         """
         text = ""  # type: str
         substrings = []  # type: List[FormattedString]
-        attributes = DEFAULT_ATRIBUTES.copy()
+        attributes = DEFAULT_ATTRIBUTES.copy()
 
         i = 0
         while i < len(line):
             # Bold
-            if line[i] == "\x02":
+            if line[i] == "\x02" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
                 attributes["bold"] = not attributes["bold"]
                 i = i + 1
 
-            # Markdown bold
-            elif line[i] == "*":
-                if attributes["italic"] and not line[i-1].isspace():
+            # Markdown inline code
+            elif line[i] == "`":
+                if text:
+                    # strip leading and trailing spaces and compress consecutive
+                    # spaces in inline code blocks
+                    if attributes["code"]:
+                        text = text.strip()
+                        text = re.sub(r"\s+", " ", text)
+
+                    substrings.append(
+                        FormattedString(text, attributes.copy())
+                    )
+                text = ""
+                attributes["code"] = not attributes["code"]
+                i = i + 1
+
+            # Markdown emphasis
+            elif line[i] == "*" and not attributes["code"]:
+                if attributes["italic"] and not line[i - 1].isspace():
                     if text:
-                        substrings.append(FormattedString(
-                            text, attributes.copy()))
+                        substrings.append(
+                            FormattedString(text, attributes.copy())
+                        )
                     text = ""
                     attributes["italic"] = not attributes["italic"]
                     i = i + 1
                     continue
 
-                elif attributes["italic"] and line[i-1].isspace():
+                elif attributes["italic"] and line[i - 1].isspace():
                     text = text + line[i]
                     i = i + 1
                     continue
 
-                elif i+1 < len(line) and line[i+1].isspace():
+                elif i + 1 < len(line) and line[i + 1].isspace():
                     text = text + line[i]
                     i = i + 1
                     continue
@@ -109,7 +151,7 @@ class Formatted():
                 i = i + 1
 
             # Color
-            elif line[i] == "\x03":
+            elif line[i] == "\x03" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
@@ -147,15 +189,16 @@ class Formatted():
                 else:
                     attributes["bgcolor"] = None
             # Reset
-            elif line[i] == "\x0F":
+            elif line[i] == "\x0F" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
                 # Reset all the attributes
-                attributes = DEFAULT_ATRIBUTES.copy()
+                attributes = DEFAULT_ATTRIBUTES.copy()
                 i = i + 1
+
             # Italic
-            elif line[i] == "\x1D":
+            elif line[i] == "\x1D" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
@@ -163,7 +206,7 @@ class Formatted():
                 i = i + 1
 
             # Underline
-            elif line[i] == "\x1F":
+            elif line[i] == "\x1F" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
@@ -175,7 +218,7 @@ class Formatted():
                 text = text + line[i]
                 i = i + 1
 
-        substrings.append(FormattedString(text, attributes))
+        substrings.append(FormattedString(text, DEFAULT_ATTRIBUTES.copy()))
         return cls(substrings)
 
     @classmethod
@@ -190,36 +233,60 @@ class Formatted():
         def add_attribute(string, name, value):
             if name == "bold" and value:
                 return "{bold_on}{text}{bold_off}".format(
-                    bold_on="<strong>", text=string, bold_off="</strong>")
-            elif name == "italic" and value:
+                    bold_on="<strong>", text=string, bold_off="</strong>"
+                )
+            if name == "italic" and value:
                 return "{italic_on}{text}{italic_off}".format(
-                    italic_on="<em>", text=string, italic_off="</em>")
-            elif name == "underline" and value:
+                    italic_on="<em>", text=string, italic_off="</em>"
+                )
+            if name == "underline" and value:
                 return "{underline_on}{text}{underline_off}".format(
-                    underline_on="<u>", text=string, underline_off="</u>")
-            elif name == "strikethrough" and value:
+                    underline_on="<u>", text=string, underline_off="</u>"
+                )
+            if name == "strikethrough" and value:
                 return "{strike_on}{text}{strike_off}".format(
-                    strike_on="<del>", text=string, strike_off="</del>")
-            elif name == "quote" and value:
+                    strike_on="<del>", text=string, strike_off="</del>"
+                )
+            if name == "quote" and value:
                 return "{quote_on}{text}{quote_off}".format(
                     quote_on="<blockquote>",
                     text=string,
-                    quote_off="</blockquote>")
-            elif name == "fgcolor" and value:
+                    quote_off="</blockquote>",
+                )
+            if name == "code" and value:
+                return "{code_on}{text}{code_off}".format(
+                    code_on="<code>", text=string, code_off="</code>"
+                )
+            if name == "fgcolor" and value:
                 return "{color_on}{text}{color_off}".format(
                     color_on="<font color={color}>".format(
-                        color=color_weechat_to_html(value)),
+                        color=color_weechat_to_html(value)
+                    ),
                     text=string,
-                    color_off="</font>")
+                    color_off="</font>",
+                )
 
             return string
 
         def format_string(formatted_string):
             text = formatted_string.text
-            attributes = formatted_string.attributes
+            attributes = formatted_string.attributes.copy()
 
-            for key, value in attributes.items():
-                text = add_attribute(text, key, value)
+            if attributes["code"]:
+                if attributes["preformatted"]:
+                    # XXX: This can't really happen since there's no way of
+                    # creating preformatted code blocks in weechat (because
+                    # there is not multiline input), but I'm creating this
+                    # branch as a note that it should be handled once we do
+                    # implement them.
+                    pass
+                else:
+                    text = add_attribute(text, "code", True)
+                    attributes.pop("code")
+            else:
+                for key, value in attributes.items():
+                    text = add_attribute(text, key, value)
+
             return text
 
         html_string = map(format_string, self.substrings)
@@ -228,7 +295,7 @@ class Formatted():
     # TODO do we want at least some formatting using unicode
     # (strikethrough, quotes)?
     def to_plain(self):
-        # type: (List[FormattedString]) -> str
+        # type: () -> str
         def strip_atribute(string, _, __):
             return string
 
@@ -245,44 +312,91 @@ class Formatted():
 
     def to_weechat(self):
         # TODO BG COLOR
-        def add_attribute(string, name, value):
-            if name == "bold" and value:
+        def add_attribute(string, name, value, attributes):
+            if not value:
+                return string
+            elif name == "bold":
                 return "{bold_on}{text}{bold_off}".format(
                     bold_on=W.color("bold"),
                     text=string,
-                    bold_off=W.color("-bold"))
-
-            elif name == "italic" and value:
+                    bold_off=W.color("-bold"),
+                )
+            elif name == "italic":
                 return "{italic_on}{text}{italic_off}".format(
                     italic_on=W.color("italic"),
                     text=string,
-                    italic_off=W.color("-italic"))
-
-            elif name == "underline" and value:
+                    italic_off=W.color("-italic"),
+                )
+            elif name == "underline":
                 return "{underline_on}{text}{underline_off}".format(
                     underline_on=W.color("underline"),
                     text=string,
-                    underline_off=W.color("-underline"))
-
-            elif name == "strikethrough" and value:
+                    underline_off=W.color("-underline"),
+                )
+            elif name == "strikethrough":
                 return string_strikethrough(string)
+            elif name == "quote":
+                return self.textwrapper.fill(
+                    W.string_remove_color(string.replace("\n", ""), "")
+                )
+            elif name == "code":
+                code_color_pair = color_pair(
+                    G.CONFIG.color.untagged_code_fg,
+                    G.CONFIG.color.untagged_code_bg
+                )
 
-            elif name == "quote" and value:
-                return quote_wrapper.fill(string.replace("\n", ""))
+                margin = G.CONFIG.look.code_block_margin
 
-            elif name == "fgcolor" and value:
+                if attributes["preformatted"]:
+                    # code block
+
+                    try:
+                        lexer = get_lexer_by_name(value)
+                    except ClassNotFound:
+                        if G.CONFIG.look.code_blocks:
+                            return colored_text_block(
+                                string,
+                                margin=margin,
+                                color_pair=code_color_pair)
+                        else:
+                            return string_color_and_reset(string,
+                                                          code_color_pair)
+
+                    try:
+                        style = get_style_by_name(G.CONFIG.look.pygments_style)
+                    except ClassNotFound:
+                        style = "native"
+
+                    if G.CONFIG.look.code_blocks:
+                        code_block = text_block(string, margin=margin)
+                    else:
+                        code_block = string
+
+                    # highlight adds a newline to the end of the string, remove
+                    # it from the output
+                    highlighted_code = highlight(
+                        code_block,
+                        lexer,
+                        WeechatFormatter(style=style)
+                    ).rstrip()
+
+                    return highlighted_code
+                else:
+                    return string_color_and_reset(string, code_color_pair)
+            elif name == "fgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color(value),
                     text=string,
-                    color_off=W.color("resetcolor"))
-
-            elif name == "bgcolor" and value:
+                    color_off=W.color("resetcolor"),
+                )
+            elif name == "bgcolor":
                 return "{color_on}{text}{color_off}".format(
                     color_on=W.color("," + value),
                     text=string,
-                    color_off=W.color("resetcolor"))
-
-            return string
+                    color_off=W.color("resetcolor"),
+                )
+            else:
+                return string
 
         def format_string(formatted_string):
             text = formatted_string.text
@@ -291,28 +405,68 @@ class Formatted():
             # We need to handle strikethrough first, since doing
             # a strikethrough followed by other attributes succeeds in the
             # terminal, but doing it the other way around results in garbage.
-            if 'strikethrough' in attributes:
-                text = add_attribute(text, 'strikethrough',
-                                     attributes['strikethrough'])
-                attributes.pop('strikethrough')
+            if "strikethrough" in attributes:
+                text = add_attribute(
+                    text,
+                    "strikethrough",
+                    attributes["strikethrough"],
+                    attributes
+                )
+                attributes.pop("strikethrough")
+
+            def indent(text, prefix):
+                return prefix + text.replace("\n", "\n{}".format(prefix))
 
             for key, value in attributes.items():
-                text = add_attribute(text, key, value)
-            return text
+                if not value:
+                    continue
+
+                # Don't use textwrap to quote the code
+                if key == "quote" and attributes["code"]:
+                    continue
+
+                # Reflow inline code blocks
+                if key == "code" and not attributes["preformatted"]:
+                    text = text.strip().replace('\n', ' ')
+
+                text = add_attribute(text, key, value, attributes)
+
+                # If we're quoted code add quotation marks now.
+                if key == "code" and attributes["quote"]:
+                    fg = G.CONFIG.color.quote_fg
+                    bg = G.CONFIG.color.quote_bg
+                    text = indent(
+                        text,
+                        string_color_and_reset(">", color_pair(fg, bg)) + " ",
+                    )
+
+            # If we're code don't remove multiple newlines blindly
+            if attributes["code"]:
+                return text
+            return re.sub(r"\n+", "\n", text)
 
         weechat_strings = map(format_string, self.substrings)
-        return "".join(weechat_strings).rstrip("\n")
+
+        # Remove duplicate \n elements from the list
+        strings = []
+        for string in weechat_strings:
+            if len(strings) == 0 or string != "\n" or string != strings[-1]:
+                strings.append(string)
+
+        return "".join(strings).strip()
 
 
 # TODO this should be a typed dict.
-DEFAULT_ATRIBUTES = {
+DEFAULT_ATTRIBUTES = {
     "bold": False,
     "italic": False,
     "underline": False,
     "strikethrough": False,
+    "preformatted": False,
     "quote": False,
+    "code": None,
     "fgcolor": None,
-    "bgcolor": None
+    "bgcolor": None,
 }
 
 
@@ -323,7 +477,7 @@ class MatrixHtmlParser(HTMLParser):
         HTMLParser.__init__(self)
         self.text = ""  # type: str
         self.substrings = []  # type: List[FormattedString]
-        self.attributes = DEFAULT_ATRIBUTES.copy()
+        self.attributes = DEFAULT_ATTRIBUTES.copy()
 
     def unescape(self, text):
         """Shim to unescape HTML in both Python 2 and 3.
@@ -357,11 +511,33 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("strikethrough")
         elif tag == "blockquote":
             self._toggle_attribute("quote")
+        elif tag == "pre":
+            self._toggle_attribute("preformatted")
+        elif tag == "code":
+            lang = None
+
+            for key, value in attrs:
+                if key == "class":
+                    if value.startswith("language-"):
+                        lang = value.split("-", 1)[1]
+
+            lang = lang or "unknown"
+
+            if self.text:
+                self.add_substring(self.text, self.attributes.copy())
+            self.text = ""
+            self.attributes["code"] = lang
+        elif tag == "p":
+            if self.text:
+                self.add_substring(self.text, self.attributes.copy())
+            self.text = "\n"
+            self.add_substring(self.text, DEFAULT_ATTRIBUTES.copy())
+            self.text = ""
         elif tag == "br":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
             self.text = "\n"
-            self.add_substring(self.text, DEFAULT_ATRIBUTES.copy())
+            self.add_substring(self.text, DEFAULT_ATTRIBUTES.copy())
             self.text = ""
         elif tag == "font":
             for key, value in attrs:
@@ -387,8 +563,18 @@ class MatrixHtmlParser(HTMLParser):
             self._toggle_attribute("underline")
         elif tag == "del":
             self._toggle_attribute("strikethrough")
+        elif tag == "pre":
+            self._toggle_attribute("preformatted")
+        elif tag == "code":
+            if self.text:
+                self.add_substring(self.text, self.attributes.copy())
+            self.text = ""
+            self.attributes["code"] = None
         elif tag == "blockquote":
             self._toggle_attribute("quote")
+            self.text = "\n"
+            self.add_substring(self.text, DEFAULT_ATTRIBUTES.copy())
+            self.text = ""
         elif tag == "font":
             if self.text:
                 self.add_substring(self.text, self.attributes.copy())
@@ -515,7 +701,7 @@ def color_line_to_weechat(color_string):
         "96": "250",
         "97": "254",
         "98": "231",
-        "99": "default"
+        "99": "default",
     }
 
     assert color_string in line_colors
@@ -523,20 +709,20 @@ def color_line_to_weechat(color_string):
     return line_colors[color_string]
 
 
-# The functions colour_dist_sq(), colour_to_6cube(), and colour_find_rgb
+# The functions color_dist_sq(), color_to_6cube(), and color_find_rgb
 # are python ports of the same named functions from the tmux
 # source, they are under the copyright of Nicholas Marriott, and Avi Halachmi
 # under the ISC license.
 # More info: https://github.com/tmux/tmux/blob/master/colour.c
 
 
-def colour_dist_sq(R, G, B, r, g, b):
+def color_dist_sq(R, G, B, r, g, b):
     # pylint: disable=invalid-name,too-many-arguments
     # type: (int, int, int, int, int, int) -> int
     return (R - r) * (R - r) + (G - g) * (G - g) + (B - b) * (B - b)
 
 
-def colour_to_6cube(v):
+def color_to_6cube(v):
     # pylint: disable=invalid-name
     # type: (int) -> int
     if v < 48:
@@ -546,15 +732,15 @@ def colour_to_6cube(v):
     return (v - 35) // 40
 
 
-def colour_find_rgb(r, g, b):
+def color_find_rgb(r, g, b):
     # type: (int, int, int) -> int
-    """Convert an RGB triplet to the xterm(1) 256 colour palette.
+    """Convert an RGB triplet to the xterm(1) 256 color palette.
 
-       xterm provides a 6x6x6 colour cube (16 - 231) and 24 greys (232 - 255).
-       We map our RGB colour to the closest in the cube, also work out the
+       xterm provides a 6x6x6 color cube (16 - 231) and 24 greys (232 - 255).
+       We map our RGB color to the closest in the cube, also work out the
        closest grey, and use the nearest of the two.
 
-       Note that the xterm has much lower resolution for darker colours (they
+       Note that the xterm has much lower resolution for darker colors (they
        are not evenly spread out), so our 6 levels are not evenly spread: 0x0,
        0x5f (95), 0x87 (135), 0xaf (175), 0xd7 (215) and 0xff (255). Greys are
        more evenly spread (8, 18, 28 ... 238).
@@ -563,16 +749,16 @@ def colour_find_rgb(r, g, b):
     q2c = [0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff]
 
     # Map RGB to 6x6x6 cube.
-    qr = colour_to_6cube(r)
-    qg = colour_to_6cube(g)
-    qb = colour_to_6cube(b)
+    qr = color_to_6cube(r)
+    qg = color_to_6cube(g)
+    qb = color_to_6cube(b)
 
     cr = q2c[qr]
     cg = q2c[qg]
     cb = q2c[qb]
 
-    # If we have hit the colour exactly, return early.
-    if (cr == r and cg == g and cb == b):
+    # If we have hit the color exactly, return early.
+    if cr == r and cg == g and cb == b:
         return 16 + (36 * qr) + (6 * qg) + qb
 
     # Work out the closest grey (average of RGB).
@@ -585,10 +771,10 @@ def colour_find_rgb(r, g, b):
 
     grey = 8 + (10 * grey_idx)
 
-    # Is grey or 6x6x6 colour closest?
-    d = colour_dist_sq(cr, cg, cb, r, g, b)
+    # Is grey or 6x6x6 color closest?
+    d = color_dist_sq(cr, cg, cb, r, g, b)
 
-    if colour_dist_sq(grey, grey, grey, r, g, b) < d:
+    if color_dist_sq(grey, grey, grey, r, g, b) < d:
         idx = 232 + grey_idx
     else:
         idx = 16 + (36 * qr) + (6 * qg) + qb
@@ -622,12 +808,12 @@ def color_html_to_weechat(color):
     try:
         rgb_color = webcolors.html5_parse_legacy_color(color)
     except ValueError:
-        return None
+        return ""
 
     if rgb_color in weechat_basic_colors:
         return weechat_basic_colors[rgb_color]
 
-    return str(colour_find_rgb(*rgb_color))
+    return str(color_find_rgb(*rgb_color))
 
 
 def color_weechat_to_html(color):
@@ -913,5 +1099,50 @@ def color_weechat_to_html(color):
     # yapf: enable
     if color in weechat_basic_colors:
         return hex_colors[weechat_basic_colors[color]]
-    else:
-        return hex_colors[color]
+    return hex_colors[color]
+
+
+class WeechatFormatter(Formatter):
+    def __init__(self, **options):
+        Formatter.__init__(self, **options)
+        self.styles = {}
+
+        for token, style in self.style:
+            start = end = ""
+            if style["color"]:
+                start += "{}".format(
+                    W.color(color_html_to_weechat(str(style["color"])))
+                )
+                end = "{}".format(W.color("resetcolor")) + end
+            if style["bold"]:
+                start += W.color("bold")
+                end = W.color("-bold") + end
+            if style["italic"]:
+                start += W.color("italic")
+                end = W.color("-italic") + end
+            if style["underline"]:
+                start += W.color("underline")
+                end = W.color("-underline") + end
+            self.styles[token] = (start, end)
+
+    def format(self, tokensource, outfile):
+        lastval = ""
+        lasttype = None
+
+        for ttype, value in tokensource:
+            while ttype not in self.styles:
+                ttype = ttype.parent
+
+            if ttype == lasttype:
+                lastval += value
+            else:
+                if lastval:
+                    stylebegin, styleend = self.styles[lasttype]
+                    outfile.write(stylebegin + lastval + styleend)
+                # set lastval/lasttype to current values
+                lastval = value
+                lasttype = ttype
+
+        if lastval:
+            stylebegin, styleend = self.styles[lasttype]
+            outfile.write(stylebegin + lastval + styleend)

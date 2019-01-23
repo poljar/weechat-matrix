@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright © 2018 Damir Jelić <poljar@termina.org.uk>
+# Copyright © 2018, 2019 Damir Jelić <poljar@termina.org.uk>
 #
 # Permission to use, copy, modify, and/or distribute this software for
 # any purpose with or without fee is hereby granted, provided that the
@@ -17,17 +17,32 @@
 from __future__ import unicode_literals
 
 import sys
+from typing import Dict, Optional
+from logbook import Logger
+from collections import OrderedDict
 
-from matrix.utf import WeechatWrapper
-from matrix.plugin_options import PluginOptions
+from .utf import WeechatWrapper
+
+if False:
+    from .server import MatrixServer
+    from .config import MatrixConfig
+    from .uploads import Upload
+
 
 try:
     import weechat
+
     W = weechat if sys.hexversion >= 0x3000000 else WeechatWrapper(weechat)
 except ImportError:
-    import matrix._weechat as weechat
+    import matrix._weechat as weechat  # type: ignore
+
     W = weechat
 
-OPTIONS = PluginOptions()  # type: PluginOptions
 SERVERS = dict()  # type: Dict[str, MatrixServer]
-CONFIG = None  # type: weechat.config
+CONFIG = None  # type: Optional[MatrixConfig]
+ENCRYPTION = True  # type: bool
+SCRIPT_NAME = "matrix"  # type: str
+MAX_EVENTS = 100
+TYPING_NOTICE_TIMEOUT = 4000  # 4 seconds typing notice lifetime
+LOGGER = Logger("weechat-matrix")
+UPLOADS = OrderedDict()  # type: Dict[str, Upload]

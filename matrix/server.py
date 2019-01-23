@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright © 2018 Damir Jelić <poljar@termina.org.uk>
+# Copyright © 2018, 2019 Damir Jelić <poljar@termina.org.uk>
 #
 # Permission to use, copy, modify, and/or distribute this software for
 # any purpose with or without fee is hereby granted, provided that the
@@ -15,177 +15,314 @@
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 from __future__ import unicode_literals
-from builtins import str, bytes
 
 import os
-import ssl
-import socket
-import time
-import datetime
 import pprint
+import socket
+import ssl
+import time
+import copy
+from collections import defaultdict, deque
+from atomicwrites import atomic_write
+from typing import Any, Deque, Dict, Optional, List, NamedTuple, DefaultDict
 
-from collections import deque
-from http_parser.pyparser import HttpParser
+from uuid import UUID
 
-from matrix.plugin_options import Option, DebugType
-from matrix.utils import (key_from_value, prnt_debug, server_buffer_prnt,
-                          create_server_buffer, tags_for_message)
-from matrix.utf import utf8_decode
-from matrix.globals import W, SERVERS, OPTIONS
-import matrix.api as API
-from matrix.api import MatrixClient, MatrixSyncMessage, MatrixLoginMessage
+from nio import (
+    Api,
+    HttpClient,
+    LocalProtocolError,
+    LoginResponse,
+    Response,
+    Rooms,
+    RoomSendResponse,
+    SyncResponse,
+    PartialSyncResponse,
+    ShareGroupSessionResponse,
+    KeysQueryResponse,
+    KeysClaimResponse,
+    DevicesResponse,
+    UpdateDeviceResponse,
+    DeleteDevicesAuthResponse,
+    DeleteDevicesResponse,
+    TransportType,
+    RoomMessagesResponse,
+    EncryptionError,
+    GroupEncryptionError,
+    OlmTrustError,
+    ErrorResponse,
+    SyncError,
+    LoginError,
+    JoinedMembersResponse,
+    JoinedMembersError,
+    RoomKeyEvent
+)
+
+from . import globals as G
+from .buffer import OwnAction, OwnMessage, RoomBuffer
+from .config import ConfigSection, Option, ServerBufferType
+from .globals import SCRIPT_NAME, SERVERS, W, MAX_EVENTS, TYPING_NOTICE_TIMEOUT
+from .utf import utf8_decode
+from .utils import create_server_buffer, key_from_value, server_buffer_prnt
+
+from .colors import Formatted, FormattedString, DEFAULT_ATTRIBUTES
 
 
-class MatrixServer:
+try:
+    FileNotFoundError  # type: ignore
+except NameError:
+    FileNotFoundError = IOError
+
+
+EncrytpionQueueItem = NamedTuple(
+    "EncrytpionQueueItem",
+    [
+        ("message_type", str),
+        ("formatted_message", Formatted),
+    ],
+)
+
+
+class ServerConfig(ConfigSection):
+    def __init__(self, server_name, config_ptr):
+        # type: (str, str) -> None
+        self._server_name = server_name
+        self._config_ptr = config_ptr
+        self._option_ptrs = {}  # type: Dict[str, str]
+
+        options = [
+            Option(
+                "autoconnect",
+                "boolean",
+                "",
+                0,
+                0,
+                "off",
+                (
+                    "automatically connect to the matrix server when weechat "
+                    "is starting"
+                ),
+            ),
+            Option(
+                "address",
+                "string",
+                "",
+                0,
+                0,
+                "",
+                "Hostname or IP address for the server",
+            ),
+            Option(
+                "port", "integer", "", 0, 65535, "443", "Port for the server"
+            ),
+            Option(
+                "proxy",
+                "string",
+                "",
+                0,
+                0,
+                "",
+                ("Name of weechat proxy to use (see /help proxy)"),
+            ),
+            Option(
+                "ssl_verify",
+                "boolean",
+                "",
+                0,
+                0,
+                "on",
+                ("Check that the SSL connection is fully trusted"),
+            ),
+            Option(
+                "username", "string", "", 0, 0, "", "Username to use on server"
+            ),
+            Option(
+                "password",
+                "string",
+                "",
+                0,
+                0,
+                "",
+                (
+                    "Password for server (note: content is evaluated, see "
+                    "/help eval)"
+                ),
+            ),
+            Option(
+                "device_name",
+                "string",
+                "",
+                0,
+                0,
+                "Weechat Matrix",
+                "Device name to use while logging in to the matrix server",
+            ),
+            Option(
+                "autoreconnect_delay",
+                "integer",
+                "",
+                0,
+                86400,
+                "10",
+                ("Delay (in seconds) before trying to reconnect to server"),
+            ),
+        ]
+
+        section = W.config_search_section(config_ptr, "server")
+        self._ptr = section
+
+        for option in options:
+            option_name = "{server}.{option}".format(
+                server=self._server_name, option=option.name
+            )
+
+            self._option_ptrs[option.name] = W.config_new_option(
+                config_ptr,
+                section,
+                option_name,
+                option.type,
+                option.description,
+                option.string_values,
+                option.min,
+                option.max,
+                option.value,
+                option.value,
+                0,
+                "",
+                "",
+                "matrix_config_server_change_cb",
+                self._server_name,
+                "",
+                "",
+            )
+
+    autoconnect = ConfigSection.option_property("autoconnect", "boolean")
+    address = ConfigSection.option_property("address", "string")
+    port = ConfigSection.option_property("port", "integer")
+    proxy = ConfigSection.option_property("proxy", "string")
+    ssl_verify = ConfigSection.option_property("ssl_verify", "boolean")
+    username = ConfigSection.option_property("username", "string")
+    device_name = ConfigSection.option_property("device_name", "string")
+    reconnect_delay = ConfigSection.option_property("autoreconnect_delay", "integer")
+    password = ConfigSection.option_property(
+        "password", "string", evaluate=True
+    )
+
+    def free(self):
+        W.config_section_free_options(self._ptr)
+
+
+class MatrixServer(object):
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, name, config_file):
-        # type: (str, weechat.config) -> None
+    def __init__(self, name, config_ptr):
+        # type: (str, str) -> None
         # yapf: disable
         self.name = name                     # type: str
         self.user_id = ""
-        self.address = ""                    # type: str
-        self.port = 8448                     # type: int
-        self.options = dict()                # type: Dict[str, weechat.config]
-        self.device_name = "Weechat Matrix"  # type: str
         self.device_id = ""                  # type: str
 
-        self.user = ""                       # type: str
-        self.password = ""                   # type: str
+        self.room_buffers = dict()  # type: Dict[str, RoomBuffer]
+        self.buffers = dict()                # type: Dict[str, str]
+        self.server_buffer = None            # type: Optional[str]
+        self.fd_hook = None                  # type: Optional[str]
+        self.ssl_hook = None                 # type: Optional[str]
+        self.timer_hook = None               # type: Optional[str]
+        self.numeric_address = ""            # type: Optional[str]
 
-        self.rooms = dict()                  # type: Dict[str, MatrixRoom]
-        self.buffers = dict()                # type: Dict[str, weechat.buffer]
-        self.server_buffer = None            # type: weechat.buffer
-        self.fd_hook = None                  # type: weechat.hook
-        self.ssl_hook = None                 # type: weechat.hook
-        self.timer_hook = None               # type: weechat.hook
-        self.numeric_address = ""            # type: str
-
-        self.autoconnect = False                         # type: bool
-        self.connected = False                           # type: bool
-        self.connecting = False                          # type: bool
-        self.proxy = None                                # type: str
-        self.reconnect_delay = 0                         # type: int
-        self.reconnect_time = None                       # type: float
-        self.socket = None                               # type: ssl.SSLSocket
+        self.connected = False      # type: bool
+        self.connecting = False     # type: bool
+        self.keys_queried = False   # type: bool
+        self.reconnect_delay = 0    # type: int
+        self.reconnect_time = None  # type: Optional[float]
+        self.sync_time = None       # type: Optional[float]
+        self.socket = None          # type: Optional[ssl.SSLSocket]
         self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
+        self.transport_type = None  # type: Optional[TransportType]
+
+        # Enable http2 negotiation on the ssl context.
+        self.ssl_context.set_alpn_protocols(["h2", "http/1.1"])
+
+        try:
+            self.ssl_context.set_npn_protocols(["h2", "http/1.1"])
+        except NotImplementedError:
+            pass
 
         self.client = None
-        self.access_token = None                         # type: str
-        self.next_batch = None                           # type: str
+        self.access_token = None                         # type: Optional[str]
+        self.next_batch = None                           # type: Optional[str]
         self.transaction_id = 0                          # type: int
         self.lag = 0                                     # type: int
         self.lag_done = False                            # type: bool
+        self.busy = False                                # type: bool
 
-        self.send_fd_hook = None                         # type: weechat.hook
+        self.send_fd_hook = None                         # type: Optional[str]
         self.send_buffer = b""                           # type: bytes
-        self.current_message = None                      # type: MatrixMessage
+        self.device_check_timestamp = None               # type: Optional[int]
 
-        self.http_parser = HttpParser()                  # type: HttpParser
-        self.http_buffer = []                            # type: List[bytes]
+        self.device_deletion_queue = dict()              # type: Dict[str, str]
 
-        # Queue of messages we need to send off.
-        self.send_queue = deque()     # type: Deque[MatrixMessage]
+        self.encryption_queue = defaultdict(deque)  \
+            # type: DefaultDict[str, Deque[EncrytpionQueueItem]]
+        self.backlog_queue = dict()      # type: Dict[str, str]
 
-        # Queue of messages we send off and are waiting a response for
-        self.receive_queue = deque()  # type: Deque[MatrixMessage]
+        self.user_gc_time = time.time()    # type: float
+        self.member_request_list = []         # type: List[str]
+        self.rooms_with_missing_members = []  # type: List[str]
+        self.lazy_load_hook = None       # type: Optional[str]
+        self.partial_sync_hook = None    # type: Optional[str]
 
-        self.event_queue_timer = None
-        self.event_queue = deque()  # type: Deque[RoomInfo]
+        self.keys_claimed = defaultdict(bool)          # type: Dict[str, bool]
+        self.group_session_shared = defaultdict(bool)  # type: Dict[str, bool]
 
-        self._create_options(config_file)
+        self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
-        self._load_devide_id()
         # yapf: enable
 
     def _create_session_dir(self):
         path = os.path.join("matrix", self.name)
         if not W.mkdir_home(path, 0o700):
-            message = ("{prefix}matrix: Error creating server session "
-                       "directory").format(prefix=W.prefix("error"))
+            message = (
+                "{prefix}matrix: Error creating server session " "directory"
+            ).format(prefix=W.prefix("error"))
             W.prnt("", message)
 
-    def _get_session_path(self):
-        home_dir = W.info_get('weechat_dir', '')
+    def get_session_path(self):
+        home_dir = W.info_get("weechat_dir", "")
         return os.path.join(home_dir, "matrix", self.name)
 
-    def _load_devide_id(self):
-        file_name = "{}{}".format(self.name, ".device_id")
-        path = os.path.join(self._get_session_path(), file_name)
+    def _load_device_id(self):
+        file_name = "{}{}".format(self.config.username, ".device_id")
+        path = os.path.join(self.get_session_path(), file_name)
 
         if not os.path.isfile(path):
             return
 
-        with open(path, 'r') as f:
-            device_id = f.readline().rstrip()
+        with open(path, "r") as device_file:
+            device_id = device_file.readline().rstrip()
             if device_id:
                 self.device_id = device_id
 
     def save_device_id(self):
-        file_name = "{}{}".format(self.name, ".device_id")
-        path = os.path.join(self._get_session_path(), file_name)
+        file_name = "{}{}".format(self.config.username, ".device_id")
+        path = os.path.join(self.get_session_path(), file_name)
 
-        with open(path, 'w') as f:
-            f.write(self.device_id)
-
-    def _create_options(self, config_file):
-        options = [
-            Option('autoconnect', 'boolean', '', 0, 0, 'off',
-                   ("automatically connect to the matrix server when weechat "
-                    "is starting")),
-            Option('address', 'string', '', 0, 0, '',
-                   "Hostname or IP address for the server"),
-            Option('port', 'integer', '', 0, 65535, '8448',
-                   "Port for the server"),
-            Option('proxy', 'string', '', 0, 0, '',
-                   ("Name of weechat proxy to use (see /help proxy)")),
-            Option('ssl_verify', 'boolean', '', 0, 0, 'on',
-                   ("Check that the SSL connection is fully trusted")),
-            Option('username', 'string', '', 0, 0, '',
-                   "Username to use on server"),
-            Option(
-                'password', 'string', '', 0, 0, '',
-                ("Password for server (note: content is evaluated, see /help "
-                 "eval)")),
-            Option('device_name', 'string', '', 0, 0, 'Weechat Matrix',
-                   "Device name to use while logging in to the matrix server"),
-        ]
-
-        section = W.config_search_section(config_file, 'server')
-
-        for option in options:
-            option_name = "{server}.{option}".format(
-                server=self.name, option=option.name)
-
-            self.options[option.name] = W.config_new_option(
-                config_file, section, option_name, option.type,
-                option.description, option.string_values, option.min,
-                option.max, option.value, option.value, 0, "", "",
-                "matrix_config_server_change_cb", self.name, "", "")
-
-    def reset_parser(self):
-        self.http_parser = HttpParser()
-        self.http_buffer = []
+        with atomic_write(path, overwrite=True) as device_file:
+            device_file.write(self.device_id)
 
     def _change_client(self):
-        host = ':'.join([self.address, str(self.port)])
-        user_agent = 'weechat-matrix/{version}'.format(version="0.1")
-        self.client = MatrixClient(host, user_agent=user_agent)
+        host = ":".join([self.config.address, str(self.config.port)])
+        self.client = HttpClient(
+            host,
+            self.config.username,
+            self.device_id,
+            self.get_session_path()
+        )
 
     def update_option(self, option, option_name):
         if option_name == "address":
-            value = W.config_string(option)
-            self.address = value
             self._change_client()
-        elif option_name == "autoconnect":
-            value = W.config_boolean(option)
-            self.autoconnect = value
         elif option_name == "port":
-            value = W.config_integer(option)
-            self.port = value
             self._change_client()
-        elif option_name == "proxy":
-            value = W.config_string(option)
-            self.proxy = value
         elif option_name == "ssl_verify":
             value = W.config_boolean(option)
             if value:
@@ -196,31 +333,29 @@ class MatrixServer:
                 self.ssl_context.verify_mode = ssl.CERT_NONE
         elif option_name == "username":
             value = W.config_string(option)
-            self.user = value
             self.access_token = ""
-        elif option_name == "password":
-            value = W.config_string(option)
-            self.password = W.string_eval_expression(value, {}, {}, {})
-        elif option_name == "device_name":
-            value = W.config_string(option)
-            self.device_name = value
+
+            self._load_device_id()
+
+            if self.client:
+                self.client.user = value
+                if self.device_id:
+                    self.client.device_id = self.device_id
         else:
             pass
 
-    def send_or_queue(self, message):
-        # type: (MatrixServer, MatrixMessage) -> None
-        if not self.send(message):
-            prnt_debug(DebugType.MESSAGING, self,
-                       ("{prefix} Failed sending message of type {t}. "
-                        "Adding to queue").format(
-                            prefix=W.prefix("error"),
-                            t=message.__class__.__name__))
-            self.send_queue.append(message)
+    def send_or_queue(self, request):
+        # type: (bytes) -> None
+        self.send(request)
 
     def try_send(self, message):
         # type: (MatrixServer, bytes) -> bool
 
         sock = self.socket
+
+        if not sock:
+            return False
+
         total_sent = 0
         message_length = len(message)
 
@@ -241,14 +376,17 @@ class MatrixServer:
                 strerr = error.strerror if error.strerror else "Unknown reason"
                 strerr = errno + strerr
 
-                error_message = ("{prefix}Error while writing to "
-                                 "socket: {error}").format(
-                                     prefix=W.prefix("network"), error=strerr)
+                error_message = (
+                    "{prefix}Error while writing to " "socket: {error}"
+                ).format(prefix=W.prefix("network"), error=strerr)
 
                 server_buffer_prnt(self, error_message)
                 server_buffer_prnt(
-                    self, ("{prefix}matrix: disconnecting from server..."
-                          ).format(prefix=W.prefix("network")))
+                    self,
+                    ("{prefix}matrix: disconnecting from server...").format(
+                        prefix=W.prefix("network")
+                    ),
+                )
 
                 self.disconnect()
                 return False
@@ -259,10 +397,15 @@ class MatrixServer:
                 server_buffer_prnt(
                     self,
                     "{prefix}matrix: Error while writing to socket".format(
-                        prefix=W.prefix("network")))
+                        prefix=W.prefix("network")
+                    ),
+                )
                 server_buffer_prnt(
-                    self, ("{prefix}matrix: disconnecting from server..."
-                          ).format(prefix=W.prefix("network")))
+                    self,
+                    ("{prefix}matrix: disconnecting from server...").format(
+                        prefix=W.prefix("network")
+                    ),
+                )
                 self.disconnect()
                 return False
 
@@ -272,37 +415,38 @@ class MatrixServer:
         return True
 
     def _abort_send(self):
-        self.send_queue.appendleft(self.current_message)
-        self.current_message = None
-        self.send_buffer = ""
+        self.send_buffer = b""
 
     def _finalize_send(self):
         # type: (MatrixServer) -> None
-        self.current_message.send_time = time.time()
-        self.receive_queue.append(self.current_message)
-
         self.send_buffer = b""
-        self.current_message = None
 
-    def send(self, message):
-        # type: (MatrixServer, MatrixMessage) -> bool
-        if self.current_message:
-            return False
+    def info(self, message):
+        buf = ""
+        if self.server_buffer:
+            buf = self.server_buffer
 
-        self.current_message = message
+        msg = "{}{}: {}".format(W.prefix("network"), SCRIPT_NAME, message)
+        W.prnt(buf, msg)
 
-        request = message.request.request
-        payload = message.request.payload
+    def error(self, message):
+        buf = ""
+        if self.server_buffer:
+            buf = self.server_buffer
 
-        bytes_message = bytes(request, 'utf-8') + bytes(payload, 'utf-8')
+        msg = "{}{}: {}".format(W.prefix("error"), SCRIPT_NAME, message)
+        W.prnt(buf, msg)
 
-        self.try_send(bytes_message)
+    def send(self, data):
+        # type: (bytes) -> bool
+        self.try_send(data)
 
         return True
 
     def reconnect(self):
-        message = ("{prefix}matrix: reconnecting to server..."
-                  ).format(prefix=W.prefix("network"))
+        message = ("{prefix}matrix: reconnecting to server...").format(
+            prefix=W.prefix("network")
+        )
 
         server_buffer_prnt(self, message)
 
@@ -319,11 +463,11 @@ class MatrixServer:
         if self.reconnect_delay:
             self.reconnect_delay = self.reconnect_delay * 2
         else:
-            self.reconnect_delay = 10
+            self.reconnect_delay = self.config.reconnect_delay
 
-        message = ("{prefix}matrix: reconnecting to server in {t} "
-                   "seconds").format(
-                       prefix=W.prefix("network"), t=self.reconnect_delay)
+        message = (
+            "{prefix}matrix: reconnecting to server in {t} " "seconds"
+        ).format(prefix=W.prefix("network"), t=self.reconnect_delay)
 
         server_buffer_prnt(self, message)
 
@@ -332,8 +476,12 @@ class MatrixServer:
         if self.socket:
             try:
                 self.socket.shutdown(socket.SHUT_RDWR)
-                self.socket.close()
             except socket.error:
+                pass
+
+            try:
+                self.socket.close()
+            except OSError:
                 pass
 
     def disconnect(self, reconnect=True):
@@ -347,37 +495,46 @@ class MatrixServer:
         self.socket = None
         self.connected = False
         self.access_token = ""
-        self.send_queue.clear()
-        self.receive_queue.clear()
 
         self.send_buffer = b""
-        self.current_message = None
-        self.reset_parser()
+        self.transport_type = None
+        self.member_request_list = []
+
+        if self.client:
+            try:
+                self.client.disconnect()
+            except LocalProtocolError:
+                pass
 
         self.lag = 0
         W.bar_item_update("lag")
-        self.reconnect_delay = 0
         self.reconnect_time = None
 
         if self.server_buffer:
-            message = ("{prefix}matrix: disconnected from server"
-                      ).format(prefix=W.prefix("network"))
+            message = ("{prefix}matrix: disconnected from server").format(
+                prefix=W.prefix("network")
+            )
             server_buffer_prnt(self, message)
 
         if reconnect:
             self.schedule_reconnect()
+        else:
+            self.reconnect_delay = 0
 
     def connect(self):
         # type: (MatrixServer) -> int
-        if not self.address or not self.port:
+        if not self.config.address or not self.config.port:
+            W.prnt("", self.config.address)
             message = "{prefix}Server address or port not set".format(
-                prefix=W.prefix("error"))
+                prefix=W.prefix("error")
+            )
             W.prnt("", message)
             return False
 
-        if not self.user or not self.password:
+        if not self.config.username or not self.config.password:
             message = "{prefix}User or password not set".format(
-                prefix=W.prefix("error"))
+                prefix=W.prefix("error")
+            )
             W.prnt("", message)
             return False
 
@@ -388,155 +545,921 @@ class MatrixServer:
             create_server_buffer(self)
 
         if not self.timer_hook:
-            self.timer_hook = W.hook_timer(1 * 1000, 0, 0, "matrix_timer_cb",
-                                           self.name)
+            self.timer_hook = W.hook_timer(
+                1 * 1000, 0, 0, "matrix_timer_cb", self.name
+            )
 
         ssl_message = " (SSL)" if self.ssl_context.check_hostname else ""
 
-        message = ("{prefix}matrix: Connecting to "
-                   "{server}:{port}{ssl}...").format(
-                       prefix=W.prefix("network"),
-                       server=self.address,
-                       port=self.port,
-                       ssl=ssl_message)
+        message = (
+            "{prefix}matrix: Connecting to " "{server}:{port}{ssl}..."
+        ).format(
+            prefix=W.prefix("network"),
+            server=self.config.address,
+            port=self.config.port,
+            ssl=ssl_message,
+        )
 
         W.prnt(self.server_buffer, message)
 
-        W.hook_connect(self.proxy if self.proxy else "",
-                       self.address, self.port,
-                       1, 0, "", "connect_cb",
-                       self.name)
+        W.hook_connect(
+            self.config.proxy,
+            self.config.address,
+            self.config.port,
+            1,
+            0,
+            "",
+            "connect_cb",
+            self.name,
+        )
 
         return True
 
-    def sync(self):
-        limit = None if self.next_batch else OPTIONS.sync_limit
-        message = MatrixSyncMessage(self.client, self.next_batch, limit)
-        self.send_queue.append(message)
+    def schedule_sync(self):
+        self.sync_time = time.time()
+
+    def sync(self, timeout=None, sync_filter=None):
+        # type: (Optional[int], Optional[Dict[Any, Any]]) -> None
+        if not self.client:
+            return
+
+        self.sync_time = None
+        _, request = self.client.sync(timeout, sync_filter)
+        self.send_or_queue(request)
 
     def login(self):
-        # type: (MatrixServer) -> None
-        message = MatrixLoginMessage(self.client, self.user, self.password,
-                                     self.device_name, self.device_id)
-        self.send_or_queue(message)
+        # type: () -> None
+        if not self.client:
+            return
 
-        msg = "{prefix}matrix: Logging in...".format(prefix=W.prefix("network"))
+        if self.client.logged_in:
+            msg = (
+                "{prefix}{script_name}: Already logged in, " "syncing..."
+            ).format(prefix=W.prefix("network"), script_name=SCRIPT_NAME)
+            W.prnt(self.server_buffer, msg)
+            timeout = 0 if self.transport_type == TransportType.HTTP else 30000
+            sync_filter = {
+                "room": {
+                    "timeline": {"limit": 5000},
+                    "state": {"lazy_load_members": True}
+                }
+            }
+            self.sync(timeout, sync_filter)
+            return
+
+        _, request = self.client.login(
+            self.config.password, self.config.device_name
+        )
+        self.send_or_queue(request)
+
+        msg = "{prefix}matrix: Logging in...".format(
+            prefix=W.prefix("network")
+        )
 
         W.prnt(self.server_buffer, msg)
 
+    def devices(self):
+        _, request = self.client.devices()
+        self.send_or_queue(request)
+
+    def delete_device(self, device_id, auth=None):
+        uuid, request = self.client.delete_devices([device_id], auth)
+        self.device_deletion_queue[uuid] = device_id
+        self.send_or_queue(request)
+        return
+
+    def rename_device(self, device_id, display_name):
+        content = {
+            "display_name": display_name
+        }
+
+        _, request = self.client.update_device(device_id, content)
+        self.send_or_queue(request)
+
+    def room_send_state(self, room_buffer, body, event_type):
+        if room_buffer.room.encrypted:
+            return
+
+        _, request = self.client.room_put_state(
+            room_buffer.room.room_id, event_type, body
+        )
+        self.send_or_queue(request)
+
+    def room_send_redaction(self, room_buffer, event_id, reason=None):
+        _, request = self.client.room_redact(
+            room_buffer.room.room_id, event_id, reason
+        )
+        self.send_or_queue(request)
+
+    def room_kick(self, room_buffer, user_id, reason=None):
+        _, request = self.client.room_kick(
+            room_buffer.room.room_id, user_id, reason
+        )
+        self.send_or_queue(request)
+
+    def room_invite(self, room_buffer, user_id):
+        _, request = self.client.room_invite(room_buffer.room.room_id, user_id)
+        self.send_or_queue(request)
+
+    def room_join(self, room_id):
+        _, request = self.client.join(room_id)
+        self.send_or_queue(request)
+
+    def room_leave(self, room_id):
+        _, request = self.client.room_leave(room_id)
+        self.send_or_queue(request)
+
+    def room_get_messages(self, room_id):
+        room_buffer = self.find_room_from_id(room_id)
+
+        # We're already fetching old messages
+        if room_buffer.backlog_pending:
+            return
+
+        if not room_buffer.prev_batch:
+            return
+
+        uuid, request = self.client.room_messages(
+            room_id,
+            room_buffer.prev_batch,
+            limit=10)
+
+        room_buffer.backlog_pending = True
+        self.backlog_queue[uuid] = room_id
+        self.send_or_queue(request)
+
+    def room_send_read_marker(self, room_id, event_id):
+        """Send read markers for the provided room.
+
+        Args:
+            room_id(str): the room for which the read markers should
+                be sent.
+            event_id(str): the event id where to set the marker
+        """
+        if not self.connected:
+            return
+
+        _, request = self.client.room_read_markers(
+            room_id,
+            fully_read_event=event_id,
+            read_event=event_id)
+        self.send(request)
+
+    def room_send_typing_notice(self, room_buffer):
+        """Send a typing notice for the provided room.
+
+        Args:
+            room_buffer(RoomBuffer): the room for which the typing notice needs
+                to be sent.
+        """
+        if not self.connected:
+            return
+
+        input = room_buffer.weechat_buffer.input
+
+        typing_enabled = bool(int(W.string_eval_expression(
+            G.CONFIG.network.typing_notice_conditions,
+            {},
+            {"typing_enabled": str(int(room_buffer.typing_enabled))},
+            {"type": "condition"}
+        )))
+
+        if not typing_enabled:
+            return
+
+        # Don't send a typing notice if the user is typing in a weechat command
+        if input.startswith("/") and not input.startswith("//"):
+            return
+
+        # Don't send a typing notice if we only typed a couple of letters.
+        elif len(input) < 4 and not room_buffer.typing:
+            return
+
+        # If we were typing already and our input bar now has no letters or
+        # only a couple of letters stop the typing notice.
+        elif len(input) < 4:
+            _, request = self.client.room_typing(
+                room_buffer.room.room_id,
+                typing_state=False)
+            room_buffer.typing = False
+            self.send(request)
+            return
+
+        # Don't send out a typing notice if we already sent one out and it
+        # didn't expire yet.
+        if not room_buffer.typing_notice_expired:
+            return
+
+        _, request = self.client.room_typing(
+            room_buffer.room.room_id,
+            typing_state=True,
+            timeout=TYPING_NOTICE_TIMEOUT)
+
+        room_buffer.typing = True
+        self.send(request)
+
+    def room_send_upload(
+        self,
+        upload
+    ):
+        """Send a room message containing the mxc URI of an upload."""
+        try:
+            room_buffer = self.find_room_from_id(upload.room_id)
+        except (ValueError, KeyError):
+            return False
+
+        assert self.client
+
+        if room_buffer.room.encrypted:
+            room_buffer.error("Uploading to encrypted rooms is "
+                              "not yet implemented")
+            return False
+
+        # TODO the content is different if the room is encrypted.
+        content = {
+            "msgtype": Api.mimetype_to_msgtype(upload.mimetype),
+            "body": upload.file_name,
+            "url": upload.content_uri,
+        }
+
+        try:
+            uuid = self.room_send_event(upload.room_id, content)
+        except (EncryptionError, GroupEncryptionError):
+            # TODO put the message in a queue to resend after group sessions
+            # are shared
+            # message = EncrytpionQueueItem(msgtype, formatted)
+            # self.encryption_queue[room.room_id].append(message)
+            return False
+
+        http_url = Api.mxc_to_http(upload.content_uri)
+        description = ("/{}".format(upload.file_name) if upload.file_name
+                       else "")
+
+        attributes = DEFAULT_ATTRIBUTES.copy()
+        formatted = Formatted([FormattedString(
+            "{url}{desc}".format(url=http_url, desc=description),
+            attributes
+        )])
+
+        own_message = OwnMessage(
+            self.user_id, 0, "", uuid, upload.room_id, formatted
+        )
+
+        room_buffer.sent_messages_queue[uuid] = own_message
+        self.print_unconfirmed_message(room_buffer, own_message)
+
+        return True
+
+    def room_send_event(
+        self,
+        room_id,    # type: str
+        content,    # type: Dict[str, str]
+        event_type="m.room.message"
+    ):
+        # type: (...) -> UUID
+        assert self.client
+
+        try:
+            uuid, request = self.client.room_send(
+                room_id, event_type, content
+            )
+            self.send(request)
+            return uuid
+        except GroupEncryptionError:
+            try:
+                if not self.group_session_shared[room_id]:
+                    _, request = self.client.share_group_session(room_id)
+                    self.group_session_shared[room_id] = True
+                    self.send(request)
+                raise
+
+            except EncryptionError:
+                if not self.keys_claimed[room_id]:
+                    _, request = self.client.keys_claim(room_id)
+                    self.keys_claimed[room_id] = True
+                    self.send(request)
+                raise
+
+    def room_send_message(
+        self,
+        room_buffer,  # type: RoomBuffer
+        formatted,    # type: Formatted
+        msgtype="m.text",  # type: str
+    ):
+        # type: (...) -> bool
+        room = room_buffer.room
+
+        assert self.client
+
+        content = {"msgtype": msgtype, "body": formatted.to_plain()}
+
+        if formatted.is_formatted():
+            content["format"] = "org.matrix.custom.html"
+            content["formatted_body"] = formatted.to_html()
+
+        try:
+            uuid = self.room_send_event(room.room_id, content)
+        except (EncryptionError, GroupEncryptionError):
+            message = EncrytpionQueueItem(msgtype, formatted)
+            self.encryption_queue[room.room_id].append(message)
+            return False
+
+        if msgtype == "m.emote":
+            message_class = OwnAction
+        else:
+            message_class = OwnMessage
+
+        own_message = message_class(
+            self.user_id, 0, "", uuid, room.room_id, formatted
+        )
+
+        room_buffer.sent_messages_queue[uuid] = own_message
+        self.print_unconfirmed_message(room_buffer, own_message)
+
+        return True
+
+    def print_unconfirmed_message(self, room_buffer, message):
+        """Print an outoing message before getting a recieve confirmation.
+
+        The message is printed out greyed out and only printed out if the
+        client is configured to do so. The message needs to be later modified
+        to contain proper coloring, this is done in the
+        replace_printed_line_by_uuid() method of the RoomBuffer class.
+
+        Args:
+            room_buffer(RoomBuffer): the buffer of the room where the message
+                needs to be printed out
+            message(OwnMessages): the message that should be printed out
+        """
+        if G.CONFIG.network.print_unconfirmed_messages:
+            room_buffer.printed_before_ack_queue.append(message.uuid)
+            plain_message = message.formatted_message.to_weechat()
+            plain_message = W.string_remove_color(plain_message, "")
+            attributes = DEFAULT_ATTRIBUTES.copy()
+            attributes["fgcolor"] = G.CONFIG.color.unconfirmed_message_fg
+            attributes["bgcolor"] = G.CONFIG.color.unconfirmed_message_bg
+            new_formatted = Formatted([FormattedString(
+                plain_message,
+                attributes
+            )])
+
+            new_message = copy.copy(message)
+            new_message.formatted_message = new_formatted
+
+            if isinstance(new_message, OwnAction):
+                room_buffer.self_action(new_message)
+            elif isinstance(new_message, OwnMessage):
+                room_buffer.self_message(new_message)
+
+    def keys_upload(self):
+        _, request = self.client.keys_upload()
+        self.send_or_queue(request)
+
+    def keys_query(self):
+        _, request = self.client.keys_query()
+        self.keys_queried = True
+        self.send_or_queue(request)
+
+    def get_joined_members(self, room_id):
+        if not self.connected:
+            return
+        if room_id in self.member_request_list:
+            return
+
+        self.member_request_list.append(room_id)
+        _, request = self.client.joined_members(room_id)
+        self.send(request)
+
     def _print_message_error(self, message):
-        server_buffer_prnt(self,
-                           ("{prefix}Unhandled {status_code} error, please "
-                            "inform the developers about this.").format(
-                                prefix=W.prefix("error"),
-                                status_code=message.response.status))
+        server_buffer_prnt(
+            self,
+            (
+                "{prefix}Unhandled {status_code} error, please "
+                "inform the developers about this."
+            ).format(
+                prefix=W.prefix("error"), status_code=message.response.status
+            ),
+        )
 
         server_buffer_prnt(self, pprint.pformat(message.__class__.__name__))
         server_buffer_prnt(self, pprint.pformat(message.request.payload))
         server_buffer_prnt(self, pprint.pformat(message.response.body))
 
-    def _loop_events(self, info, n):
+    def handle_own_messages_error(self, response):
+        room_buffer = self.room_buffers[response.room_id]
 
-        for i in range(n+1):
-            try:
-                event = info.events.popleft()
-            except IndexError:
-                return i
+        if response.uuid not in room_buffer.printed_before_ack_queue:
+            return
 
-            room = self.rooms[info.room_id]
-            buf = self.buffers[info.room_id]
+        message = room_buffer.sent_messages_queue.pop(response.uuid)
+        room_buffer.mark_message_as_unsent(response.uuid, message)
+        room_buffer.printed_before_ack_queue.remove(response.uuid)
 
-            tags = tags_for_message("message")
-            event.execute(self, room, buf, tags)
-
-        self.event_queue.appendleft(info)
-        return i
-
-    def handle_events(self):
-        n = 25
-
-        while True:
-            try:
-                info = self.event_queue.popleft()
-            except IndexError:
-                if self.event_queue_timer:
-                    W.unhook(self.event_queue_timer)
-                    self.event_queue_timer = None
-
-                self.sync()
+    def handle_own_messages(self, response):
+        def send_marker():
+            if not room_buffer.read_markers_enabled:
                 return
 
-            ret = self._loop_events(info, n)
+            self.room_send_read_marker(response.room_id, response.event_id)
+            room_buffer.last_read_event = response.event_id
 
-            if ret < n:
-                n = n - ret
-            else:
-                self.event_queue.appendleft(info)
+        room_buffer = self.room_buffers[response.room_id]
 
-                if not self.event_queue_timer:
-                    hook = W.hook_timer(1 * 100, 0, 0, "matrix_event_timer_cb",
-                                        self.name)
-                    self.event_queue_timer = hook
+        message = room_buffer.sent_messages_queue.pop(response.uuid, None)
 
-                return
+        # The message might have been returned in a sync response before we got
+        # a room send response.
+        if not message:
+            return
 
-    def handle_response(self, message):
-        # type: (MatrixMessage) -> None
+        message.event_id = response.event_id
+        # We already printed the message, just modify it to contain the proper
+        # colors and formatting.
+        if response.uuid in room_buffer.printed_before_ack_queue:
+            room_buffer.replace_printed_line_by_uuid(response.uuid, message)
+            room_buffer.printed_before_ack_queue.remove(response.uuid)
+            send_marker()
+            return
 
-        assert message.response
+        if isinstance(message, OwnAction):
+            room_buffer.self_action(message)
+            send_marker()
+            return
+        if isinstance(message, OwnMessage):
+            room_buffer.self_message(message)
+            send_marker()
+            return
 
-        if ('content-type' in message.response.headers and
-                message.response.headers['content-type'] == 'application/json'):
-            ret, error = message.decode_body(self)
+        raise NotImplementedError(
+            "Unsupported message of type {}".format(type(message))
+        )
 
-            if not ret:
-                message = ("{prefix}matrix: Error decoding json response from "
-                           "server: {error}").format(
-                               prefix=W.prefix("error"), error=error)
-                W.prnt(self.server_buffer, message)
-                return
+    def handle_backlog_response(self, response):
+        room_id = self.backlog_queue.pop(response.uuid)
+        room_buffer = self.find_room_from_id(room_id)
 
-            event = message.event
-            event.execute()
-        else:
-            status_code = message.response.status
-            if status_code == 504:
-                if isinstance(message, API.MatrixSyncMessage):
-                    self.sync()
-                else:
-                    self._print_message_error(message)
-            else:
-                self._print_message_error(message)
+        room_buffer.handle_backlog(response)
 
-        creation_date = datetime.datetime.fromtimestamp(message.creation_time)
-        done_time = time.time()
-        info_message = (
-            "Message of type {t} created at {c}."
-            "\nMessage lifetime information:"
-            "\n    Send delay: {s} ms"
-            "\n    Receive delay: {r} ms"
-            "\n    Handling time: {h} ms"
-            "\n    Total time: {total} ms").format(
-                t=message.__class__.__name__,
-                c=creation_date,
-                s=(message.send_time - message.creation_time) * 1000,
-                r=(message.receive_time - message.send_time) * 1000,
-                h=(done_time - message.receive_time) * 1000,
-                total=(done_time - message.creation_time) * 1000,
+    def handle_devices_response(self, response):
+        if not response.devices:
+            m = "{}{}: No devices found for this account".format(
+                    W.prefix("error"),
+                    SCRIPT_NAME)
+            W.prnt(self.server_buffer, m)
+
+        header = (W.prefix("network") + SCRIPT_NAME + ": Devices for "
+                  "server {}{}{}:\n"
+                  "  Device ID         Device Name                       "
+                  "Last Seen").format(
+                      W.color("chat_server"),
+                      self.name,
+                      W.color("reset")
+                  )
+        W.prnt(self.server_buffer, header)
+
+        lines = []
+        for device in response.devices:
+            last_seen_date = ("?" if not device.last_seen_date else
+                              device.last_seen_date.strftime("%Y/%m/%d %H:%M"))
+            last_seen = "{ip} @ {date}".format(
+                ip=device.last_seen_ip or "?",
+                date=last_seen_date
             )
-        prnt_debug(DebugType.TIMING, self, info_message)
+            device_color = ("chat_self" if device.id == self.device_id else
+                            W.info_get("nick_color_name", device.id))
+            bold = W.color("bold") if device.id == self.device_id else ""
+            line = "  {}{}{:<18}{}{:<34}{:<}".format(
+                bold,
+                W.color(device_color),
+                device.id,
+                W.color("resetcolor"),
+                device.display_name or "",
+                last_seen
+                )
+            lines.append(line)
+        W.prnt(self.server_buffer, "\n".join(lines))
 
-        return
+    def _handle_login(self, response):
+        self.access_token = response.access_token
+        self.user_id = response.user_id
+        self.client.access_token = response.access_token
+        self.device_id = response.device_id
+        self.save_device_id()
+
+        message = "{prefix}matrix: Logged in as {user}".format(
+            prefix=W.prefix("network"), user=self.user_id
+        )
+
+        W.prnt(self.server_buffer, message)
+
+        if not self.client.olm_account_shared:
+            self.keys_upload()
+
+        sync_filter = {
+            "room": {
+                "timeline": {
+                    "limit": G.CONFIG.network.max_initial_sync_events
+                },
+                "state": {"lazy_load_members": True}
+            }
+        }
+        self.sync(timeout=0, sync_filter=sync_filter)
+
+    def _handle_room_info(self, response):
+        for room_id, info in response.rooms.invite.items():
+            room = self.client.invited_rooms.get(room_id, None)
+
+            if room:
+                if room.inviter:
+                    inviter_msg = " by {}{}".format(
+                        W.color("chat_nick_other"), room.inviter
+                    )
+                else:
+                    inviter_msg = ""
+
+                self.info(
+                    "You have been invited to {} {}({}{}{}){}"
+                    "{}".format(
+                        room.display_name,
+                        W.color("chat_delimiters"),
+                        W.color("chat_channel"),
+                        room_id,
+                        W.color("chat_delimiters"),
+                        W.color("reset"),
+                        inviter_msg,
+                    )
+                )
+            else:
+                self.info("You have been invited to {}.".format(room_id))
+
+        for room_id, info in response.rooms.leave.items():
+            if room_id not in self.buffers:
+                continue
+
+            room_buffer = self.find_room_from_id(room_id)
+            room_buffer.handle_left_room(info)
+
+        for room_id, info in response.rooms.join.items():
+            if room_id not in self.buffers:
+                self.create_room_buffer(room_id, info.timeline.prev_batch)
+
+            room_buffer = self.find_room_from_id(room_id)
+            room_buffer.handle_joined_room(info)
+
+    def add_unhandled_users(self, rooms, n):
+        # type: (List[RoomBuffer], int) -> bool
+        total_users = 0
+
+        while total_users <= n:
+            try:
+                room_buffer = rooms.pop()
+            except IndexError:
+                return False
+
+            handled_users = 0
+
+            users = room_buffer.unhandled_users
+
+            for user_id in users:
+                room_buffer.add_user(user_id, 0, True)
+                handled_users += 1
+                total_users += 1
+
+                if total_users >= n:
+                    room_buffer.unhandled_users = users[handled_users:]
+                    rooms.append(room_buffer)
+                    return True
+
+            room_buffer.unhandled_users = []
+
+        return False
+
+    def _hook_lazy_user_adding(self):
+        if not self.lazy_load_hook:
+            hook = W.hook_timer(1 * 1000, 0, 0,
+                                "matrix_load_users_cb", self.name)
+            self.lazy_load_hook = hook
+
+    def decrypt_printed_messages(self, key_event):
+        """Decrypt already printed messages and send them to the buffer"""
+        try:
+            room_buffer = self.find_room_from_id(key_event.room_id)
+        except KeyError:
+            return
+
+        decrypted_events = []
+
+        for undecrypted_event in room_buffer.undecrypted_events:
+            if undecrypted_event.session_id != key_event.session_id:
+                continue
+
+            event = self.client.decrypt_event(undecrypted_event)
+            if event:
+                decrypted_events.append((undecrypted_event, event))
+
+        for event_pair in decrypted_events:
+            undecrypted_event, event = event_pair
+            room_buffer.undecrypted_events.remove(undecrypted_event)
+            room_buffer.replace_undecrypted_line(event)
+
+    def _handle_sync(self, response):
+        # we got the same batch again, nothing to do
+        if self.next_batch == response.next_batch:
+            self.schedule_sync()
+            return
+
+        self._handle_room_info(response)
+
+        for event in response.to_device_events:
+            if not isinstance(event, RoomKeyEvent):
+                continue
+
+            message = {
+                "sender": event.sender,
+                "sender_key": event.sender_key,
+                "room_id": event.room_id,
+                "session_id": event.session_id,
+                "algorithm": event.algorithm,
+                "server": self.name,
+            }
+            W.hook_hsignal_send("matrix_room_key_received", message)
+
+            # TODO try to decrypt some cached undecrypted messages with the
+            # new key
+            # self.decrypt_printed_messages(event)
+
+        # Full sync response handle everything.
+        if isinstance(response, SyncResponse):
+            if self.client.should_upload_keys:
+                self.keys_upload()
+
+            if self.client.should_query_keys and not self.keys_queried:
+                self.keys_query()
+
+            for room_buffer in self.room_buffers.values():
+                # It's our initial sync, we need to fetch room members, so add
+                # the room to the missing members queue.
+                if not self.next_batch:
+                    if (not G.CONFIG.network.lazy_load_room_users
+                            or room_buffer.room.encrypted):
+                        self.rooms_with_missing_members.append(
+                            room_buffer.room.room_id
+                        )
+                if room_buffer.unhandled_users:
+                    self._hook_lazy_user_adding()
+                    break
+
+            self.next_batch = response.next_batch
+            self.schedule_sync()
+            W.bar_item_update("matrix_typing_notice")
+
+            if self.rooms_with_missing_members:
+                self.get_joined_members(self.rooms_with_missing_members.pop())
+        else:
+            if not self.partial_sync_hook:
+                hook = W.hook_timer(1 * 100, 0, 0, "matrix_partial_sync_cb",
+                                    self.name)
+                self.partial_sync_hook = hook
+                self.busy = True
+                W.bar_item_update("buffer_modes")
+                W.bar_item_update("matrix_modes")
+
+    def handle_delete_device_auth(self, response):
+        device_id = self.device_deletion_queue.pop(response.uuid, None)
+
+        if not device_id:
+            return
+
+        for flow in response.flows:
+            if "m.login.password" in flow["stages"]:
+                session = response.session
+                auth = {
+                    "type": "m.login.password",
+                    "session": session,
+                    "user": self.client.user_id,
+                    "password": self.config.password
+                }
+                self.delete_device(device_id, auth)
+                return
+
+        self.error("No supported auth method for device deletion found.")
+
+    def handle_error_response(self, response):
+        self.error("Error: {}".format(str(response)))
+
+        if isinstance(response, (SyncError, LoginError)):
+            self.disconnect()
+        elif isinstance(response, JoinedMembersError):
+            self.rooms_with_missing_members.append(response.room_id)
+            self.get_joined_members(self.rooms_with_missing_members.pop())
+        elif isinstance(response, RoomSendResponse):
+            self.handle_own_messages_error(response)
+
+    def handle_response(self, response):
+        # type: (Response) -> None
+        self.lag = response.elapsed * 1000
+        self.lag_done = True
+        W.bar_item_update("lag")
+
+        if isinstance(response, ErrorResponse):
+            self.handle_error_response(response)
+
+        elif isinstance(response, LoginResponse):
+            self._handle_login(response)
+
+        elif isinstance(response, (SyncResponse, PartialSyncResponse)):
+            self._handle_sync(response)
+
+        elif isinstance(response, RoomSendResponse):
+            self.handle_own_messages(response)
+
+        elif isinstance(response, RoomMessagesResponse):
+            self.handle_backlog_response(response)
+
+        elif isinstance(response, DevicesResponse):
+            self.handle_devices_response(response)
+
+        elif isinstance(response, UpdateDeviceResponse):
+            self.info("Device name successfully updated")
+
+        elif isinstance(response, DeleteDevicesAuthResponse):
+            self.handle_delete_device_auth(response)
+
+        elif isinstance(response, DeleteDevicesResponse):
+            self.info("Device successfully deleted")
+
+        elif isinstance(response, KeysQueryResponse):
+            self.keys_queried = False
+            W.bar_item_update("buffer_modes")
+            W.bar_item_update("matrix_modes")
+
+            for user_id, device_dict in response.changed.items():
+                for device in device_dict.values():
+                    message = {
+                        "user_id": user_id,
+                        "device_id": device.id,
+                        "ed25519": device.ed25519,
+                        "curve25519": device.curve25519,
+                        "deleted": str(device.deleted)
+                    }
+                    W.hook_hsignal_send("matrix_device_changed", message)
+
+        elif isinstance(response, JoinedMembersResponse):
+            self.member_request_list.remove(response.room_id)
+            room_buffer = self.room_buffers[response.room_id]
+            users = [user.user_id for user in response.members]
+
+            # Don't add the users directly use the lazy load hook.
+            room_buffer.unhandled_users += users
+            self._hook_lazy_user_adding()
+            room_buffer.members_fetched = True
+            room_buffer.update_buffer_name()
+
+            # Fetch the users for the next room.
+            if self.rooms_with_missing_members:
+                self.get_joined_members(self.rooms_with_missing_members.pop())
+            # We are done adding all the users, do a full key query now since
+            # the client knows all the encrypted room members.
+            else:
+                if self.client.should_query_keys and not self.keys_queried:
+                    self.keys_query()
+
+        elif isinstance(response, KeysClaimResponse):
+            self.keys_claimed[response.room_id] = False
+            try:
+                _, request = self.client.share_group_session(
+                    response.room_id,
+                    ignore_missing_sessions=True
+                )
+            except OlmTrustError as e:
+                m = ("Untrusted devices found in room: {}".format(e))
+                room_buffer = self.find_room_from_id(response.room_id)
+                room_buffer.error(m)
+                self.encryption_queue[response.room_id].clear()
+                return
+
+            self.send(request)
+
+        elif isinstance(response, ShareGroupSessionResponse):
+            room_id = response.room_id
+            self.group_session_shared[response.room_id] = False
+            room_buffer = self.room_buffers[room_id]
+
+            while self.encryption_queue[room_id]:
+                message = self.encryption_queue[room_id].popleft()
+                try:
+                    if not self.room_send_message(room_buffer,
+                                                  message.formatted_message,
+                                                  message.message_type):
+                        self.encryption_queue.pop()
+                        self.encryption_queue[room_id].appendleft(message)
+                        break
+                except OlmTrustError:
+                    self.encryption_queue[room_id].clear()
+                    break
+
+    def create_room_buffer(self, room_id, prev_batch):
+        room = self.client.rooms[room_id]
+        buf = RoomBuffer(room, self.name, prev_batch)
+        # TODO this should turned into a propper class
+        self.room_buffers[room_id] = buf
+        self.buffers[room_id] = buf.weechat_buffer._ptr
+
+    def find_room_from_ptr(self, pointer):
+        try:
+            room_id = key_from_value(self.buffers, pointer)
+            room_buffer = self.room_buffers[room_id]
+
+            return room_buffer
+        except (ValueError, KeyError):
+            return None
+
+    def find_room_from_id(self, room_id):
+        room_buffer = self.room_buffers[room_id]
+        return room_buffer
+
+    def garbage_collect_users(self):
+        """ Remove inactive users.
+        This tries to keep the number of users added to the nicklist less than
+            the configuration option matrix.network.max_nicklist_users. It
+            removes users that have not been active for a day until there are
+            less than max_nicklist_users or no users are left for removal.
+            It never removes users that have a bigger power level than the
+            default one.
+        This function is run every hour by the server timer callback"""
+
+        now = time.time()
+        self.user_gc_time = now
+
+        def day_passed(t1, t2):
+            return (t2 - t1) > 86400
+
+        for room_buffer in self.room_buffers.values():
+            to_remove = max(
+                (len(room_buffer.displayed_nicks) -
+                    G.CONFIG.network.max_nicklist_users),
+                0
+            )
+
+            if not to_remove:
+                continue
+
+            removed = 0
+            removed_user_ids = []
+
+            for user_id, nick in room_buffer.displayed_nicks.items():
+                user = room_buffer.weechat_buffer.users[nick]
+
+                if (not user.speaking_time or
+                        day_passed(user.speaking_time, now)):
+                    room_buffer.weechat_buffer.part(nick, 0, False)
+                    removed_user_ids.append(user_id)
+                    removed += 1
+
+                if removed >= to_remove:
+                    break
+
+            for user_id in removed_user_ids:
+                del room_buffer.displayed_nicks[user_id]
+
+    def buffer_merge(self):
+        if not self.server_buffer:
+            return
+
+        buf = self.server_buffer
+
+        if G.CONFIG.look.server_buffer == ServerBufferType.MERGE_CORE:
+            num = W.buffer_get_integer(W.buffer_search_main(), "number")
+            W.buffer_unmerge(buf, num + 1)
+            W.buffer_merge(buf, W.buffer_search_main())
+        elif G.CONFIG.look.server_buffer == ServerBufferType.MERGE:
+            if SERVERS:
+                first = None
+                for server in SERVERS.values():
+                    if server.server_buffer:
+                        first = server.server_buffer
+                        break
+                if first:
+                    num = W.buffer_get_integer(
+                        W.buffer_search_main(), "number"
+                    )
+                    W.buffer_unmerge(buf, num + 1)
+                    if buf is not first:
+                        W.buffer_merge(buf, first)
+        else:
+            num = W.buffer_get_integer(W.buffer_search_main(), "number")
+            W.buffer_unmerge(buf, num + 1)
 
 
 @utf8_decode
-def matrix_config_server_read_cb(data, config_file, section, option_name,
-                                 value):
+def matrix_config_server_read_cb(
+    data, config_file, section, option_name, value
+):
 
     return_code = W.WEECHAT_CONFIG_OPTION_SET_ERROR
 
     if option_name:
-        server_name, option = option_name.rsplit('.', 1)
+        server_name, option = option_name.rsplit(".", 1)
         server = None
 
         if server_name in SERVERS:
@@ -546,8 +1469,10 @@ def matrix_config_server_read_cb(data, config_file, section, option_name,
             SERVERS[server.name] = server
 
         # Ignore invalid options
-        if option in server.options:
-            return_code = W.config_option_set(server.options[option], value, 1)
+        if option in server.config._option_ptrs:
+            return_code = W.config_option_set(
+                server.config._option_ptrs[option], value, 1
+            )
 
     # TODO print out error message in case of erroneous return_code
 
@@ -560,7 +1485,7 @@ def matrix_config_server_write_cb(data, config_file, section_name):
         return W.WECHAT_CONFIG_WRITE_ERROR
 
     for server in SERVERS.values():
-        for option in server.options.values():
+        for option in server.config._option_ptrs.values():
             if not W.config_write_option(config_file, option):
                 return W.WECHAT_CONFIG_WRITE_ERROR
 
@@ -569,17 +1494,61 @@ def matrix_config_server_write_cb(data, config_file, section_name):
 
 @utf8_decode
 def matrix_config_server_change_cb(server_name, option):
-    # type: (str, weechat.config_option) -> int
+    # type: (str, str) -> int
     server = SERVERS[server_name]
     option_name = None
 
     # The function config_option_get_string() is used to get differing
     # properties from a config option, sadly it's only available in the plugin
     # API of weechat.
-    option_name = key_from_value(server.options, option)
+    option_name = key_from_value(server.config._option_ptrs, option)
     server.update_option(option, option_name)
 
     return 1
+
+
+@utf8_decode
+def matrix_partial_sync_cb(server_name, remaining_calls):
+    start = time.time()
+    server = SERVERS[server_name]
+    W.unhook(server.partial_sync_hook)
+    server.partial_sync_hook = None
+
+    response = server.client.next_response(MAX_EVENTS)
+
+    while response:
+        server.handle_response(response)
+        current = time.time()
+        if current - start >= 0.1:
+            break
+        response = server.client.next_response(MAX_EVENTS)
+
+    if not server.partial_sync_hook:
+        server.busy = False
+        W.bar_item_update("buffer_modes")
+        W.bar_item_update("matrix_modes")
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_load_users_cb(server_name, remaining_calls):
+    server = SERVERS[server_name]
+    start = time.time()
+
+    rooms = [x for x in server.room_buffers.values() if x.unhandled_users]
+
+    while server.add_unhandled_users(rooms, 100):
+        current = time.time()
+
+        if current - start >= 0.1:
+            return W.WEECHAT_RC_OK
+
+    # We are done adding users, we can unhook now.
+    W.unhook(server.lazy_load_hook)
+    server.lazy_load_hook = None
+
+    return W.WEECHAT_RC_OK
 
 
 @utf8_decode
@@ -588,8 +1557,11 @@ def matrix_timer_cb(server_name, remaining_calls):
 
     current_time = time.time()
 
-    if ((not server.connected) and server.reconnect_time and
-            current_time >= (server.reconnect_time + server.reconnect_delay)):
+    if (
+        (not server.connected)
+        and server.reconnect_time
+        and current_time >= (server.reconnect_time + server.reconnect_delay)
+    ):
         server.reconnect()
         return W.WEECHAT_RC_OK
 
@@ -597,39 +1569,36 @@ def matrix_timer_cb(server_name, remaining_calls):
         return W.WEECHAT_RC_OK
 
     # check lag, disconnect if it's too big
-    if server.receive_queue:
-        message = server.receive_queue.popleft()
-        server.lag = (current_time - message.send_time) * 1000
-        server.receive_queue.appendleft(message)
-        server.lag_done = False
-        W.bar_item_update("lag")
+    server.lag = server.client.lag * 1000
+    server.lag_done = False
+    W.bar_item_update("lag")
 
-        # TODO print out message, make timeout configurable
-        if server.lag > 300000:
-            server.disconnect()
-            return W.WEECHAT_RC_OK
+    if server.lag > G.CONFIG.network.lag_reconnect * 1000:
+        server.disconnect()
+        return W.WEECHAT_RC_OK
 
-    while server.send_queue:
-        message = server.send_queue.popleft()
-        prnt_debug(
-            DebugType.MESSAGING,
-            server, ("Timer hook found message of type {t} in queue. Sending "
-                     "out.".format(t=message.__class__.__name__)))
+    if server.sync_time and current_time > server.sync_time:
+        timeout = 0 if server.transport_type == TransportType.HTTP else 30000
+        sync_filter = {
+            "room": {
+                "timeline": {"limit": 5000},
+                "state": {"lazy_load_members": True}
+            }
+        }
+        server.sync(timeout, sync_filter)
 
-        if not server.send(message):
-            # We got an error while sending the last message return the message
-            # to the queue and exit the loop
-            server.send_queue.appendleft(message)
-            break
+    if current_time > (server.user_gc_time + 3600):
+        server.garbage_collect_users()
 
     return W.WEECHAT_RC_OK
 
 
 def create_default_server(config_file):
-    server = MatrixServer('matrix.org', config_file)
+    server = MatrixServer("matrix_org", config_file._ptr)
     SERVERS[server.name] = server
 
-    W.config_option_set(server.options["address"], "matrix.org", 1)
+    option = W.config_get(SCRIPT_NAME + ".server." + server.name + ".address")
+    W.config_option_set(option, "matrix.org", 1)
 
     return True
 
@@ -645,6 +1614,6 @@ def send_cb(server_name, file_descriptor):
         server.send_fd_hook = None
 
     if server.send_buffer:
-        server.try_send(server, server.send_buffer)
+        server.try_send(server.send_buffer)
 
     return W.WEECHAT_RC_OK

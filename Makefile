@@ -1,4 +1,4 @@
-.PHONY: install install-lib install-dir uninstall phony test
+.PHONY: install install-lib install-dir uninstall phony test typecheck
 
 WEECHAT_HOME ?= $(HOME)/.weechat
 PREFIX ?= $(WEECHAT_HOME)
@@ -26,3 +26,6 @@ $(DESTDIR)$(PREFIX)/python/matrix/%.py: matrix/%.py phony
 test:
 	python3 -m pytest
 	python2 -m pytest
+
+typecheck:
+	mypy -p matrix --ignore-missing-imports --warn-redundant-casts

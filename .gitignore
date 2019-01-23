@@ -3,3 +3,5 @@
 .hypothesis/
 .mypy_cache/
 .pytest_cache/
+.ropeproject
+.coverage

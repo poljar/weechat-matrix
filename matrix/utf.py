@@ -28,8 +28,12 @@ import sys
 
 # pylint: disable=redefined-builtin
 from builtins import bytes, str
-from collections import Mapping, Iterable
 from functools import wraps
+
+if sys.version_info.major == 3 and sys.version_info.minor >= 3:
+    from collections.abc import Iterable, Mapping
+else:
+    from collections import Iterable, Mapping
 
 # These functions were written by Trygve Aaberge for wee-slack and are under a
 # MIT License.
@@ -39,13 +43,11 @@ from functools import wraps
 
 
 class WeechatWrapper(object):
-
     def __init__(self, wrapped_class):
         self.wrapped_class = wrapped_class
 
     # Helper method used to encode/decode method calls.
     def wrap_for_utf8(self, method):
-
         def hooked(*args, **kwargs):
             result = method(*encode_to_utf8(args), **encode_to_utf8(kwargs))
             # Prevent wrapped_class from becoming unwrapped
@@ -69,7 +71,8 @@ class WeechatWrapper(object):
     def prnt_date_tags(self, buffer, date, tags, message):
         message = message.replace("\n", "\n \t")
         return self.wrap_for_utf8(self.wrapped_class.prnt_date_tags)(
-            buffer, date, tags, message)
+            buffer, date, tags, message
+        )
 
 
 def utf8_decode(function):
@@ -92,7 +95,7 @@ def utf8_decode(function):
 
 def decode_from_utf8(data):
     if isinstance(data, bytes):
-        return data.decode('utf-8')
+        return data.decode("utf-8")
     if isinstance(data, str):
         return data
     elif isinstance(data, Mapping):
@@ -104,7 +107,7 @@ def decode_from_utf8(data):
 
 def encode_to_utf8(data):
     if isinstance(data, str):
-        return data.encode('utf-8')
+        return data.encode("utf-8")
     if isinstance(data, bytes):
         return data
     elif isinstance(data, Mapping):
