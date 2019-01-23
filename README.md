@@ -39,35 +39,35 @@ Configuration is completed primarily through the Weechat interface.  First start
 
 1. Start by loading the Weechat-Matrix plugin:
 
-    /script load matrix.py test
+       /script load matrix.py test
 
 1. Now set your username and password:
 
-    /set matrix.server.matrix.org.username johndoe
-    /set matrix.server.matrix.org.password jd_is_awesome
+       /set matrix.server.matrix.org.username johndoe
+       /set matrix.server.matrix.org.password jd_is_awesome
 
 1. Now try to connect:
 
-    /matrix connect matrix.org
+       /matrix connect matrix.org
 
 1. If everything works, save the configuration
 
-    /save
+       /save
 
 ## For using a custom (not matrix.org) matrix server:
 
 1. Add your custom server to the plugin:
 
-    /matrix server add myserver myserver.org
+       /matrix server add myserver myserver.org
 
 1. Add the appropriate credentials
 
-    /set matrix.server.myserver.username johndoe
-    /set matrix.server.myserver.password jd_is_awesome
+       /set matrix.server.myserver.username johndoe
+       /set matrix.server.myserver.password jd_is_awesome
 
 1. If everything works, save the configuration
 
-    /save
+       /save
 
 # Helpful Commands
 
