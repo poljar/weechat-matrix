@@ -156,6 +156,15 @@ class ServerConfig(ConfigSection):
                 "Weechat Matrix",
                 "Device name to use while logging in to the matrix server",
             ),
+            Option(
+                "autoreconnect_delay",
+                "integer",
+                "",
+                0,
+                86400,
+                "10",
+                ("Delay (in seconds) before trying to reconnect to server"),
+            ),
         ]
 
         section = W.config_search_section(config_ptr, "server")
@@ -193,6 +202,7 @@ class ServerConfig(ConfigSection):
     ssl_verify = ConfigSection.option_property("ssl_verify", "boolean")
     username = ConfigSection.option_property("username", "string")
     device_name = ConfigSection.option_property("device_name", "string")
+    reconnect_delay = ConfigSection.option_property("autoreconnect_delay", "integer")
     password = ConfigSection.option_property(
         "password", "string", evaluate=True
     )
@@ -452,7 +462,7 @@ class MatrixServer(object):
         if self.reconnect_delay:
             self.reconnect_delay = self.reconnect_delay * 2
         else:
-            self.reconnect_delay = 10
+            self.reconnect_delay = self.config.reconnect_delay
 
         message = (
             "{prefix}matrix: reconnecting to server in {t} " "seconds"
