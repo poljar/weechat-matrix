@@ -402,6 +402,15 @@ class MatrixConfig(WeechatConfig):
 
         look_options = [
             Option(
+                "use_display_names",
+                "boolean",
+                "",
+                0,
+                0,
+                "on",
+                ( "Use display names for nicks in buffers"),
+            ),
+            Option(
                 "redactions",
                 "integer",
                 "strikethrough|notice|delete",
