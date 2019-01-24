@@ -61,6 +61,7 @@ class MockConfig(object):
             'pygments_style': None,
             'redactions': None,
             'server_buffer': None,
+            'use_display_names': None,
         },
         'network': {
             'debug_buffer': None,

@@ -22,6 +22,8 @@ from typing import Any, Dict, List
 
 from .globals import W
 
+import re
+
 if False:
     from .server import MatrixServer
 
@@ -97,6 +99,10 @@ def server_ts_to_weechat(timestamp):
 def strip_matrix_server(string):
     # type: (str) -> str
     return string.rsplit(":", 1)[0]
+
+
+def underscore_nonalnum(string):
+    return re.sub(r"\W", "_", string)
 
 
 def shorten_sender(sender):

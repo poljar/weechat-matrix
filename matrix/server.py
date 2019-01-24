@@ -635,6 +635,10 @@ class MatrixServer(object):
         _, request = self.client.update_device(device_id, content)
         self.send_or_queue(request)
 
+    def set_displayname(self, displayname):
+        _, request = self.client.set_displayname(displayname)
+        self.send_or_queue(request)
+
     def room_send_state(self, room_buffer, body, event_type):
         if room_buffer.room.encrypted:
             return

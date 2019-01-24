@@ -57,6 +57,7 @@ from .utf import utf8_decode
 from .utils import (
     server_ts_to_weechat,
     shorten_sender,
+    underscore_nonalnum,
     string_strikethrough,
     color_pair,
 )
@@ -124,17 +125,23 @@ def room_buffer_close_cb(server_name, buffer):
 
 
 class WeechatUser(object):
-    def __init__(self, nick, host=None, prefix="", join_time=None):
+    def __init__(self, nick, host=None, prefix="", join_time=None, nick_ptr = None):
         # type: (str, str, str, int) -> None
         self.nick = nick
         self.host = host
         self.prefix = prefix
-        self.color = W.info_get("nick_color_name", nick)
+        # Use full user id here so weechat will color different user
+        # with same display name using different colors
+        self.color = W.info_get("nick_color_name", host if host else nick)
         self.join_time = join_time or time.time()
         self.speaking_time = None  # type: Optional[int]
+        self.nick_ptr = nick_ptr
 
     def update_speaking_time(self, new_time=None):
         self.speaking_time = new_time or time.time()
+
+    def disambiguate_nick(self):
+        return "{nick} ({host})".format(nick=self.nick, host=self.host)
 
     @property
     def joined_recently(self):
@@ -227,6 +234,7 @@ class WeechatChannelBuffer(object):
         "kick": [SCRIPT_NAME + "_kick", "log4"],
         "invite": [SCRIPT_NAME + "_invite", "log4"],
         "topic": [SCRIPT_NAME + "_topic", "log3"],
+        "change": [SCRIPT_NAME + "_nick", "log4"],
     }
 
     membership_messages = {
@@ -347,6 +355,7 @@ class WeechatChannelBuffer(object):
 
         self.name = ""
         self.users = {}  # type: Dict[str, WeechatUser]
+        self.duplicate_nicks = {} # type: Dict[str, List[WeechatUser]]
         self.smart_filtered_nicks = set()  # type: Set[str]
 
         self.topic_author = ""
@@ -491,13 +500,13 @@ class WeechatChannelBuffer(object):
 
         return tags
 
-    def _get_user(self, nick):
+    def _get_user(self, user_id):
         # type: (str) -> WeechatUser
-        if nick in self.users:
-            return self.users[nick]
+        if user_id in self.users:
+            return self.users[user_id]
 
         # A message from a non joined user
-        return WeechatUser(nick)
+        return WeechatUser(user_id)
 
     def _print_message(self, user, message, date, tags, extra_prefix=""):
         prefix_string = (
@@ -521,19 +530,20 @@ class WeechatChannelBuffer(object):
 
         self.print_date_tags(data, date, tags)
 
-    def message(self, nick, message, date, extra_tags=None, extra_prefix=""):
+    def message(self, user_id, message, date, extra_tags=None, extra_prefix=""):
         # type: (str, str, int, List[str], str) -> None
-        user = self._get_user(nick)
+        user = self._get_user(user_id)
         tags_type = "message_private" if self.type == "private" else "message"
         tags = self._message_tags(user, tags_type) + (extra_tags or [])
         self._print_message(user, message, date, tags, extra_prefix)
 
         user.update_speaking_time(date)
-        self.unmask_smart_filtered_nick(nick)
+        if user.host:
+           self.unmask_smart_filtered_nick(underscore_nonalnum(user.host))
 
-    def notice(self, nick, message, date, extra_tags=None, extra_prefix=""):
+    def notice(self, user_id, message, date, extra_tags=None, extra_prefix=""):
         # type: (str, str, int, Optional[List[str]], str) -> None
-        user = self._get_user(nick)
+        user = self._get_user(user_id)
         user_prefix = (
             ""
             if not user.prefix
@@ -566,7 +576,8 @@ class WeechatChannelBuffer(object):
         self.print_date_tags(data, date, tags)
 
         user.update_speaking_time(date)
-        self.unmask_smart_filtered_nick(nick)
+        if user.host:
+            self.unmask_smart_filtered_nick(underscore_nonalnum(user.host))
 
     def _format_action(self, user, message):
         nick_prefix = (
@@ -599,15 +610,16 @@ class WeechatChannelBuffer(object):
 
         self.print_date_tags(data, date, tags)
 
-    def action(self, nick, message, date, extra_tags=None, extra_prefix=""):
+    def action(self, user_id, message, date, extra_tags=None, extra_prefix=""):
         # type: (str, str, int, Optional[List[str]], str) -> None
-        user = self._get_user(nick)
+        user = self._get_user(user_id)
         tags_type = "action_private" if self.type == "private" else "action"
         tags = self._message_tags(user, tags_type) + (extra_tags or [])
         self._print_action(user, message, date, tags, extra_prefix)
 
         user.update_speaking_time(date)
-        self.unmask_smart_filtered_nick(nick)
+        if user.host:
+            self.unmask_smart_filtered_nick(underscore_nonalnum(user.host))
 
     @staticmethod
     def _get_nicklist_group(user):
@@ -640,22 +652,43 @@ class WeechatChannelBuffer(object):
 
     def _add_user_to_nicklist(self, user):
         # type: (WeechatUser) -> None
-        nick_pointer = W.nicklist_search_nick(self._ptr, "", user.nick)
+        if user.nick in self.duplicate_nicks:
+            if len(self.duplicate_nicks[user.nick]) == 1:
+                u2 = self.duplicate_nicks[user.nick][0]
+                g2 = W.nicklist_search_group(
+                        self._ptr, "", self._get_nicklist_group(u2)
+                )
+                p2 = user.prefix if user.prefix else " "
+                W.nicklist_remove_nick(self._ptr, u2.nick_ptr)
+                u2.nick_ptr = W.nicklist_add_nick(
+                    self._ptr,
+                    g2,
+                    u2.disambiguate_nick(),
+                    u2.color,
+                    p2,
+                    self._get_prefix_color(u2.prefix),
+                    1,
+                )
 
-        if not nick_pointer:
-            group = W.nicklist_search_group(
-                self._ptr, "", self._get_nicklist_group(user)
-            )
-            prefix = user.prefix if user.prefix else " "
-            W.nicklist_add_nick(
-                self._ptr,
-                group,
-                user.nick,
-                user.color,
-                prefix,
-                self._get_prefix_color(user.prefix),
-                1,
-            )
+            nick = user.disambiguate_nick()
+            self.duplicate_nicks[user.nick] += [user]
+        else:
+            nick = user.nick
+            self.duplicate_nicks[user.nick] = [user]
+
+        group = W.nicklist_search_group(
+            self._ptr, "", self._get_nicklist_group(user)
+        )
+        prefix = user.prefix if user.prefix else " "
+        user.nick_ptr = W.nicklist_add_nick(
+            self._ptr,
+            group,
+            nick,
+            user.color,
+            prefix,
+            self._get_prefix_color(user.prefix),
+            1,
+        )
 
     def _membership_message(self, user, message_type):
         # type: (WeechatUser, str) -> str
@@ -685,10 +718,29 @@ class WeechatChannelBuffer(object):
 
         return message
 
+    def _nick_change_message(self, user, old_nick, new_nick):
+        action_color = "purple"
+        prefix = "network"
+
+        message = (
+            "{prefix}{color}{old_nick}{ncolor}"
+            "{action_color} is now known as "
+            "{color}{new_nick}{ncolor}"
+        ).format(
+            prefix=W.prefix(prefix),
+            color=W.color(user.color),
+            old_nick=old_nick,
+            action_color=W.color(action_color),
+            new_nick=new_nick,
+            ncolor=W.color("reset")
+        )
+
+        return message
+
     def join(self, user, date, message=True, extra_tags=None):
         # type: (WeechatUser, int, Optional[bool], Optional[List[str]]) -> None
         self._add_user_to_nicklist(user)
-        self.users[user.nick] = user
+        self.users[user.host] = user
 
         if len(self.users) > 2:
             W.buffer_set(self._ptr, "localvar_set_type", "channel")
@@ -701,26 +753,67 @@ class WeechatChannelBuffer(object):
             tags.append(SCRIPT_NAME + "_smart_filter")
 
             self.print_date_tags(msg, date, tags)
-            self.add_smart_filtered_nick(user.nick)
+            if user.host:
+                self.add_smart_filtered_nick(underscore_nonalnum(user.host))
 
-    def invite(self, nick, date, extra_tags=None):
+    def change_nick(self, user_id, old_nick, new_nick, date, message=True, extra_tags=None):
+        # type: (str, str, int, Optional[bool], Optional[List[str]]) -> None
+        user = self._get_user(user_id)
+        self._remove_user_from_nicklist(user)
+        user.nick = new_nick
+        self._add_user_to_nicklist(user)
+
+        if message:
+            tags = self._message_tags(user, "change")
+            msg = self._nick_change_message(user, old_nick, new_nick)
+
+            # TODO add a option to disable smart filters
+            tags.append(SCRIPT_NAME + "_smart_filter")
+
+            self.print_date_tags(msg, date, tags)
+
+    def set_own_nick(self, nick):
+        W.buffer_set(self._ptr, "localvar_set_nick", nick)
+        W.buffer_set(self._ptr, "highlight_words", nick)
+
+    def invite(self, user_id, date, extra_tags=None):
         # type: (str, int, Optional[List[str]]) -> None
-        user = self._get_user(nick)
+        user = self._get_user(user_id)
         tags = self._message_tags(user, "invite")
         message = self._membership_message(user, "invite")
         self.print_date_tags(message, date, tags + (extra_tags or []))
 
-    def remove_user_from_nicklist(self, user):
+    def _remove_user_from_nicklist(self, user):
         # type: (WeechatUser) -> None
-        nick_pointer = W.nicklist_search_nick(self._ptr, "", user.nick)
+        if user.nick_ptr:
+            W.nicklist_remove_nick(self._ptr, user.nick_ptr)
+            user.nick_ptr = None
 
-        if nick_pointer:
-            W.nicklist_remove_nick(self._ptr, nick_pointer)
+            self.duplicate_nicks[user.nick].remove(user)
 
-    def _leave(self, nick, date, message, leave_type, extra_tags=None):
+            if len(self.duplicate_nicks[user.nick]) == 0:
+                self.duplicate_nicks.pop(user.nick)
+            elif len(self.duplicate_nicks[user.nick]) == 1:
+                u2 = self.duplicate_nicks[user.nick][0]
+                g2 = W.nicklist_search_group(
+                        self._ptr, "", self._get_nicklist_group(u2)
+                )
+                p2 = user.prefix if user.prefix else " "
+                W.nicklist_remove_nick(self._ptr, u2.nick_ptr)
+                u2.nick_ptr = W.nicklist_add_nick(
+                    self._ptr,
+                    g2,
+                    u2.nick,
+                    u2.color,
+                    p2,
+                    self._get_prefix_color(u2.prefix),
+                    1,
+                )
+
+    def _leave(self, user_id, date, message, leave_type, extra_tags=None):
         # type: (str, int, bool, str, List[str]) -> None
-        user = self._get_user(nick)
-        self.remove_user_from_nicklist(user)
+        user = self._get_user(user_id)
+        self._remove_user_from_nicklist(user)
 
         if len(self.users) <= 2:
             W.buffer_set(self._ptr, "localvar_set_type", "private")
@@ -734,21 +827,22 @@ class WeechatChannelBuffer(object):
 
             msg = self._membership_message(user, leave_type)
             self.print_date_tags(msg, date, tags + (extra_tags or []))
-            self.remove_smart_filtered_nick(user.nick)
+            if user.host:
+                self.remove_smart_filtered_nick(underscore_nonalnum(user.host))
 
-        if user.nick in self.users:
-            del self.users[user.nick]
+        if user_id in self.users:
+            del self.users[user_id]
 
-    def part(self, nick, date, message=True, extra_tags=None):
+    def part(self, user_id, date, message=True, extra_tags=None):
         # type: (str, int, bool, Optional[List[str]]) -> None
-        self._leave(nick, date, message, "part", extra_tags)
+        self._leave(user_id, date, message, "part", extra_tags)
 
-    def kick(self, nick, date, message=True, extra_tags=None):
+    def kick(self, user_id, date, message=True, extra_tags=None):
         # type: (str, int, bool, Optional[List[str]]) -> None
-        self._leave(nick, date, message, "kick", extra_tags)
+        self._leave(user_id, date, message, "kick", extra_tags)
 
-    def _print_topic(self, nick, topic, date):
-        user = self._get_user(nick)
+    def _print_topic(self, user_id, topic, date):
+        user = self._get_user(user_id)
         tags = self._message_tags(user, "topic")
 
         data = (
@@ -766,7 +860,8 @@ class WeechatChannelBuffer(object):
 
         self.print_date_tags(data, date, tags)
         user.update_speaking_time(date)
-        self.unmask_smart_filtered_nick(nick)
+        if user.host:
+            self.unmask_smart_filtered_nick(underscore_nonalnum(user.host))
 
     @property
     def topic(self):
@@ -776,21 +871,21 @@ class WeechatChannelBuffer(object):
     def topic(self, topic):
         W.buffer_set(self._ptr, "title", topic)
 
-    def change_topic(self, nick, topic, date, message=True):
+    def change_topic(self, user_id, topic, date, message=True):
         if message:
-            self._print_topic(nick, topic, date)
+            self._print_topic(user_id, topic, date)
 
         self.topic = topic
-        self.topic_author = nick
+        self.topic_author = user_id
         self.topic_date = date
 
-    def self_message(self, nick, message, date, tags=None):
-        user = self._get_user(nick)
+    def self_message(self, user_id, message, date, tags=None):
+        user = self._get_user(user_id)
         tags = self._message_tags(user, "self_message") + (tags or [])
         self._print_message(user, message, date, tags)
 
-    def self_action(self, nick, message, date, tags=None):
-        user = self._get_user(nick)
+    def self_action(self, user_id, message, date, tags=None):
+        user = self._get_user(user_id)
         tags = self._message_tags(user, "self_message") + (tags or [])
         tags.append(SCRIPT_NAME + "_action")
         self._print_action(user, message, date, tags)
@@ -847,7 +942,18 @@ class RoomBuffer(object):
         # This dict remembers the connection from a user_id to the name we
         # displayed in the buffer
         self.displayed_nicks = {}
-        user = shorten_sender(self.room.own_user_id)
+        short_name = shorten_sender(self.room.own_user_id)
+        # TODO this user list does not contain own user id for newly joined
+        # rooms so we need to fetch own display_name from server
+        # It's going to be fixed by following "join" event.
+        if self.room.own_user_id in self.room.users:
+            display_name = self.room.users[self.room.own_user_id].display_name
+        else:
+            display_name = None
+        if G.CONFIG.look.use_display_names and display_name:
+            user = display_name
+        else:
+            user = short_name
 
         self.weechat_buffer = WeechatChannelBuffer(
             buffer_name, server_name, user
@@ -1004,10 +1110,10 @@ class RoomBuffer(object):
         elif user.user_id.startswith("@freenode_"):
             short_name = shorten_sender(user.user_id[9:])
 
-        # TODO make this configurable
-        if not short_name or short_name in self.displayed_nicks.values():
-            # Use the full user id, but don't include the @
-            nick = user_id[1:]
+        display_name = user.display_name
+
+        if G.CONFIG.look.use_display_names and display_name:
+            nick = display_name
         else:
             nick = short_name
 
@@ -1019,6 +1125,16 @@ class RoomBuffer(object):
             user.nick_color = "weechat.color.chat_nick_self"
 
         self.weechat_buffer.join(buffer_user, date, not is_state)
+
+    def change_nick(self, user_id, prev_nick, new_nick, date, is_state):
+        # There is no such user
+        if not user_id in self.displayed_nicks:
+            return
+
+        if self.room.own_user_id == user_id:
+            self.weechat_buffer.set_own_nick(new_nick)
+
+        self.weechat_buffer.change_nick(user_id, prev_nick, new_nick, date, not is_state)
 
     def handle_membership_events(self, event, is_state):
         date = server_ts_to_weechat(event.server_timestamp)
@@ -1032,7 +1148,14 @@ class RoomBuffer(object):
 
                 self.add_user(event.state_key, date, is_state)
             else:
-                # TODO print out profile changes
+                if (G.CONFIG.look.use_display_names and
+                        event.prev_content and
+                        "displayname" in event.prev_content and
+                        "displayname" in event.content):
+                    prev_name = event.prev_content["displayname"]
+                    new_name = event.content["displayname"]
+                    if prev_name != new_name:
+                        self.change_nick(event.state_key, prev_name, new_name, date, is_state)
                 return
 
         elif event.content["membership"] == "leave":
@@ -1040,11 +1163,10 @@ class RoomBuffer(object):
                 self.unhandled_users.remove(event.state_key)
                 return
 
-            nick = self.find_nick(event.state_key)
             if event.sender == event.state_key:
-                self.weechat_buffer.part(nick, date, not is_state)
+                self.weechat_buffer.part(event.state_key, date, not is_state)
             else:
-                self.weechat_buffer.kick(nick, date, not is_state)
+                self.weechat_buffer.kick(event.state_key, date, not is_state)
 
             if event.state_key in self.displayed_nicks:
                 del self.displayed_nicks[event.state_key]
@@ -1135,7 +1257,6 @@ class RoomBuffer(object):
         line.tags = tags
 
     def _handle_redacted_message(self, event):
-        nick = self.find_nick(event.sender)
         date = server_ts_to_weechat(event.server_timestamp)
         tags = self.get_event_tags(event)
         tags.append(SCRIPT_NAME + "_redacted")
@@ -1159,13 +1280,11 @@ class RoomBuffer(object):
             reason=reason,
         )
 
-        self.weechat_buffer.message(nick, data, date, tags)
+        self.weechat_buffer.message(event.sender, data, date, tags)
 
     def _handle_topic(self, event, is_state):
-        nick = self.find_nick(event.sender)
-
         self.weechat_buffer.change_topic(
-            nick,
+            event.sender,
             event.topic,
             server_ts_to_weechat(event.server_timestamp),
             not is_state,
@@ -1187,16 +1306,14 @@ class RoomBuffer(object):
     def _handle_power_level(self, _):
         for user_id in self.room.power_levels.users:
             if user_id in self.displayed_nicks:
-                nick = self.find_nick(user_id)
-
-                user = self.weechat_buffer.users[nick]
+                user = self.weechat_buffer.users[user_id]
                 user.power_level = self.room.power_levels.get_user_level(
                     user_id
                 )
 
                 # There is no way to change the group of a user without
                 # removing him from the nicklist
-                self.weechat_buffer.remove_user_from_nicklist(user)
+                self.weechat_buffer._remove_user_from_nicklist(user)
                 self.weechat_buffer._add_user_to_nicklist(user)
 
     def handle_state_event(self, event):
@@ -1271,19 +1388,17 @@ class RoomBuffer(object):
         # Emotes are a subclass of RoomMessageText, so put them before the text
         # ones
         elif isinstance(event, RoomMessageEmote):
-            nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
 
             extra_prefix = (self.warning_prefix if event.decrypted
                             and not event.verified else "")
 
             self.weechat_buffer.action(
-                nick, event.body, date, self.get_event_tags(event),
+                event.sender, event.body, date, self.get_event_tags(event),
                 extra_prefix
             )
 
         elif isinstance(event, RoomMessageText):
-            nick = self.find_nick(event.sender)
             formatted = None
 
             if event.formatted_body:
@@ -1296,22 +1411,20 @@ class RoomBuffer(object):
 
             date = server_ts_to_weechat(event.server_timestamp)
             self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event), extra_prefix
+                event.sender, data, date, self.get_event_tags(event), extra_prefix
             )
 
         elif isinstance(event, RoomMessageNotice):
-            nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
             extra_prefix = (self.warning_prefix if event.decrypted
                             and not event.verified else "")
 
             self.weechat_buffer.notice(
-                nick, event.body, date, self.get_event_tags(event),
+                event.sender, event.body, date, self.get_event_tags(event),
                 extra_prefix
             )
 
         elif isinstance(event, RoomMessageMedia):
-            nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
             http_url = Api.mxc_to_http(event.url)
             url = http_url if http_url else event.url
@@ -1323,11 +1436,10 @@ class RoomBuffer(object):
                             and not event.verified else "")
 
             self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event), extra_prefix
+                event.sender, data, date, self.get_event_tags(event), extra_prefix
             )
 
         elif isinstance(event, RoomEncryptedMedia):
-            nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
             http_url = Api.encrypted_mxc_to_plumb(
                 event.url,
@@ -1348,18 +1460,17 @@ class RoomBuffer(object):
                             and not event.verified else "")
 
             self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event), extra_prefix
+                event.sender, data, date, self.get_event_tags(event), extra_prefix
             )
 
         elif isinstance(event, RoomMessageUnknown):
-            nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
             data = ("Unknown message of type {t}").format(t=event.type)
             extra_prefix = (self.warning_prefix if event.decrypted
                             and not event.verified else "")
 
             self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event), extra_prefix
+                event.sender, data, date, self.get_event_tags(event), extra_prefix
             )
 
         elif isinstance(event, RedactionEvent):
@@ -1380,7 +1491,6 @@ class RoomBuffer(object):
             self._handle_power_level(event)
 
         elif isinstance(event, MegolmEvent):
-            nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
 
             data = ("{del_color}<{log_color}Unable to decrypt: "
@@ -1391,7 +1501,7 @@ class RoomBuffer(object):
                             ncolor=W.color("reset"))
             session_id_tag = SCRIPT_NAME + "_sessionid_" + event.session_id
             self.weechat_buffer.message(
-                nick,
+                event.sender,
                 data,
                 date,
                 self.get_event_tags(event) + [session_id_tag]
@@ -1409,7 +1519,6 @@ class RoomBuffer(object):
 
     def self_message(self, message):
         # type: (OwnMessage) -> None
-        nick = self.find_nick(self.room.own_user_id)
         data = message.formatted_message.to_weechat()
         if message.event_id:
             tags = [SCRIPT_NAME + "_id_{}".format(message.event_id)]
@@ -1417,11 +1526,10 @@ class RoomBuffer(object):
             tags = [SCRIPT_NAME + "_uuid_{}".format(message.uuid)]
         date = message.age
 
-        self.weechat_buffer.self_message(nick, data, date, tags)
+        self.weechat_buffer.self_message(self.room.own_user_id, data, date, tags)
 
     def self_action(self, message):
         # type: (OwnMessage) -> None
-        nick = self.find_nick(self.room.own_user_id)
         date = message.age
         if message.event_id:
             tags = [SCRIPT_NAME + "_id_{}".format(message.event_id)]
@@ -1429,7 +1537,7 @@ class RoomBuffer(object):
             tags = [SCRIPT_NAME + "_uuid_{}".format(message.uuid)]
 
         self.weechat_buffer.self_action(
-            nick, message.formatted_message.to_weechat(), date, tags
+            self.room.own_user_id, message.formatted_message.to_weechat(), date, tags
         )
 
     @staticmethod
@@ -1463,8 +1571,7 @@ class RoomBuffer(object):
     def replace_printed_line_by_uuid(self, uuid, new_message):
         """Replace already printed lines that are greyed out with real ones."""
         if isinstance(new_message, OwnAction):
-            displayed_nick = self.displayed_nicks[self.room.own_user_id]
-            user = self.weechat_buffer._get_user(displayed_nick)
+            user = self.weechat_buffer._get_user(self.room.own_user_id)
             data = self.weechat_buffer._format_action(
                 user,
                 new_message.formatted_message.to_weechat()
@@ -1554,8 +1661,7 @@ class RoomBuffer(object):
         )
 
         tags += self.get_event_tags(event)
-        nick = self.find_nick(event.sender)
-        user = self.weechat_buffer._get_user(nick)
+        user = self.weechat_buffer._get_user(event.sender)
         date = server_ts_to_weechat(event.server_timestamp)
         self.weechat_buffer._print_message(user, data, date, tags)
 
@@ -1567,7 +1673,6 @@ class RoomBuffer(object):
             "no_highlight",
         ]
         tags += self.get_event_tags(event)
-        nick = self.find_nick(event.sender)
 
         formatted = None
 
@@ -1575,7 +1680,7 @@ class RoomBuffer(object):
             formatted = Formatted.from_html(event.formatted_body)
 
         data = formatted.to_weechat() if formatted else event.body
-        user = self.weechat_buffer._get_user(nick)
+        user = self.weechat_buffer._get_user(event.sender)
         date = server_ts_to_weechat(event.server_timestamp)
         self.weechat_buffer._print_message(user, data, date, tags)
 
