@@ -1267,9 +1267,12 @@ class MatrixServer(object):
 
     def handle_response(self, response):
         # type: (Response) -> None
-        self.lag = response.elapsed * 1000
-        self.lag_done = True
-        W.bar_item_update("lag")
+        response_lag = response.elapsed
+
+        if response_lag >= self.client.lag:
+            self.lag = response_lag * 1000
+            self.lag_done = True
+            W.bar_item_update("lag")
 
         if isinstance(response, ErrorResponse):
             self.handle_error_response(response)
