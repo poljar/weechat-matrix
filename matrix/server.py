@@ -229,7 +229,7 @@ class MatrixServer(object):
         self.timer_hook = None               # type: Optional[str]
         self.numeric_address = ""            # type: Optional[str]
 
-        self.connected = False      # type: bool
+        self._connected = False     # type: bool
         self.connecting = False     # type: bool
         self.keys_queried = False   # type: bool
         self.reconnect_delay = 0    # type: int
@@ -285,6 +285,16 @@ class MatrixServer(object):
                 "{prefix}matrix: Error creating server session " "directory"
             ).format(prefix=W.prefix("error"))
             W.prnt("", message)
+
+    @property
+    def connected(self):
+        return self._connected
+
+    @connected.setter
+    def connected(self, value):
+        self._connected = value
+        W.bar_item_update("buffer_modes")
+        W.bar_item_update("matrix_modes")
 
     def get_session_path(self):
         home_dir = W.info_get("weechat_dir", "")
