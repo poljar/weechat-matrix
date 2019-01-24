@@ -1361,7 +1361,10 @@ class MatrixServer(object):
     def create_room_buffer(self, room_id, prev_batch):
         room = self.client.rooms[room_id]
         buf = RoomBuffer(room, self.name, prev_batch)
-        # TODO this should turned into a propper class
+
+        if room.members_synced:
+            buf.members_fetched = True
+
         self.room_buffers[room_id] = buf
         self.buffers[room_id] = buf.weechat_buffer._ptr
 
