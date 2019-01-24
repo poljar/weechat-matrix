@@ -178,6 +178,12 @@ class WeechatCommandParser(object):
         parser.add_argument("file")
         return WeechatCommandParser._run_parser(parser, args)
 
+    @staticmethod
+    def nick(args):
+        parser = WeechatArgParse(prog="nick")
+        parser.add_argument("display_name", nargs="*")
+        return WeechatCommandParser._run_parser(parser, args)
+
 
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
@@ -445,6 +451,21 @@ def hook_commands():
         ("%(filename)"),
         # Callback
         "matrix_upload_command_cb",
+        "",
+    )
+
+    W.hook_command(
+        # Command name and short description
+        "nick",
+        "change display name",
+        # Synopsis
+        ("<display_name>"),
+        # Description
+        ("display_name: display name to set"),
+        # Completions
+        "",
+        # Callback
+        "matrix_nick_command_cb",
         "",
     )
 
@@ -1050,6 +1071,21 @@ def matrix_upload_command_cb(data, buffer, args):
             G.CONFIG.upload_buffer.render()
 
         break
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_nick_command_cb(data, buffer, args):
+    parsed_args = WeechatCommandParser.nick(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
+
+    for server in SERVERS.values():
+        if buffer in server.buffers.values() or buffer == server.server_buffer:
+            new_name = " ".join(parsed_args.display_name).strip("\"")
+            server.set_displayname(new_name)
+            break
 
     return W.WEECHAT_RC_OK
 
