@@ -229,7 +229,6 @@ class Formatted(object):
         return cls(parser.get_substrings())
 
     def to_html(self):
-        # TODO BG COLOR
         def add_attribute(string, name, value):
             if name == "bold" and value:
                 return "{bold_on}{text}{bold_off}".format(
@@ -257,16 +256,31 @@ class Formatted(object):
                 return "{code_on}{text}{code_off}".format(
                     code_on="<code>", text=string, code_off="</code>"
                 )
-            if name == "fgcolor" and value:
-                return "{color_on}{text}{color_off}".format(
-                    color_on="<font color={color}>".format(
-                        color=color_weechat_to_html(value)
-                    ),
-                    text=string,
-                    color_off="</font>",
-                )
 
             return string
+
+        def add_color(string, fgcolor, bgcolor):
+            fgcolor_string = ""
+            bgcolor_string = ""
+
+            if fgcolor:
+                fgcolor_string = " data-mx-color={}".format(
+                    color_weechat_to_html(fgcolor)
+                )
+
+            if bgcolor:
+                bgcolor_string = " data-mx-bg-color={}".format(
+                    color_weechat_to_html(bgcolor)
+                )
+
+            return "{color_on}{text}{color_off}".format(
+                color_on="<font{fg}{bg}>".format(
+                    fg=fgcolor_string,
+                    bg=bgcolor_string
+                ),
+                text=string,
+                color_off="</font>",
+            )
 
         def format_string(formatted_string):
             text = formatted_string.text
@@ -283,6 +297,13 @@ class Formatted(object):
                 else:
                     text = add_attribute(text, "code", True)
                     attributes.pop("code")
+
+            elif attributes["fgcolor"] or attributes["bgcolor"]:
+                text = add_color(
+                    text,
+                    attributes["fgcolor"],
+                    attributes["bgcolor"]
+                )
             else:
                 for key, value in attributes.items():
                     text = add_attribute(text, key, value)
@@ -311,7 +332,6 @@ class Formatted(object):
         return "".join(plain_string)
 
     def to_weechat(self):
-        # TODO BG COLOR
         def add_attribute(string, name, value, attributes):
             if not value:
                 return string
@@ -471,7 +491,6 @@ DEFAULT_ATTRIBUTES = {
 
 
 class MatrixHtmlParser(HTMLParser):
-    # TODO bg color
     # TODO bullets
     def __init__(self):
         HTMLParser.__init__(self)
@@ -541,7 +560,7 @@ class MatrixHtmlParser(HTMLParser):
             self.text = ""
         elif tag == "font":
             for key, value in attrs:
-                if key == "color":
+                if key in ["data-mx-color", "color"]:
                     color = color_html_to_weechat(value)
 
                     if not color:
@@ -551,6 +570,17 @@ class MatrixHtmlParser(HTMLParser):
                         self.add_substring(self.text, self.attributes.copy())
                     self.text = ""
                     self.attributes["fgcolor"] = color
+
+                elif key in ["data-mx-bg-color"]:
+                    color = color_html_to_weechat(value)
+                    if not color:
+                        continue
+
+                    if self.text:
+                        self.add_substring(self.text, self.attributes.copy())
+                    self.text = ""
+                    self.attributes["bgcolor"] = color
+
         else:
             pass
 
