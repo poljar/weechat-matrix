@@ -27,7 +27,39 @@ from json.decoder import JSONDecodeError
 
 urllib3.disable_warnings()
 
-mime = magic.Magic(mime=True)
+
+def to_stdout(message):
+    print(json.dumps(message), flush=True)
+
+
+def error(e):
+    message = {
+        "type": "status",
+        "status": "error",
+        "message": str(e)
+    }
+    to_stdout(message)
+    os.sys.exit()
+
+
+def mime_from_file(file):
+    try:
+        t = magic.from_file(file, mime=True)
+    except AttributeError:
+        try:
+            m = magic.open(magic.MIME)
+            m.load()
+            t, _ = m.file(file).split(';')
+        except AttributeError:
+            error('Your \'magic\' module is unsupported. '
+                  'Install either https://github.com/ahupp/python-magic '
+                  'or https://github.com/file/file/tree/master/python '
+                  '(official \'file\' python bindings, available as the '
+                  'python-magic package on many distros)')
+
+            raise SystemExit
+
+    return t
 
 
 class Upload(object):
@@ -36,7 +68,7 @@ class Upload(object):
         self.filename = os.path.basename(file)
         self.chunksize = chunksize
         self.totalsize = os.path.getsize(file)
-        self.mimetype = mime.from_file(file)
+        self.mimetype = mime_from_file(file)
         self.readsofar = 0
 
     def send_progress(self):
@@ -73,20 +105,6 @@ class IterableToFileAdapter(object):
 
     def __len__(self):
         return self.length
-
-
-def to_stdout(message):
-    print(json.dumps(message), flush=True)
-
-
-def error(e):
-    message = {
-        "type": "status",
-        "status": "error",
-        "message": str(e)
-    }
-    to_stdout(message)
-    os.sys.exit()
 
 
 def upload_process(args):
