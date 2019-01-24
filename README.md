@@ -26,12 +26,25 @@ The following Python modules must also be available on your system:
 - http-parser
 - future (Python2 users only, see below)
 - atomicwrite
-- matrix-nio
+- [matrix-nio](https://github.com/poljar/matrix-nio)
 - attrs
 - logbook
 - pygments
 
-Note that weechat only supports Python2 OR Python3, and that setting is determined at the time that Weechat is compiled.  Weechat-Matrix can work with either Python2 or Python3, but when you install dependencies you will have to take into account which version of Python your Weechat was built to use.  If you are unsure, Python2 is a good first guess.
+Note that weechat only supports Python2 OR Python3, and that setting is
+determined at the time that Weechat is compiled.  Weechat-Matrix can work with
+either Python2 or Python3, but when you install dependencies you will have to
+take into account which version of Python your Weechat was built to use.
+
+To check the python version that weechat is using, run:
+
+    /python version
+
+## Uploads
+
+Uploads are done using a helper script, the script found under
+[contrib/matrix_upload](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_upload)
+should be installed under your `PATH`.
 
 # Configuration
 
@@ -69,6 +82,31 @@ Configuration is completed primarily through the Weechat interface.  First start
 
        /save
 
+
+## Bar items
+
+There are two bar items provided by this script:
+
+1. `matrix_typing_notice` - shows the currently typing users
+
+1. `matrix_modes` - shows room and server info (encryption status of the room,
+   server connection status)
+
+They can be added to the weechat status bar as usual:
+       /set weechat.bar.status.items
+
+The `matrix_modes` bar item is replicated in the already used `buffer_modes` bar
+item.
+
+## Typing notices and read receipts
+
+The sending of typing notices and read receipts can be temporarily disabled via
+the `/room` command, they can also be permanently configured using standard
+weechat conditions settings with the following settings:
+
+1. `matrix.network.read_markers_conditions`
+1. `matrix.network.typing_notice_conditions`
+
 # Helpful Commands
 
 `/help matrix` will print information about the `/matrix` command.
@@ -77,4 +115,3 @@ Configuration is completed primarily through the Weechat interface.  First start
 device verification.
 
 `/matrix help [command]` will print information for subcommands, such as `/matrix help server`
-
