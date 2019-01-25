@@ -56,3 +56,8 @@ def test_normalize_spaces_in_inline_code():
 
     formatted = Formatted.from_input_line('`   *    a   *   `')
     assert formatted.to_weechat() == valid_result
+
+def test_input_line_color():
+    formatted = Formatted.from_input_line("\x0304Hello")
+    assert "\x1b[038;5;9mHello\x1b[039m" == formatted.to_weechat()
+    assert "<font data-mx-color=#ff0000>Hello</font>" == formatted.to_html()
