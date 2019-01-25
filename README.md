@@ -25,7 +25,7 @@ The following Python modules must also be available on your system:
 - webcolors
 - http-parser
 - future (Python2 users only, see below)
-- atomicwrite
+- atomicwrites
 - [matrix-nio](https://github.com/poljar/matrix-nio)
 - attrs
 - logbook

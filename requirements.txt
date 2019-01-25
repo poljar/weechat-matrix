@@ -3,7 +3,7 @@ typing ; python_version < "3.5"
 webcolors
 http-parser
 future
-atomicwrite
+atomicwrites
 attrs
 logbook
 pygments
