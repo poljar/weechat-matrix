@@ -1,0 +1,9 @@
+pyOpenSSL
+typing ; python_version < "3.5"
+webcolors
+future
+atomicwrites
+attrs
+logbook
+pygments
+matrix-nio @ git+https://github.com/poljar/matrix-nio.git@master#egg=matrix-nio-0
