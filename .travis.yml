@@ -14,7 +14,7 @@ before_install:
 
 install:
     - pip install -r requirements.txt
-    - pip pytest
+    - pip install pytest
 
 script:
     make test
