@@ -1,7 +1,6 @@
 pyOpenSSL
 typing ; python_version < "3.5"
 webcolors
-http-parser
 future
 atomicwrites
 attrs
