@@ -61,3 +61,23 @@ def test_input_line_color():
     formatted = Formatted.from_input_line("\x0304Hello")
     assert "\x1b[038;5;9mHello\x1b[039m" == formatted.to_weechat()
     assert "<font data-mx-color=#ff0000>Hello</font>" == formatted.to_html()
+
+def test_input_line_bold():
+    formatted = Formatted.from_input_line("\x02Hello")
+    assert "\x1b[01mHello\x1b[021m" == formatted.to_weechat()
+    assert "<strong>Hello</strong>" == formatted.to_html()
+
+def test_input_line_bold():
+    formatted = Formatted.from_input_line("\x1FHello")
+    assert "\x1b[04mHello\x1b[024m" == formatted.to_weechat()
+    assert "<u>Hello</u>" == formatted.to_html()
+
+def test_input_line_markdown_emph():
+    formatted = Formatted.from_input_line("*Hello*")
+    assert "\x1b[03mHello\x1b[023m" == formatted.to_weechat()
+    assert "<em>Hello</em>" == formatted.to_html()
+
+def test_conversion():
+    formatted = Formatted.from_input_line("*Hello*")
+    formatted2 = Formatted.from_html(formatted.to_html())
+    formatted.to_weechat() == formatted2.to_weechat()
