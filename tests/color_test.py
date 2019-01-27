@@ -5,7 +5,7 @@ from __future__ import unicode_literals
 import webcolors
 from collections import OrderedDict
 from hypothesis import given
-from hypothesis.strategies import sampled_from
+from hypothesis.strategies import sampled_from, text
 
 from matrix.colors import (G, Formatted, FormattedString,
                            color_html_to_weechat, color_weechat_to_html)
@@ -56,6 +56,18 @@ def test_normalize_spaces_in_inline_code():
 
     formatted = Formatted.from_input_line('`   *    a   *   `')
     assert formatted.to_weechat() == valid_result
+
+
+# FIXME: this case doesn't and can't work yet (until a proper Markdown parser
+# is integrated)
+# @given(text().map(lambda s: '*' + s)
+# def test_unpaired_prefix_asterisk_without_space_is_literal(text):
+#     """An unpaired asterisk at the beginning of the line, without a space
+#     after it, is considered literal.
+#     """
+#     formatted = Formatted.from_input_line(text)
+#     assert text == formatted.to_weechat()
+
 
 def test_input_line_color():
     formatted = Formatted.from_input_line("\x0304Hello")
