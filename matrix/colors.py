@@ -218,7 +218,7 @@ class Formatted(object):
                 text = text + line[i]
                 i = i + 1
 
-        substrings.append(FormattedString(text, DEFAULT_ATTRIBUTES.copy()))
+        substrings.append(FormattedString(text, attributes))
         return cls(substrings)
 
     @classmethod
