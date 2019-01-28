@@ -1083,6 +1083,19 @@ class RoomBuffer(object):
 
             return False
 
+        def redact_string(message):
+            new_message = ""
+
+            if G.CONFIG.look.redactions == RedactType.STRIKETHROUGH:
+                plaintext_msg = W.string_remove_color(message, "")
+                new_message = string_strikethrough(plaintext_msg)
+            elif G.CONFIG.look.redactions == RedactType.NOTICE:
+                new_message = message
+            elif G.CONFIG.look.redactions == RedactType.DELETE:
+                pass
+
+            return new_message
+
         lines = self.weechat_buffer.find_lines(
             partial(predicate, event.redacts)
         )
@@ -1091,13 +1104,7 @@ class RoomBuffer(object):
         if not lines:
             return
 
-        # TODO multiple lines can contain a single matrix ID, we need to redact
-        # them all
-        line = lines[0]
-
         censor = self.find_nick(event.sender)
-        message = line.message
-        tags = line.tags
 
         reason = (
             ""
@@ -1117,22 +1124,32 @@ class RoomBuffer(object):
             reason=reason,
         )
 
-        new_message = ""
+        line = lines[0]
+        message = line.message
+        tags = line.tags
 
-        if G.CONFIG.look.redactions == RedactType.STRIKETHROUGH:
-            plaintext_msg = W.string_remove_color(message, "")
-            new_message = string_strikethrough(plaintext_msg)
-        elif G.CONFIG.look.redactions == RedactType.NOTICE:
-            new_message = message
-        elif G.CONFIG.look.redactions == RedactType.DELETE:
-            pass
-
+        new_message = redact_string(message)
         message = " ".join(s for s in [new_message, redaction_msg] if s)
-
         tags.append("matrix_redacted")
 
         line.message = message
         line.tags = tags
+
+        for line in lines[1:]:
+            message = line.message
+            tags = line.tags
+
+            new_message = redact_string(message)
+
+            if not new_message:
+                new_message = redaction_msg
+            elif G.CONFIG.look.redactions == RedactType.NOTICE:
+                new_message += " {}".format(redaction_msg)
+
+            tags.append("matrix_redacted")
+
+            line.message = new_message
+            line.tags = tags
 
     def _handle_redacted_message(self, event):
         nick = self.find_nick(event.sender)
