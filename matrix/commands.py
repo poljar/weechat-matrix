@@ -21,10 +21,11 @@ import re
 from builtins import str
 from future.moves.itertools import zip_longest
 from collections import defaultdict
+from functools import partial
 
 from . import globals as G
 from .colors import Formatted
-from .globals import SERVERS, W, UPLOADS
+from .globals import SERVERS, W, UPLOADS, SCRIPT_NAME
 from .server import MatrixServer
 from .utf import utf8_decode
 from .utils import key_from_value, tags_from_line_data
@@ -232,12 +233,10 @@ def hook_commands():
         "redact",
         "redact messages",
         # Synopsis
-        ('<message-number>[:"<message-part>"] [<reason>]'),
+        ('<event-id>[:"<message-part>"] [<reason>]'),
         # Description
         (
-            "message-number: number of message to redact "
-            "(starting from 1 for\n"
-            "                the last message received, counting up)\n"
+            "event-id: event id of the message that will be redacted\n"
             "  message-part: an initial part of the message (ignored, only "
             "used\n"
             "                as visual feedback when using completion)\n"
@@ -1081,47 +1080,32 @@ def matrix_kick_command_cb(data, buffer, args):
     return W.WEECHAT_RC_OK
 
 
-def event_id_from_line(buf, target_number):
-    # type: (str, int) -> str
-    own_lines = W.hdata_pointer(W.hdata_get("buffer"), buf, "own_lines")
-    if own_lines:
-        line = W.hdata_pointer(W.hdata_get("lines"), own_lines, "last_line")
-
-        line_number = 1
-
-        while line:
-            line_data = W.hdata_pointer(W.hdata_get("line"), line, "data")
-
-            if line_data:
-                tags = tags_from_line_data(line_data)
-
-                # Only count non redacted user messages
-                if (
-                    "matrix_message" in tags
-                    and "matrix_redacted" not in tags
-                    and "matrix_new_redacted" not in tags
-                ):
-
-                    if line_number == target_number:
-                        for tag in tags:
-                            if tag.startswith("matrix_id"):
-                                event_id = tag[10:]
-                                return event_id
-
-                    line_number += 1
-
-            line = W.hdata_move(W.hdata_get("line"), line, -1)
-
-    return ""
-
-
 @utf8_decode
 def matrix_redact_command_cb(data, buffer, args):
+    def already_redacted(line):
+        if SCRIPT_NAME + "_redacted" in line.tags:
+            return True
+        return False
+
+    def predicate(event_id, line):
+        event_tag = SCRIPT_NAME + "_id_{}".format(event_id)
+        tags = line.tags
+
+        if event_tag in tags:
+            return True
+
+        return False
+
     for server in SERVERS.values():
         if buffer in server.buffers.values():
             room_buffer = server.find_room_from_ptr(buffer)
 
-            matches = re.match(r"(\d+)(:\".*\")? ?(.*)?", args)
+            matches = re.match(
+                r"^(\$[a-zA-Z0-9]+:([a-z0-9])(([a-z0-9-]{1,61})?[a-z0-9]{1})?"
+                r"(\.[a-z0-9](([a-z0-9-]{1,61})?[a-z0-9]{1})?)?"
+                r"(\.[a-zA-Z]{2,4})+)(:\".*\")? ?(.*)?$",
+                args
+            )
 
             if not matches:
                 message = (
@@ -1131,17 +1115,21 @@ def matrix_redact_command_cb(data, buffer, args):
                 W.prnt("", message)
                 return W.WEECHAT_RC_ERROR
 
-            line_string, _, reason = matches.groups()
-            line = int(line_string)
+            groups = matches.groups()
+            event_id, reason = (groups[0], groups[-1])
 
-            event_id = event_id_from_line(buffer, line)
+            lines = room_buffer.weechat_buffer.find_lines(
+                partial(predicate, event_id), max_lines=1
+            )
 
-            if not event_id:
-                message = (
-                    "{prefix}matrix: No such message with number "
-                    "{number} found"
-                ).format(prefix=W.prefix("error"), number=line)
-                W.prnt("", message)
+            if not lines:
+                room_buffer.error(
+                    "No such message with event id "
+                    "{event_id} found.".format(event_id=event_id))
+                return W.WEECHAT_RC_OK
+
+            if already_redacted(lines[0]):
+                room_buffer.error("Event already redacted.")
                 return W.WEECHAT_RC_OK
 
             server.room_send_redaction(room_buffer, event_id, reason)

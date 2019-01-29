@@ -16,7 +16,8 @@
 
 from __future__ import unicode_literals
 
-from matrix.globals import SERVERS, W
+from typing import List, Optional
+from matrix.globals import SERVERS, W, SCRIPT_NAME
 from matrix.utf import utf8_decode
 from matrix.utils import tags_from_line_data
 from nio import LocalProtocolError
@@ -99,42 +100,61 @@ REDACTION_COMP_LEN = 50
 
 @utf8_decode
 def matrix_message_completion_cb(data, completion_item, buffer, completion):
-    own_lines = W.hdata_pointer(W.hdata_get("buffer"), buffer, "own_lines")
-    if own_lines:
-        line = W.hdata_pointer(W.hdata_get("lines"), own_lines, "last_line")
+    max_events = 500
 
-        line_number = 1
+    def redacted_or_not_message(tags):
+        # type: (List[str]) -> bool
+        if SCRIPT_NAME + "_redacted" in tags:
+            return True
+        if SCRIPT_NAME + "_message" not in tags:
+            return True
 
-        while line:
-            line_data = W.hdata_pointer(W.hdata_get("line"), line, "data")
+        return False
 
-            if line_data:
-                message = W.hdata_string(
-                    W.hdata_get("line_data"), line_data, "message"
+    def event_id_from_tags(tags):
+        # type: (List[str]) -> Optional[str]
+        for tag in tags:
+            if tag.startswith("matrix_id"):
+                event_id = tag[10:]
+                return event_id
+
+        return None
+
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            room_buffer = server.find_room_from_ptr(buffer)
+            lines = room_buffer.weechat_buffer.lines
+
+            added = 0
+
+            for line in lines:
+                tags = line.tags
+                if redacted_or_not_message(tags):
+                    continue
+
+                event_id = event_id_from_tags(tags)
+
+                if not event_id:
+                    continue
+
+                message = line.message
+
+                if len(message) > REDACTION_COMP_LEN + 2:
+                    message = message[:REDACTION_COMP_LEN] + ".."
+
+                item = ('{event_id}:"{message}"').format(
+                    event_id=event_id, message=message
                 )
 
-                tags = tags_from_line_data(line_data)
+                W.hook_completion_list_add(
+                    completion, item, 0, W.WEECHAT_LIST_POS_END
+                )
+                added += 1
 
-                # Only add non redacted user messages to the completion
-                if (
-                    message
-                    and "matrix_message" in tags
-                    and "matrix_redacted" not in tags
-                ):
+                if added >= max_events:
+                    break
 
-                    if len(message) > REDACTION_COMP_LEN + 2:
-                        message = message[:REDACTION_COMP_LEN] + ".."
-
-                    item = ('{number}:"{message}"').format(
-                        number=line_number, message=message
-                    )
-
-                    W.hook_completion_list_add(
-                        completion, item, 0, W.WEECHAT_LIST_POS_END
-                    )
-                    line_number += 1
-
-            line = W.hdata_move(W.hdata_get("line"), line, -1)
+            return W.WEECHAT_RC_OK
 
     return W.WEECHAT_RC_OK
 
