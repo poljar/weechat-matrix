@@ -236,11 +236,11 @@ def hook_commands():
         ('<event-id>[:"<message-part>"] [<reason>]'),
         # Description
         (
-            "event-id: event id of the message that will be redacted\n"
-            "  message-part: an initial part of the message (ignored, only "
+            "    event-id: event id of the message that will be redacted\n"
+            "message-part: an initial part of the message (ignored, only "
             "used\n"
-            "                as visual feedback when using completion)\n"
-            "        reason: the redaction reason\n"
+            "              as visual feedback when using completion)\n"
+            "      reason: the redaction reason\n"
         ),
         # Completions
         ("%(matrix_messages)"),
