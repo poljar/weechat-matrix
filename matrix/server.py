@@ -1269,7 +1269,12 @@ class MatrixServer(object):
         # type: (Response) -> None
         response_lag = response.elapsed
 
-        if response_lag >= self.client.lag:
+        current_lag = 0
+
+        if self.client:
+            current_lag = self.client.lag
+
+        if response_lag >= current_lag:
             self.lag = response_lag * 1000
             self.lag_done = True
             W.bar_item_update("lag")
