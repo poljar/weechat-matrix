@@ -506,8 +506,8 @@ class MatrixConfig(WeechatConfig):
                 0,
                 "on",
                 ("Display preformatted code blocks as rectangular areas by "
-                 "padding them with whitespace up to the length of the longest "
-                 "line (with optional margin)"),
+                 "padding them with whitespace up to the length of the longest"
+                 " line (with optional margin)"),
             ),
             Option(
                 "code_block_margin",
@@ -622,7 +622,7 @@ class MatrixConfig(WeechatConfig):
                 0,
                 0,
                 "on",
-                ("If off, messages are only printed after the server confirms"
+                ("If off, messages are only printed after the server confirms "
                  "their receival. If on, messages are immediately printed but "
                  "colored differently until receival is confirmed."),
             ),
