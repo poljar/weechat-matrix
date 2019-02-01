@@ -695,7 +695,7 @@ def olm_export_command(server, args):
     file_path = os.path.expanduser(args.file)
     try:
         server.client.export_keys(file_path, args.passphrase)
-    except IOError as e:
+    except (OSError, IOError) as e:
         server.error("Error exporting keys: {}".format(str(e)))
 
     server.info("Succesfully exported keys")
@@ -704,7 +704,7 @@ def olm_import_command(server, args):
     file_path = os.path.expanduser(args.file)
     try:
         server.client.import_keys(file_path, args.passphrase)
-    except (IOError, EncryptionError) as e:
+    except (OSError, IOError, EncryptionError) as e:
         server.error("Error importing keys: {}".format(str(e)))
 
     server.info("Succesfully imported keys")
