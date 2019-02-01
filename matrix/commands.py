@@ -17,11 +17,13 @@
 
 from __future__ import unicode_literals
 import argparse
+import os
 import re
 from builtins import str
 from future.moves.itertools import zip_longest
 from collections import defaultdict
 from functools import partial
+from nio import EncryptionError
 
 from . import globals as G
 from .colors import Formatted
@@ -141,6 +143,14 @@ class WeechatCommandParser(object):
         unblacklist_parser = subparsers.add_parser("unblacklist")
         unblacklist_parser.add_argument("user_filter")
         unblacklist_parser.add_argument("device_filter", nargs="?")
+
+        export_parser = subparsers.add_parser("export")
+        export_parser.add_argument("file")
+        export_parser.add_argument("passphrase")
+
+        import_parser = subparsers.add_parser("import")
+        import_parser.add_argument("file")
+        import_parser.add_argument("passphrase")
 
         return WeechatCommandParser._run_parser(parser, args)
 
@@ -374,13 +384,18 @@ def hook_commands():
         ("info all|blacklisted|private|unverified|verified <filter>||"
          "blacklist <user-id> <device-id> ||"
          "unverify <user-id> <device-id> ||"
-         "verify <user-id> <device-id>"),
+         "verify <user-id> <device-id> ||"
+         "export <file-name> <passphrase> ||"
+         "import <file-name> <passphrase>"
+         ),
         # Description
         ("       info: show info about known devices and their keys\n"
          "  blacklist: blacklist a device\n"
          "unblacklist: unblacklist a device\n"
          "   unverify: unverify a device\n"
-         "     verify: verify a device\n\n"
+         "     verify: verify a device\n"
+         "     export: export encryption keys\n"
+         "     import: import encryption keys\n\n"
          "Examples:"
          "\n  /olm verify @example:example.com *"
          "\n  /olm info all example*"
@@ -390,7 +405,10 @@ def hook_commands():
          'blacklist %(olm_user_ids) %(olm_devices) ||'
          'unblacklist %(olm_user_ids) %(olm_devices) ||'
          'unverify %(olm_user_ids) %(olm_devices) ||'
-         'verify %(olm_user_ids) %(olm_devices)'),
+         'verify %(olm_user_ids) %(olm_devices) ||'
+         'export %(filename) ||'
+         'import %(filename)'
+         ),
         # Function name
         'matrix_olm_command_cb',
         '')
@@ -673,6 +691,25 @@ def olm_unblacklist_command(server, args):
     )
 
 
+def olm_export_command(server, args):
+    file_path = os.path.expanduser(args.file)
+    try:
+        server.client.export_keys(file_path, args.passphrase)
+    except IOError as e:
+        server.error("Error exporting keys: {}".format(str(e)))
+
+    server.info("Succesfully exported keys")
+
+def olm_import_command(server, args):
+    file_path = os.path.expanduser(args.file)
+    try:
+        server.client.import_keys(file_path, args.passphrase)
+    except (IOError, EncryptionError) as e:
+        server.error("Error importing keys: {}".format(str(e)))
+
+    server.info("Succesfully imported keys")
+
+
 @utf8_decode
 def matrix_olm_command_cb(data, buffer, args):
     def command(server, data, buffer, args):
@@ -687,6 +724,10 @@ def matrix_olm_command_cb(data, buffer, args):
 
         if not parsed_args.subcommand or parsed_args.subcommand == "info":
             olm_info_command(server, parsed_args)
+        elif parsed_args.subcommand == "export":
+            olm_export_command(server, parsed_args)
+        elif parsed_args.subcommand == "import":
+            olm_import_command(server, parsed_args)
         elif parsed_args.subcommand == "verify":
             olm_verify_command(server, parsed_args)
         elif parsed_args.subcommand == "unverify":
