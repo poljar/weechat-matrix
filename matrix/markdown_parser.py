@@ -21,8 +21,8 @@ from enum import Enum
 from markdown import Markdown
 from markdown import Extension
 from markdown.util import etree
-from markdown.preprocessors import build_preprocessors, Preprocessor
-from markdown.inlinepatterns import SimpleTagPattern
+from markdown.preprocessors import Preprocessor
+from markdown.inlinepatterns import InlineProcessor, SimpleTagPattern
 
 
 class Attribute(Enum):
@@ -101,15 +101,51 @@ class WeechatToMarkdown(Preprocessor):
         return "".join(dest).split('\n')
 
 
+class MarkdownColor(InlineProcessor):
+    def handleMatch(self, m, data):
+        def add_color(color_type, color):
+            if color_type == "fg":
+                el.set("data-mx-color", color)
+            elif color_type == "bg":
+                el.set("data-mx-bg-color", color)
+
+        el = etree.Element('font')
+
+        text = m.group(1)
+
+        first_setting = m.group(2)
+        first_color = m.group(3)
+
+        second_setting = m.group(4)
+        second_color = m.group(5)
+
+        el.text = text
+
+        if first_setting != second_setting:
+            add_color(first_setting, first_color)
+
+        add_color(second_setting, second_color)
+
+        return el, m.start(0), m.end(0)
+
+
 class Weechat(Extension):
     def extendMarkdown(self, md):
         self.md = md
 
+        md.preprocessors.register(WeechatToMarkdown(md), 'weechattomd', 100)
+
         underline_re =  r"(~)(.*?)~"
         u_tag = SimpleTagPattern(underline_re, "u")
-        md.inlinePatterns.register(u_tag, "underline", 75)
 
-        md.preprocessors.register(WeechatToMarkdown(md), 'weechattomd', 100)
+        color_re = (r"\[([^\]]+)\]\{\s*(fg|bg)=([a-z]+|#[\da-fA-F]{6})\s*"
+                    r"(?:\s+(fg|bg)=([a-z]+|#[\da-fA-F]{6}))?\s*\}")
+
+        font_tag = MarkdownColor(color_re)
+
+        md.inlinePatterns.register(u_tag, "underline", 75)
+        md.inlinePatterns.register(font_tag, "font", 100)
+
 
 class Parser(Markdown):
     def __init__(self, source):

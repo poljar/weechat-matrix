@@ -2,6 +2,7 @@ import unittest
 from matrix.markdown_parser import Parser
 from markdown import markdown
 import textwrap
+import re
 import pdb
 
 class TestClass(unittest.TestCase):
@@ -15,6 +16,9 @@ class TestClass(unittest.TestCase):
             return textwrap.dedent(text.strip('/n'))
         else:
             return textwrap.dedent(text).strip()
+
+    def strip_extra(self, text):
+        return re.sub(r"\s\s+", "", text.strip().replace("\n", ""))
 
     def test_hr_before_paragraph(self):
         self.assertParserRendersHtml(
@@ -108,4 +112,41 @@ class TestClass(unittest.TestCase):
         self.assertParserRendersHtml(
             "\x1F\x02Hello\x1F",
             "<p><u><strong>Hello</strong></u></p>"
+        )
+
+    def test_input_line_md_color(self):
+        self.assertParserRendersHtml(
+            "[Hello]{fg=fuchsia}",
+            "<p><font data-mx-color=\"fuchsia\">Hello</font></p>"
+        )
+        self.assertParserRendersHtml(
+            "[Hello]{fg=fuchsia bg=black}",
+            self.strip_extra("""
+            <p>
+                <font data-mx-bg-color=\"black\" data-mx-color=\"fuchsia\">
+                    Hello
+                </font>
+            </p>
+            """)
+        )
+        self.assertParserRendersHtml(
+            "[Hello]{fg=fuchsia bg=#FFFFFF}",
+            self.strip_extra("""
+            <p>
+                <font data-mx-bg-color=\"#FFFFFF\" data-mx-color=\"fuchsia\">
+                    Hello
+                </font>
+            </p>
+            """)
+        )
+
+        self.assertParserRendersHtml(
+            "[Hello]{bg=fuchsia fg=#FFFFFF}",
+            self.strip_extra("""
+            <p>
+                <font data-mx-bg-color=\"fuchsia\" data-mx-color=\"#FFFFFF\">
+                    Hello
+                </font>
+            </p>
+            """)
         )
