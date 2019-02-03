@@ -8,8 +8,8 @@ import sys
 
 class TestClass(unittest.TestCase):
     def assertParserRendersHtml(self, source, expected):
-        parser = Parser(source)
-        self.assertMultiLineEqual(parser.html, expected)
+        parser = Parser.from_weechat(source)
+        self.assertMultiLineEqual(parser.to_html(), expected)
 
     def dedent(self, text):
         if text.endswith("\n"):

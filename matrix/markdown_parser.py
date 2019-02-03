@@ -15,7 +15,7 @@
 # CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-from builtins import super
+from builtins import super, str
 from enum import Enum
 from typing import List
 
@@ -266,10 +266,74 @@ class Weechat(Extension):
 
 
 class Parser(Markdown):
-    def __init__(self, source):
+    def __init__(self):
         super().__init__(extensions=['extra', Weechat()])
-        self.html = self.convert(source)
+        self.source = None
+        self.document_tree = None
+        self.lines = None
 
-    @property
-    def weechat(self):
+    @classmethod
+    def from_weechat(cls, input_string):
+        """Create a parser object from the weechat input line string.
+
+        Markdown as well as the classical weechat irc markup codes are
+        supported.
+        """
+        parser = cls()
+
+        if not input_string.strip():
+            return ''  # a blank unicode string
+
+        source = str(input_string)
+        parser.source = source
+
+        parser.lines = source.split("\n")
+        for prep in parser.preprocessors:
+            parser.lines = prep.run(parser.lines)
+
+        root = parser.parser.parseDocument(parser.lines).getroot()
+
+        for treeprocessor in parser.treeprocessors:
+            newRoot = treeprocessor.run(root)
+            if newRoot is not None:
+                root = newRoot
+
+        parser.document_tree = root
+        return parser
+
+    @classmethod
+    def from_html(cls, html_source):
+        """Create a parser object from the weechat input line string.
+
+        Only the allowed subset of HTML in the matrix spec is supported.
+        """
         raise NotImplementedError()
+
+    def to_weechat(self):
+        """Convert the parsed document to a string for weechat to display."""
+        raise NotImplementedError()
+
+    def to_html(self):
+        """Convert the parsed document to a html string."""
+        output = self.serializer(self.document_tree)
+
+        if self.stripTopLevelTags:
+            try:
+                start = output.index(
+                    '<%s>' % self.doc_tag) + len(self.doc_tag) + 2
+                end = output.rindex('</%s>' % self.doc_tag)
+                output = output[start:end].strip()
+            except ValueError:  # pragma: no cover
+                if output.strip().endswith('<%s />' % self.doc_tag):
+                    # We have an empty document
+                    output = ''
+                else:
+                    # We have a serious problem
+                    raise ValueError('Markdown failed to strip top-level '
+                                     'tags. Document=%r' % output.strip())
+
+        # Run the text post-processors
+        for pp in self.postprocessors:
+            output = pp.run(output)
+
+        return output.strip()
