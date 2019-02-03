@@ -2,6 +2,7 @@
 
 # Weechat Matrix Protocol Script
 # Copyright © 2019 Damir Jelić <poljar@termina.org.uk>
+# Copyright © 2018, 2019 Denis Kasak <dkasak@termina.org.uk>
 #
 # Permission to use, copy, modify, and/or distribute this software for
 # any purpose with or without fee is hereby granted, provided that the
@@ -15,6 +16,7 @@
 # CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+import html
 from builtins import super, str
 from enum import Enum
 from typing import List
@@ -25,7 +27,18 @@ from markdown.util import etree
 from markdown.preprocessors import Preprocessor
 from markdown.inlinepatterns import InlineProcessor, SimpleTagPattern
 
-from matrix.colors import color_line_to_weechat, color_weechat_to_html
+from matrix.colors import (
+    color_line_to_weechat,
+    color_weechat_to_html,
+    color_html_to_weechat
+)
+
+
+try:
+    from HTMLParser import HTMLParser
+except ImportError:
+    from html.parser import HTMLParser
+
 
 
 class Attribute(Enum):
@@ -41,6 +54,7 @@ DEFAULT_ATTRIBUTES = {
     "bgcolor": None,
 }
 
+
 class FormattedString:
     __slots__ = ("text", "attributes")
 
@@ -51,6 +65,84 @@ class FormattedString:
 
     def __repr__(self):
         return "FormmattedString({} {})".format(self.text, self.attributes)
+
+
+
+class MatrixHtmlParser(HTMLParser):
+    supported_tags = ["strong", "p", "h1", "h2", "h3", "h4", "h5", "h6",
+                      "br", "font", "blockquote", "em", "u", "del", "pre"]
+
+    def __init__(self):
+        HTMLParser.__init__(self)
+        self.text = ""  # type: str
+        self.substrings = []  # type: List[FormattedString]
+        self.attributes = DEFAULT_ATTRIBUTES.copy()
+        self.document_tree = etree.Element("div")
+        self.current_node = self.document_tree
+        self.node_stack = []
+
+    def unescape(self, text):
+        """Shim to unescape HTML in both Python 2 and 3.
+
+        The instance method was deprecated in Python 3 and html.unescape
+        doesn't exist in Python 2 so this is needed.
+        """
+        try:
+            return html.unescape(text)
+        except AttributeError:
+            return HTMLParser.unescape(self, text)
+
+    def open_element(self, tag):
+        new_node = etree.SubElement(self.current_node, tag)
+        self.node_stack.append(self.current_node)
+        self.current_node = new_node
+
+    def close_element(self, tag):
+        if not self.current_node:
+            pass
+
+        elif not self.current_node.tag == tag:
+            etree.SubElement(self.current_node, tag)
+
+        if not self.node_stack:
+            self.current_node = etree.Element("div")
+
+        self.current_node = self.node_stack.pop()
+
+    def add_text(self, text):
+        if not self.current_node.text:
+            self.current_node.text = text
+        else:
+            self.current_node.text += text
+
+    def handle_starttag(self, tag, attrs):
+        if tag in MatrixHtmlParser.supported_tags:
+            self.open_element(tag)
+
+        if tag in ["font", "span"]:
+            for key, value in attrs:
+                if key in ["data-mx-color", "color"]:
+                    self.current_node.set("data-mx-color", value)
+                elif key in ["data-mx-bg-color"]:
+                    self.current_node.set("data-mx-bg-color", value)
+
+        if tag == "code":
+            for key, value in attrs:
+                if key == "class" and value.startswith("language-"):
+                    self.current_node.set("class", value)
+
+    def handle_endtag(self, tag):
+        if tag in MatrixHtmlParser.supported_tags:
+            self.close_element(tag)
+
+    def handle_data(self, data):
+        self.add_text(data)
+
+    def handle_entityref(self, name):
+        self.add_text(self.unescape("&{};".format(name)))
+
+    def handle_charref(self, name):
+        self.add_text(self.unescape("&#{};".format(name)))
 
 
 class WeechatToMarkdown(Preprocessor):
@@ -311,8 +403,10 @@ class Parser(Markdown):
         # TODO this needs to be done differently so that only allowed tags are
         # parsed
         parser = cls()
+        html_parser = MatrixHtmlParser()
+        html_parser.feed(html_source)
         parser.source = html_source
-        parser.document_tree = etree.fromstring(html_source)
+        parser.document_tree = html_parser.document_tree
 
         return parser
 

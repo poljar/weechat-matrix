@@ -1,5 +1,5 @@
 import unittest
-from matrix.markdown_parser import Parser
+from matrix.markdown_parser import Parser, MatrixHtmlParser
 from markdown import markdown
 import textwrap
 import re
@@ -185,3 +185,8 @@ class TestClass(unittest.TestCase):
     def test_to_and_from_html(self):
         parser = Parser.from_weechat("\x0301T\x0302e\x0303s\x0304t")
         assert Parser.from_html(parser.to_html()).to_html() == parser.to_html()
+
+    def test_html_parser(self):
+        parser = MatrixHtmlParser()
+        parser.feed("<p><strong>Hello</strong></p>")
+        assert parser.document_tree[0][0].text == "Hello"
