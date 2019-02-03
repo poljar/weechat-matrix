@@ -67,6 +67,10 @@ from .utils import create_server_buffer, key_from_value, server_buffer_prnt
 
 from .colors import Formatted, FormattedString, DEFAULT_ATTRIBUTES
 
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 
 try:
     FileNotFoundError  # type: ignore
@@ -319,8 +323,28 @@ class MatrixServer(object):
         with atomic_write(path, overwrite=True) as device_file:
             device_file.write(self.device_id)
 
+    @staticmethod
+    def _parse_url(address, port):
+        parsed_url = urlparse(address)
+
+        if parsed_url.netloc:
+            netloc, path = (parsed_url.netloc, parsed_url.path)
+        else:
+            try:
+                netloc, path = address.split("/", 1)
+            except ValueError:
+                netloc, path = (address, "")
+
+        path = path.strip("/")
+        netloc = "{}:{}".format(netloc, port)
+
+        return "/".join([netloc, path]).rstrip("/")
+
     def _change_client(self):
-        host = ":".join([self.config.address, str(self.config.port)])
+        host = MatrixServer._parse_url(
+            self.config.address,
+            str(self.config.port)
+        )
         self.client = HttpClient(
             host,
             self.config.username,
