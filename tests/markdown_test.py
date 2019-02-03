@@ -4,10 +4,10 @@ from markdown import markdown
 import textwrap
 import re
 import pdb
+import sys
 
 class TestClass(unittest.TestCase):
     def assertParserRendersHtml(self, source, expected):
-        # pdb.set_trace()
         parser = Parser(source)
         self.assertMultiLineEqual(parser.html, expected)
 
@@ -97,22 +97,40 @@ class TestClass(unittest.TestCase):
         )
 
     def test_input_line_combination(self):
-        self.assertParserRendersHtml(
-            "\x1F\x02Hello\x0F",
-            "<p><u><strong>Hello</strong></u></p>"
-        )
-        self.assertParserRendersHtml(
-            "\x1F\x02Hello\x02\x1F",
-            "<p><u><strong>Hello</strong></u></p>"
-        )
-        self.assertParserRendersHtml(
-            "\x1F\x02Hello",
-            "<p><u><strong>Hello</strong></u></p>"
-        )
-        self.assertParserRendersHtml(
-            "\x1F\x02Hello\x1F",
-            "<p><u><strong>Hello</strong></u></p>"
-        )
+        if sys.version_info[0] < 3:
+            self.assertParserRendersHtml(
+                "\x1F\x02Hello\x0F",
+                "<p><strong><u>Hello</u></strong></p>"
+            )
+            self.assertParserRendersHtml(
+                "\x1F\x02Hello\x02\x1F",
+                "<p><strong><u>Hello</u></strong></p>"
+            )
+            self.assertParserRendersHtml(
+                "\x1F\x02Hello",
+                "<p><strong><u>Hello</u></strong></p>"
+            )
+            self.assertParserRendersHtml(
+                "\x1F\x02Hello\x1F",
+                "<p><strong><u>Hello</u></strong></p>"
+            )
+        else:
+            self.assertParserRendersHtml(
+                "\x1F\x02Hello\x0F",
+                "<p><u><strong>Hello</strong></u></p>"
+            )
+            self.assertParserRendersHtml(
+                "\x1F\x02Hello\x02\x1F",
+                "<p><u><strong>Hello</strong></u></p>"
+            )
+            self.assertParserRendersHtml(
+                "\x1F\x02Hello",
+                "<p><u><strong>Hello</strong></u></p>"
+            )
+            self.assertParserRendersHtml(
+                "\x1F\x02Hello\x1F",
+                "<p><u><strong>Hello</strong></u></p>"
+            )
 
     def test_input_line_md_color(self):
         self.assertParserRendersHtml(
@@ -147,6 +165,19 @@ class TestClass(unittest.TestCase):
                 <font data-mx-bg-color=\"fuchsia\" data-mx-color=\"#FFFFFF\">
                     Hello
                 </font>
+            </p>
+            """)
+        )
+
+    def test_input_line_weechat_color(self):
+        self.assertParserRendersHtml(
+            u"\x0301T\x0302e\x0303s\x0304t",
+            self.strip_extra("""
+            <p>
+                <font data-mx-color="#000000">T</font>
+                <font data-mx-color="#000080">e</font>
+                <font data-mx-color="#008000">s</font>
+                <font data-mx-color="#ff0000">t</font>
             </p>
             """)
         )

@@ -17,6 +17,7 @@
 
 from builtins import super
 from enum import Enum
+from typing import List
 
 from markdown import Markdown
 from markdown import Extension
@@ -24,81 +25,198 @@ from markdown.util import etree
 from markdown.preprocessors import Preprocessor
 from markdown.inlinepatterns import InlineProcessor, SimpleTagPattern
 
+from matrix.colors import color_line_to_weechat, color_weechat_to_html
+
 
 class Attribute(Enum):
     emph = 0
     bold = 1
     underline = 2
 
+DEFAULT_ATTRIBUTES = {
+    "bold": False,
+    "italic": False,
+    "underline": False,
+    "fgcolor": None,
+    "bgcolor": None,
+}
+
+class FormattedString:
+    __slots__ = ("text", "attributes")
+
+    def __init__(self, text, attributes):
+        self.attributes = DEFAULT_ATTRIBUTES.copy()
+        self.attributes.update(attributes)
+        self.text = text
+
+    def __repr__(self):
+        return "FormmattedString({} {})".format(self.text, self.attributes)
+
 
 class WeechatToMarkdown(Preprocessor):
+    """Markdown preprocessor to turn the weechat input line into markdown."""
+
+    @staticmethod
+    def add_attribute(string, name, value):
+        if name == "bold" and value:
+            return "{bold_on}{text}{bold_off}".format(
+                bold_on="**", text=string, bold_off="**"
+            )
+        if name == "italic" and value:
+            return "{italic_on}{text}{italic_off}".format(
+                italic_on="*", text=string, italic_off="*"
+            )
+        if name == "underline" and value:
+            return "{underline_on}{text}{underline_off}".format(
+                underline_on="~", text=string, underline_off="~"
+            )
+
+        return string
+
+    @staticmethod
+    def add_color(string, fgcolor, bgcolor):
+        fgcolor_string = ""
+        bgcolor_string = ""
+
+        if fgcolor:
+            fgcolor_string = " fg={}".format(
+                color_weechat_to_html(fgcolor)
+            )
+
+        if bgcolor:
+            bgcolor_string = " bg={}".format(
+                color_weechat_to_html(bgcolor)
+            )
+
+        return "[{text}]{{{color_on}}}".format(
+            text=string,
+            color_on="{fg}{bg}".format(
+                fg=fgcolor_string,
+                bg=bgcolor_string
+            ),
+        )
+
+    @staticmethod
+    def format_string(formatted_string):
+        text = formatted_string.text
+        attributes = formatted_string.attributes.copy()
+
+        if attributes["fgcolor"] or attributes["bgcolor"]:
+            text = WeechatToMarkdown.add_color(
+                text,
+                attributes["fgcolor"],
+                attributes["bgcolor"]
+            )
+        else:
+            for key, value in attributes.items():
+                text = WeechatToMarkdown.add_attribute(text, key, value)
+
+        return text
+
+    @staticmethod
+    def build_string(substrings):
+        md_string = map(WeechatToMarkdown.format_string, substrings)
+        return "".join(md_string)
+
     def run(self, lines):
         emph = "\x1D"
         bold = "\x02"
         reset = "\x0F"
         underline = "\x1F"
+        color = "\x03"
 
-        source = '\n'.join(lines)
+        text = ""  # type: str
+        substrings = []  # type: List[FormattedString]
+        attributes = DEFAULT_ATTRIBUTES.copy()
 
-        stack = []
+        line = '\n'.join(lines)
 
-        dest = []
+        i = 0
+        while i < len(line):
+            # Bold
+            if line[i] == bold:
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                attributes["bold"] = not attributes["bold"]
+                i = i + 1
 
-        def add_attribute(attr):
-            if attr == Attribute.emph:
-                dest.append("*")
-            elif attr == Attribute.bold:
-                dest.append("__")
-            elif attr == Attribute.underline:
-                dest.append("~")
+            # Color
+            elif line[i] == color:
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                i = i + 1
 
-        def add_attrs():
-            for attr in reversed(stack):
-                add_attribute(attr)
+                # check if it's a valid color, add it to the attributes
+                if line[i].isdigit():
+                    color_string = line[i]
+                    i = i + 1
 
-        def close_attr(closing_attr):
-            put_back = []
+                    if line[i].isdigit():
+                        if color_string == "0":
+                            color_string = line[i]
+                        else:
+                            color_string = color_string + line[i]
+                        i = i + 1
 
-            while stack:
-                attr = stack.pop()
+                    attributes["fgcolor"] = color_line_to_weechat(color_string)
+                else:
+                    attributes["fgcolor"] = None
 
-                add_attribute(attr)
+                # check if we have a background color
+                if line[i] == "," and line[i + 1].isdigit():
+                    color_string = line[i + 1]
+                    i = i + 2
 
-                if attr == closing_attr:
-                    break
+                    if line[i].isdigit():
+                        if color_string == "0":
+                            color_string = line[i]
+                        else:
+                            color_string = color_string + line[i]
+                        i = i + 1
 
-                put_back.append(attr)
+                    attributes["bgcolor"] = color_line_to_weechat(color_string)
+                else:
+                    attributes["bgcolor"] = None
+            # Reset
+            elif line[i] == reset:
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                # Reset all the attributes
+                attributes = DEFAULT_ATTRIBUTES.copy()
+                i = i + 1
 
-            while put_back:
-                attr = put_back.pop()
-                stack.append(attr)
+            # Italic
+            elif line[i] == emph:
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                attributes["italic"] = not attributes["italic"]
+                i = i + 1
 
-                add_attribute(attr)
+            # Underline
+            elif line[i] == underline:
+                if text:
+                    substrings.append(FormattedString(text, attributes.copy()))
+                text = ""
+                attributes["underline"] = not attributes["underline"]
+                i = i + 1
 
-        def toggle_attr(attr):
-            if attr in stack:
-                close_attr(attr)
+            # Normal text
             else:
-                stack.append(attr)
-                add_attribute(attr)
+                text = text + line[i]
+                i = i + 1
 
-        for character in source:
-            if character == emph:
-                toggle_attr(Attribute.emph)
-            elif character == bold:
-                toggle_attr(Attribute.bold)
-            elif character == underline:
-                toggle_attr(Attribute.underline)
-            elif character == reset:
-                add_attrs()
-                stack = []
+        substrings.append(FormattedString(text, attributes))
 
-            else:
-                dest.append(character)
+        def is_not_empty(substring):
+            return substring.text != ""
 
-        add_attrs()
+        substrings = filter(is_not_empty, substrings)
 
-        return "".join(dest).split('\n')
+        return WeechatToMarkdown.build_string(substrings).split("\n")
 
 
 class MarkdownColor(InlineProcessor):
