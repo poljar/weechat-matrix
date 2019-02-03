@@ -181,3 +181,7 @@ class TestClass(unittest.TestCase):
             </p>
             """)
         )
+
+    def test_to_and_from_html(self):
+        parser = Parser.from_weechat("\x0301T\x0302e\x0303s\x0304t")
+        assert Parser.from_html(parser.to_html()).to_html() == parser.to_html()

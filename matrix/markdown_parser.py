@@ -280,12 +280,13 @@ class Parser(Markdown):
         supported.
         """
         parser = cls()
+        parser.source = input_string
 
         if not input_string.strip():
-            return ''  # a blank unicode string
+            parser.document_tree = etree.Element("")
+            return parser
 
         source = str(input_string)
-        parser.source = source
 
         parser.lines = source.split("\n")
         for prep in parser.preprocessors:
@@ -307,7 +308,13 @@ class Parser(Markdown):
 
         Only the allowed subset of HTML in the matrix spec is supported.
         """
-        raise NotImplementedError()
+        # TODO this needs to be done differently so that only allowed tags are
+        # parsed
+        parser = cls()
+        parser.source = html_source
+        parser.document_tree = etree.fromstring(html_source)
+
+        return parser
 
     def to_weechat(self):
         """Convert the parsed document to a string for weechat to display."""
@@ -317,20 +324,15 @@ class Parser(Markdown):
         """Convert the parsed document to a html string."""
         output = self.serializer(self.document_tree)
 
-        if self.stripTopLevelTags:
-            try:
-                start = output.index(
-                    '<%s>' % self.doc_tag) + len(self.doc_tag) + 2
-                end = output.rindex('</%s>' % self.doc_tag)
-                output = output[start:end].strip()
-            except ValueError:  # pragma: no cover
-                if output.strip().endswith('<%s />' % self.doc_tag):
-                    # We have an empty document
-                    output = ''
-                else:
-                    # We have a serious problem
-                    raise ValueError('Markdown failed to strip top-level '
-                                     'tags. Document=%r' % output.strip())
+        try:
+            start = output.index(
+                '<%s>' % self.doc_tag) + len(self.doc_tag) + 2
+            end = output.rindex('</%s>' % self.doc_tag)
+            output = output[start:end].strip()
+        except ValueError:  # pragma: no cover
+            if output.strip().endswith('<%s />' % self.doc_tag):
+                # We have an empty document
+                output = ''
 
         # Run the text post-processors
         for pp in self.postprocessors:
