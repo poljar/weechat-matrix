@@ -180,7 +180,7 @@ def wrap_socket(server, file_descriptor):
 
     ssl_socket = server.ssl_context.wrap_socket(
         sock, do_handshake_on_connect=False,
-        server_hostname=server.config.address)  # type: ssl.SSLSocket
+        server_hostname=server.address)  # type: ssl.SSLSocket
 
     server.socket = ssl_socket
 

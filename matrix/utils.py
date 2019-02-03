@@ -82,7 +82,7 @@ def server_buffer_set_title(server):
         ip_string = ""
 
     title = ("Matrix: {address}:{port}{ip}").format(
-        address=server.config.address, port=server.config.port, ip=ip_string
+        address=server.address, port=server.config.port, ip=ip_string
     )
 
     W.buffer_set(server.server_buffer, "title", title)

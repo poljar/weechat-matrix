@@ -251,6 +251,7 @@ class MatrixServer(object):
         except NotImplementedError:
             pass
 
+        self.address = None
         self.client = None
         self.access_token = None                         # type: Optional[str]
         self.next_batch = None                           # type: Optional[str]
@@ -336,15 +337,18 @@ class MatrixServer(object):
                 netloc, path = (address, "")
 
         path = path.strip("/")
-        netloc = "{}:{}".format(netloc, port)
 
-        return "/".join([netloc, path]).rstrip("/")
+        return netloc, "/".join([
+            "{}:{}".format(netloc, port),
+            path
+        ]).rstrip("/")
 
     def _change_client(self):
-        host = MatrixServer._parse_url(
+        netloc, host = MatrixServer._parse_url(
             self.config.address,
             str(self.config.port)
         )
+        self.address = netloc
         self.client = HttpClient(
             host,
             self.config.username,
@@ -558,7 +562,6 @@ class MatrixServer(object):
     def connect(self):
         # type: (MatrixServer) -> int
         if not self.config.address or not self.config.port:
-            W.prnt("", self.config.address)
             message = "{prefix}Server address or port not set".format(
                 prefix=W.prefix("error")
             )
@@ -589,7 +592,7 @@ class MatrixServer(object):
             "{prefix}matrix: Connecting to " "{server}:{port}{ssl}..."
         ).format(
             prefix=W.prefix("network"),
-            server=self.config.address,
+            server=self.address,
             port=self.config.port,
             ssl=ssl_message,
         )
@@ -598,7 +601,7 @@ class MatrixServer(object):
 
         W.hook_connect(
             self.config.proxy,
-            self.config.address,
+            self.address,
             self.config.port,
             1,
             0,

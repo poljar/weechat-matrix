@@ -6,14 +6,21 @@ G.CONFIG = MockConfig()
 
 class TestClass(object):
     def test_address_parsing(self):
-        host = MatrixServer._parse_url("example.org", "443")
+        netloc, host = MatrixServer._parse_url("example.org", "443")
         assert host == "example.org:443"
+        assert netloc == "example.org"
 
-        host = MatrixServer._parse_url("example.org/_matrix", "443")
+        netloc, host = MatrixServer._parse_url("example.org/_matrix", "443")
         assert host == "example.org:443/_matrix"
+        assert netloc == "example.org"
 
-        host = MatrixServer._parse_url("https://example.org/_matrix", "443")
+        netloc, host = MatrixServer._parse_url(
+            "https://example.org/_matrix",
+            "443"
+        )
         assert host == "example.org:443/_matrix"
+        assert netloc == "example.org"
 
-        host = MatrixServer._parse_url("https://example.org", "443")
+        netloc, host = MatrixServer._parse_url("https://example.org", "443")
         assert host == "example.org:443"
+        assert netloc == "example.org"
