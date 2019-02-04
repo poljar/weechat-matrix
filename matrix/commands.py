@@ -1078,7 +1078,7 @@ def matrix_upload_command_cb(data, buffer, args):
 
         upload = Upload(
             server.name,
-            server.client.host,
+            server.config.address,
             server.client.access_token,
             room_buffer.room.room_id,
             parsed_args.file,
