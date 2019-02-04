@@ -325,7 +325,7 @@ class MatrixServer(object):
             device_file.write(self.device_id)
 
     @staticmethod
-    def _parse_url(address, port):
+    def _parse_url(address):
         parsed_url = urlparse(address)
 
         if parsed_url.netloc:
@@ -336,24 +336,18 @@ class MatrixServer(object):
             except ValueError:
                 netloc, path = (address, "")
 
-        path = path.strip("/")
-
-        return netloc, "/".join([
-            "{}:{}".format(netloc, port),
-            path
-        ]).rstrip("/")
+        return netloc, path.strip("/")
 
     def _change_client(self):
-        netloc, host = MatrixServer._parse_url(
-            self.config.address,
-            str(self.config.port)
-        )
+        netloc, extra_path = MatrixServer._parse_url(self.config.address)
+        host = "{}:{}".format(netloc, self.config.port)
         self.address = netloc
         self.client = HttpClient(
             host,
             self.config.username,
             self.device_id,
-            self.get_session_path()
+            self.get_session_path(),
+            extra_path=extra_path
         )
 
     def update_option(self, option, option_name):
