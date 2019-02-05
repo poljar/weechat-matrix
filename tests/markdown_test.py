@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import unittest
 from matrix.markdown_parser import Parser, MatrixHtmlParser
 from markdown import markdown
@@ -10,6 +12,10 @@ class TestClass(unittest.TestCase):
     def assertParserRendersHtml(self, source, expected):
         parser = Parser.from_weechat(source)
         self.assertMultiLineEqual(parser.to_html(), expected)
+
+    def assertParserRendersWeechat(self, source, expected):
+        parser = Parser.from_html(source)
+        self.assertMultiLineEqual(parser.to_weechat(), expected)
 
     def dedent(self, text):
         if text.endswith("\n"):
@@ -190,3 +196,35 @@ class TestClass(unittest.TestCase):
         parser = MatrixHtmlParser()
         parser.feed("<p><strong>Hello</strong></p>")
         assert parser.document_tree[0][0].text == "Hello"
+
+    def test_weechat_formatter(self):
+        formatted = Parser.from_weechat("*Hello*")
+        assert "\x1b[03mHello\x1b[023m" == formatted.to_weechat()
+
+        self.assertParserRendersWeechat(
+            "<strong>Hello</strong>",
+            "\x1b[01mHello\x1b[021m"
+        )
+
+        self.assertParserRendersWeechat(
+            "<strong><em>Hello</em></strong>",
+            "\x1b[01m\x1b[03mHello\x1b[023m\x1b[021m"
+        )
+        self.assertParserRendersWeechat(
+            "<u><strong><em>Hello</em></strong></u>",
+            "\x1b[04m\x1b[01m\x1b[03mHello\x1b[023m\x1b[021m\x1b[024m"
+        )
+
+    def test_weechat_formatter_del(self):
+        self.assertParserRendersWeechat(
+            "<del>Hello</del>",
+            "\x1b[09mHello\x1b[29m"
+        )
+        self.assertParserRendersWeechat(
+            "<strong><del>Hello</del></strong>",
+            "\x1b[01m\x1b[09mHello\x1b[29m\x1b[021m"
+        )
+        self.assertParserRendersWeechat(
+            "<del><strong>Hello</strong></del>",
+            "\x1b[09m\x1b[01mHello\x1b[021m\x1b[29m"
+        )

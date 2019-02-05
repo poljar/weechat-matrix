@@ -27,6 +27,7 @@ from markdown.util import etree
 from markdown.preprocessors import Preprocessor
 from markdown.inlinepatterns import InlineProcessor, SimpleTagPattern
 
+from matrix.globals import W
 from matrix.colors import (
     color_line_to_weechat,
     color_weechat_to_html,
@@ -410,9 +411,49 @@ class Parser(Markdown):
 
         return parser
 
+    def _add_attribute(self, text, attribute):
+        if attribute == "strong":
+            return "{}{}{}".format(
+                W.color("bold"),
+                text,
+                W.color("-bold"))
+
+        elif attribute == "em":
+            return "{}{}{}".format(
+                W.color("italic"),
+                text,
+                W.color("-italic"))
+
+        elif attribute == "u":
+            return "{}{}{}".format(
+                W.color("underline"),
+                text,
+                W.color("-underline"))
+
+        elif attribute == "del":
+            return "{}{}{}".format(
+                "\x1b[09m",
+                text,
+                "\x1b[29m")
+
+        else:
+            return text
+
+    def _to_weechat(self, element):
+        text = ""
+
+        for child in element:
+            text = self._to_weechat(child)
+
+        text = text + (element.text or "")
+        text = self._add_attribute(text, element.tag)
+
+        return text
+
     def to_weechat(self):
         """Convert the parsed document to a string for weechat to display."""
-        raise NotImplementedError()
+        out = self._to_weechat(self.document_tree)
+        return out.strip()
 
     def to_html(self):
         """Convert the parsed document to a html string."""
