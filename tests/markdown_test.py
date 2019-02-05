@@ -188,6 +188,17 @@ class TestClass(unittest.TestCase):
             """)
         )
 
+        self.assertParserRendersHtml(
+            "\x0304Hello\x03",
+            "<p><font data-mx-color=\"#ff0000\">Hello</font></p>"
+        )
+
+        self.assertParserRendersHtml(
+            "\x0304,Hello\x03,",
+            "<p><font data-mx-color=\"#ff0000\">,Hello</font>,</p>"
+        )
+
+
     def test_to_and_from_html(self):
         parser = Parser.from_weechat("\x0301T\x0302e\x0303s\x0304t")
         assert Parser.from_html(parser.to_html()).to_html() == parser.to_html()

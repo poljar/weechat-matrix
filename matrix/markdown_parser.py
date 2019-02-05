@@ -242,7 +242,7 @@ class WeechatToMarkdown(Preprocessor):
                 i = i + 1
 
                 # check if it's a valid color, add it to the attributes
-                if line[i].isdigit():
+                if i < len(line) and line[i].isdigit():
                     color_string = line[i]
                     i = i + 1
 
@@ -258,11 +258,13 @@ class WeechatToMarkdown(Preprocessor):
                     attributes["fgcolor"] = None
 
                 # check if we have a background color
-                if line[i] == "," and line[i + 1].isdigit():
+                if (i + 1 < len(line) and
+                        line[i] == "," and
+                        line[i + 1].isdigit()):
                     color_string = line[i + 1]
                     i = i + 2
 
-                    if line[i].isdigit():
+                    if i < len(line) and line[i].isdigit():
                         if color_string == "0":
                             color_string = line[i]
                         else:
