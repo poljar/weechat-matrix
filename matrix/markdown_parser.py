@@ -445,9 +445,9 @@ class Parser(Markdown):
         text = ""
 
         for child in element:
-            text = self._to_weechat(child)
+            text += self._to_weechat(child)
 
-        text = text + (element.text or "")
+        text = text + (element.text or "") + (element.tail or "")
         text = self._add_attribute(text, element.tag)
 
         return text
