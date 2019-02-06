@@ -95,8 +95,10 @@ class MatrixHtmlParser(HTMLParser):
 
     def open_element(self, tag):
         new_node = etree.SubElement(self.current_node, tag)
+        # TODO limit tag nesting to 100 levels per spec.
         self.node_stack.append(self.current_node)
         self.current_node = new_node
+        self.last_node = None
 
     def close_element(self, tag):
         if not self.current_node:
@@ -108,13 +110,20 @@ class MatrixHtmlParser(HTMLParser):
         if not self.node_stack:
             self.current_node = etree.Element("div")
 
+        self.last_node = self.current_node
         self.current_node = self.node_stack.pop()
 
     def add_text(self, text):
-        if not self.current_node.text:
-            self.current_node.text = text
+        if self.last_node is None:
+            if self.current_node.text is None:
+                self.current_node.text = text
+            else:
+                self.current_node.text += text
         else:
-            self.current_node.text += text
+            if self.last_node.tail is None:
+                self.last_node.tail = text
+            else:
+                self.last_node.tail += text
 
     def handle_starttag(self, tag, attrs):
         if tag in MatrixHtmlParser.supported_tags:
@@ -212,11 +221,11 @@ class WeechatToMarkdown(Preprocessor):
         return "".join(md_string)
 
     def run(self, lines):
-        emph = "\x1D"
-        bold = "\x02"
-        reset = "\x0F"
+        emph      = "\x1D"
+        bold      = "\x02"
+        reset     = "\x0F"
         underline = "\x1F"
-        color = "\x03"
+        color     = "\x03"
 
         text = ""  # type: str
         substrings = []  # type: List[FormattedString]
@@ -403,8 +412,6 @@ class Parser(Markdown):
 
         Only the allowed subset of HTML in the matrix spec is supported.
         """
-        # TODO this needs to be done differently so that only allowed tags are
-        # parsed
         parser = cls()
         html_parser = MatrixHtmlParser()
         html_parser.feed(html_source)
@@ -447,8 +454,9 @@ class Parser(Markdown):
         for child in element:
             text += self._to_weechat(child)
 
-        text = text + (element.text or "") + (element.tail or "")
+        text += (element.text or "")
         text = self._add_attribute(text, element.tag)
+        text += (element.tail or "")
 
         return text
 

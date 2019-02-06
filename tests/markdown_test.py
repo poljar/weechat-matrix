@@ -3,6 +3,7 @@
 import unittest
 from matrix.markdown_parser import Parser, MatrixHtmlParser
 from markdown import markdown
+from markdown.util import etree
 import textwrap
 import re
 import pdb
@@ -208,6 +209,15 @@ class TestClass(unittest.TestCase):
         parser.feed("<p><strong>Hello</strong></p>")
         assert parser.document_tree[0][0].text == "Hello"
 
+        parser = MatrixHtmlParser()
+        parser.feed("<strong>Hello</strong> <em>world</em>")
+        assert (etree.tostring(parser.document_tree) ==
+                b"<div><strong>Hello</strong> <em>world</em></div>")
+
+        parser = Parser.from_html("<strong>Hello</strong> <em>world</em>")
+        assert (parser.to_html() ==
+                "<strong>Hello</strong> <em>world</em>")
+
     def test_weechat_formatter(self):
         formatted = Parser.from_weechat("*Hello*")
         assert "\x1b[03mHello\x1b[023m" == formatted.to_weechat()
@@ -246,6 +256,6 @@ class TestClass(unittest.TestCase):
             "<p><strong><em>Hello</em></strong> <em>world</em></p>"
         )
         self.assertParserRendersWeechat(
-            "<strong>Hello</strong> <em> world.</em>",
-            "\x1b[01mHello\x1b[021m\x1b[03m world.\x1b[023m"
+            "<strong>Hello</strong> <em>world.</em>",
+            "\x1b[01mHello\x1b[021m \x1b[03mworld.\x1b[023m"
         )
