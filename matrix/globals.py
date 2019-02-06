@@ -28,6 +28,7 @@ if False:
     from .config import MatrixConfig
     from .uploads import Upload
 
+CONFIG = None  # type: Optional[MatrixConfig]
 
 try:
     import weechat
@@ -35,11 +36,12 @@ try:
     W = weechat if sys.hexversion >= 0x3000000 else WeechatWrapper(weechat)
 except ImportError:
     import matrix._weechat as weechat  # type: ignore
+    from matrix._weechat import MockConfig
 
     W = weechat
+    CONFIG = MockConfig()
 
 SERVERS = dict()  # type: Dict[str, MatrixServer]
-CONFIG = None  # type: Optional[MatrixConfig]
 ENCRYPTION = True  # type: bool
 SCRIPT_NAME = "matrix"  # type: str
 MAX_EVENTS = 100

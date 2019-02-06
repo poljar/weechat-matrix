@@ -26,12 +26,12 @@ from functools import partial
 from nio import EncryptionError
 
 from . import globals as G
-from .colors import Formatted
 from .globals import SERVERS, W, UPLOADS, SCRIPT_NAME
 from .server import MatrixServer
 from .utf import utf8_decode
 from .utils import key_from_value, tags_from_line_data
 from .uploads import UploadsBuffer, Upload
+from .markdown_parser import Parser
 
 
 class ParseError(Exception):
@@ -803,9 +803,9 @@ def matrix_me_command_cb(data, buffer, args):
             if not args:
                 return W.WEECHAT_RC_OK
 
-            formatted_data = Formatted.from_input_line(args)
+            message = Parser.from_weechat(args)
 
-            server.room_send_message(room_buffer, formatted_data, "m.emote")
+            server.room_send_message(room_buffer, message, "m.emote")
             return W.WEECHAT_RC_OK
 
         if buffer == server.server_buffer:
