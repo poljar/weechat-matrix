@@ -259,3 +259,26 @@ class TestClass(unittest.TestCase):
             "<strong>Hello</strong> <em>world.</em>",
             "\x1b[01mHello\x1b[021m \x1b[03mworld.\x1b[023m"
         )
+
+    def test_weechat_formatter_colors(self):
+        self.assertParserRendersWeechat(
+            "<font data-mx-color=fuchsia>Hello</font>",
+            "\x1b[038;5;13mHello\x1b[039m"
+        )
+        self.assertParserRendersWeechat(
+            "<font data-mx-color=>Hello</font>",
+            "Hello"
+        )
+        self.assertParserRendersWeechat(
+            "<font data-mx-bg-color=blue>Hello</font>",
+            "\x1b[048;5;12mHello\x1b[039m"
+        )
+        self.assertParserRendersWeechat(
+            "<font data-mx-color=black data-mx-bg-color=blue>Hello</font>",
+            "\x1b[038;5;0;48;5;12mHello\x1b[039m"
+        )
+        self.assertParserRendersWeechat(
+            "<strong><font data-mx-color=black "
+            "data-mx-bg-color=blue>Hello</font></strong>",
+            "\x1b[01m\x1b[038;5;0;48;5;12mHello\x1b[039m\x1b[021m"
+        )

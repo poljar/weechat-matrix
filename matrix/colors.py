@@ -834,6 +834,12 @@ def color_html_to_weechat(color):
         (255, 255, 255): "white",       # 15
     }
     # yapf: enable
+    if color == "" or color is None:
+        return ""
+
+    # html5_parse_legacy_color requires unicode strings.
+    if not isinstance(color, str):
+        color = str(color)
 
     try:
         rgb_color = webcolors.html5_parse_legacy_color(color)

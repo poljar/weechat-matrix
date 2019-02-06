@@ -33,6 +33,7 @@ from matrix.colors import (
     color_weechat_to_html,
     color_html_to_weechat
 )
+from matrix.utils import color_pair, string_color
 
 
 try:
@@ -420,7 +421,9 @@ class Parser(Markdown):
 
         return parser
 
-    def _add_attribute(self, text, attribute):
+    def _add_attribute(self, text, element):
+        attribute = element.tag
+
         if attribute == "strong":
             return "{}{}{}".format(
                 W.color("bold"),
@@ -445,6 +448,15 @@ class Parser(Markdown):
                 text,
                 "\x1b[29m")
 
+        elif attribute == "font":
+            color = color_html_to_weechat(element.get("data-mx-color"))
+            bg_color = color_html_to_weechat(element.get("data-mx-bg-color"))
+
+            if not color and not bg_color:
+                return text
+
+            return string_color(text, color_pair(color, bg_color))
+
         else:
             return text
 
@@ -455,7 +467,7 @@ class Parser(Markdown):
             text += self._to_weechat(child)
 
         text += (element.text or "")
-        text = self._add_attribute(text, element.tag)
+        text = self._add_attribute(text, element)
         text += (element.tail or "")
 
         return text
