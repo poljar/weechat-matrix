@@ -41,7 +41,7 @@ class MockConfig(object):
             'unconfirmed_message_bg': "",
             'unconfirmed_message_fg': "",
             'untagged_code_bg': "",
-            'untagged_code_fg': "",
+            'untagged_code_fg': "blue",
         },
         'upload_buffer': {
             'display': None,
@@ -58,7 +58,7 @@ class MockConfig(object):
             'encrypted_room_sign': None,
             'encryption_warning_sign': None,
             'max_typing_notice_item_length': None,
-            'pygments_style': None,
+            'pygments_style': "native",
             'redactions': None,
             'server_buffer': None,
         },

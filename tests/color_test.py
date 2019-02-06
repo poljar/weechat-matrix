@@ -52,7 +52,7 @@ def test_normalize_spaces_in_inline_code():
 
     Strips leading and trailing spaces and compress consecutive infix spaces.
     """
-    valid_result = '\x1b[0m* a *\x1b[00m'
+    valid_result = "\x1b[038;5;4m* a *\x1b[00m"
 
     formatted = Formatted.from_input_line('`   *    a   *   `')
     assert formatted.to_weechat() == valid_result

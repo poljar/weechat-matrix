@@ -290,7 +290,6 @@ class TestClass(unittest.TestCase):
         )
 
     def test_weechat_formatter_blockquotes(self):
-        self.maxDiff = None
         self.assertParserRendersWeechat(
             "<blockquote>{}</blockquote>".format(lorem),
             "\x1b[0m> Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed\n"
@@ -301,4 +300,17 @@ class TestClass(unittest.TestCase):
             "\x1b[0m> dolore eu fugiat nulla pariatur. Excepteur sint occaecat\n"
             "\x1b[0m> cupidatat nonproident, sunt in culpa qui officia deserunt\n"
             "\x1b[0m> mollit anim id est laborum."
+        )
+
+    def test_weechat_formatter_code_blocks(self):
+        self.assertParserRendersWeechat(
+            "<code>Hello</code>",
+            "\x1b[038;5;4mHello\x1b[00m"
+        )
+
+        self.assertParserRendersWeechat(
+            "<pre><code class=language-python>print(\"Hello world\")</code></pre>",
+            "\x1b[038;5;70m\x1b[01mprint\x1b[021m\x1b[039m\x1b[038;5;252m"
+            "(\x1b[039m\x1b[038;5;214m\"Hello world\"\x1b[039m\x1b[038;5;252m)"
+            "\x1b[039m\x1b[038;5;252m\n\x1b[039m"
         )

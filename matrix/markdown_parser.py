@@ -29,14 +29,26 @@ from markdown.util import etree
 from markdown.preprocessors import Preprocessor
 from markdown.inlinepatterns import InlineProcessor, SimpleTagPattern
 
+from pygments import highlight
+from pygments.formatter import get_style_by_name
+from pygments.lexers import get_lexer_by_name
+from pygments.util import ClassNotFound
+
 import matrix.globals as G
 from matrix.globals import W
 from matrix.colors import (
+    WeechatFormatter,
     color_line_to_weechat,
     color_weechat_to_html,
     color_html_to_weechat
 )
-from matrix.utils import color_pair, string_color
+from matrix.utils import (
+    color_pair,
+    string_color,
+    string_color_and_reset,
+    text_block,
+    colored_text_block
+)
 
 
 try:
@@ -75,7 +87,8 @@ class FormattedString:
 
 class MatrixHtmlParser(HTMLParser):
     supported_tags = ["strong", "p", "h1", "h2", "h3", "h4", "h5", "h6",
-                      "br", "font", "blockquote", "em", "u", "del", "pre"]
+                      "br", "font", "blockquote", "em", "u", "del", "pre",
+                      "code"]
 
     def __init__(self):
         HTMLParser.__init__(self)
@@ -84,6 +97,7 @@ class MatrixHtmlParser(HTMLParser):
         self.attributes = DEFAULT_ATTRIBUTES.copy()
         self.document_tree = etree.Element("div")
         self.current_node = self.document_tree
+        self.last_node = None
         self.node_stack = []
 
     def unescape(self, text):
@@ -143,7 +157,8 @@ class MatrixHtmlParser(HTMLParser):
         if tag == "code":
             for key, value in attrs:
                 if key == "class" and value.startswith("language-"):
-                    self.current_node.set("class", value)
+                    lang = value.split("-", 1)[1]
+                    self.current_node.set("class", lang)
 
     def handle_endtag(self, tag):
         if tag in MatrixHtmlParser.supported_tags:
@@ -434,9 +449,8 @@ class Parser(Markdown):
 
         return parser
 
-    def _add_attribute(self, text, element):
+    def _add_attribute(self, text, element, preformatted):
         attribute = element.tag
-
         if attribute == "strong":
             return "{}{}{}".format(
                 W.color("bold"),
@@ -475,17 +489,62 @@ class Parser(Markdown):
                 W.string_remove_color(text.replace("\n", ""), "")
             )
 
+        elif attribute == "code":
+            code_color_pair = color_pair(
+                G.CONFIG.color.untagged_code_fg,
+                G.CONFIG.color.untagged_code_bg
+            )
+
+            margin = G.CONFIG.look.code_block_margin
+
+            if preformatted:
+                try:
+                    lexer = get_lexer_by_name(element.get("class"))
+                except ClassNotFound:
+                    if G.CONFIG.look.code_blocks:
+                        return colored_text_block(
+                            text,
+                            margin=margin,
+                            color_pair=code_color_pair)
+                    else:
+                        return string_color_and_reset(text,
+                                                      code_color_pair)
+
+                try:
+                    style = get_style_by_name(G.CONFIG.look.pygments_style)
+                except ClassNotFound:
+                    style = "native"
+
+                if G.CONFIG.look.code_blocks:
+                    code_block = text_block(text, margin=margin)
+                else:
+                    code_block = text
+
+                # highlight adds a newline to the end of the string, remove
+                # it from the output
+                highlighted_code = highlight(
+                    code_block,
+                    lexer,
+                    WeechatFormatter(style=style)
+                ).rstrip()
+
+                return highlighted_code
+            else:
+                return string_color_and_reset(text, code_color_pair)
         else:
             return text
 
-    def _to_weechat(self, element):
+    def _to_weechat(self, element, preformatted=False):
         text = ""
 
+        if element.tag == "pre":
+            preformatted = True
+
         for child in element:
-            text += self._to_weechat(child)
+            text += self._to_weechat(child, preformatted)
 
         text += (element.text or "")
-        text = self._add_attribute(text, element)
+        text = self._add_attribute(text, element, preformatted)
         text += (element.tail or "")
 
         return text
@@ -493,6 +552,37 @@ class Parser(Markdown):
     def to_weechat(self):
         """Convert the parsed document to a string for weechat to display."""
         out = self._to_weechat(self.document_tree)
+        return out.strip()
+
+    def _add_plain_attribute(self, text, element):
+        attribute = element.tag
+
+        if attribute == "em":
+            return "*{}*".format(text)
+
+        else:
+            return text
+
+    def _to_plain(self, element):
+        text = ""
+
+        for child in element:
+            text += self._to_plain(child)
+
+        text += (element.text or "")
+        text = self._add_plain_attribute(text, element)
+        text += (element.tail or "")
+
+        return text
+        pass
+
+    def to_plain(self):
+        """Convert the parsed document to a plain string.
+
+        This is useful when sending messages, this part should go into the body
+        while the to_html() output should go into the formatted_body.
+        """
+        out = self._to_plain(self.document_tree)
         return out.strip()
 
     def to_html(self):
