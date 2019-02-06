@@ -2,12 +2,18 @@
 
 import unittest
 from matrix.markdown_parser import Parser, MatrixHtmlParser
-from markdown import markdown
 from markdown.util import etree
 import textwrap
 import re
-import pdb
 import sys
+
+lorem = """Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo
+consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse
+cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non
+proident, sunt in culpa qui officia deserunt mollit anim id est laborum."""
+
 
 class TestClass(unittest.TestCase):
     def assertParserRendersHtml(self, source, expected):
@@ -281,4 +287,18 @@ class TestClass(unittest.TestCase):
             "<strong><font data-mx-color=black "
             "data-mx-bg-color=blue>Hello</font></strong>",
             "\x1b[01m\x1b[038;5;0;48;5;12mHello\x1b[039m\x1b[021m"
+        )
+
+    def test_weechat_formatter_blockquotes(self):
+        self.maxDiff = None
+        self.assertParserRendersWeechat(
+            "<blockquote>{}</blockquote>".format(lorem),
+            "\x1b[0m> Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed\n"
+            "\x1b[0m> doeiusmod tempor incididunt ut labore et dolore magna aliqua.\n"
+            "\x1b[0m> Ut enim ad minimveniam, quis nostrud exercitation ullamco\n"
+            "\x1b[0m> laboris nisi ut aliquip ex ea commodoconsequat. Duis aute\n"
+            "\x1b[0m> irure dolor in reprehenderit in voluptate velit essecillum\n"
+            "\x1b[0m> dolore eu fugiat nulla pariatur. Excepteur sint occaecat\n"
+            "\x1b[0m> cupidatat nonproident, sunt in culpa qui officia deserunt\n"
+            "\x1b[0m> mollit anim id est laborum."
         )

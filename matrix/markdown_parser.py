@@ -17,6 +17,8 @@
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 import html
+import textwrap
+
 from builtins import super, str
 from enum import Enum
 from typing import List
@@ -27,6 +29,7 @@ from markdown.util import etree
 from markdown.preprocessors import Preprocessor
 from markdown.inlinepatterns import InlineProcessor, SimpleTagPattern
 
+import matrix.globals as G
 from matrix.globals import W
 from matrix.colors import (
     color_line_to_weechat,
@@ -407,6 +410,16 @@ class Parser(Markdown):
         parser.document_tree = root
         return parser
 
+    @property
+    def textwrapper(self):
+        quote_pair = color_pair(G.CONFIG.color.quote_fg,
+                                G.CONFIG.color.quote_bg)
+        return textwrap.TextWrapper(
+            width=67,
+            initial_indent="{}> ".format(W.color(quote_pair)),
+            subsequent_indent="{}> ".format(W.color(quote_pair)),
+        )
+
     @classmethod
     def from_html(cls, html_source):
         """Create a parser object from the weechat input line string.
@@ -456,6 +469,11 @@ class Parser(Markdown):
                 return text
 
             return string_color(text, color_pair(color, bg_color))
+
+        elif attribute == "blockquote":
+            return self.textwrapper.fill(
+                W.string_remove_color(text.replace("\n", ""), "")
+            )
 
         else:
             return text
