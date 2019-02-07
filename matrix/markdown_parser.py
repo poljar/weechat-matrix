@@ -390,7 +390,7 @@ class Weechat(Extension):
 
 class Parser(Markdown):
     def __init__(self):
-        super().__init__(extensions=['extra', Weechat()])
+        super().__init__(extensions=[Weechat()])
         self.source = None
         self.document_tree = None
         self.lines = None
