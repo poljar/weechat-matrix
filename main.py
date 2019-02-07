@@ -74,7 +74,7 @@ from matrix.server import (MatrixServer, create_default_server,
                            matrix_config_server_write_cb, matrix_timer_cb,
                            send_cb, matrix_load_users_cb,
                            matrix_partial_sync_cb)
-from matrix.utf import utf8_decode
+from matrix.utf import utf8_decode, decode_from_utf8
 from matrix.utils import server_buffer_prnt, server_buffer_set_title
 
 from matrix.uploads import UploadsBuffer, upload_cb
@@ -528,6 +528,25 @@ def typing_notification_cb(data, signal, buffer_ptr):
     return W.WEECHAT_RC_OK
 
 
+# Workaround for supporting multiline messages. It intercepts before the input
+# callback is called, as this is called with the whole message, while it is
+# normally split on newline before being sent to buffer_input_callback
+# This function is from weeslack, more info here:
+# https://github.com/wee-slack/wee-slack/commit/4bf54a67516059b352789dc40127d099a06ffd3a
+def input_text_for_buffer_cb(data, modifier, buffer, string):
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            message = decode_from_utf8(string)
+
+            if "\n" in message and not message.startswith("/"):
+                room_buffer_input_cb(server.name, buffer, message)
+                return ""
+
+            return string
+
+    return string
+
+
 if __name__ == "__main__":
     if W.register(WEECHAT_SCRIPT_NAME, WEECHAT_SCRIPT_AUTHOR,
                   WEECHAT_SCRIPT_VERSION, WEECHAT_SCRIPT_LICENSE,
@@ -552,6 +571,11 @@ if __name__ == "__main__":
 
         W.hook_signal("buffer_switch", "buffer_switch_cb", "")
         W.hook_signal("input_text_changed", "typing_notification_cb", "")
+        W.hook_modifier(
+            "input_text_for_buffer",
+            "input_text_for_buffer_cb",
+            ""
+        )
 
         if not SERVERS:
             create_default_server(G.CONFIG)
