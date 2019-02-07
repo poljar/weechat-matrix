@@ -1509,6 +1509,10 @@ class RoomBuffer(object):
             partial(self._find_by_uuid_predicate, uuid), line_count
         )
 
+        # We go through the lines in the buffer from bottom to top, reverse our
+        # line list that has the lines from top to bottom.
+        new_lines = list(reversed(new_lines))
+
         for i, line in enumerate(lines):
             line.message = new_lines[i]
             tags = line.tags
