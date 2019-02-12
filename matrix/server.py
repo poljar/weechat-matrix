@@ -1366,6 +1366,7 @@ class MatrixServer(object):
         elif isinstance(response, KeysClaimResponse):
             self.keys_claimed[response.room_id] = False
             try:
+                self.group_session_shared[response.room_id] = True
                 _, request = self.client.share_group_session(
                     response.room_id,
                     ignore_missing_sessions=True
