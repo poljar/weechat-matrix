@@ -1391,7 +1391,7 @@ class MatrixServer(object):
                     if not self.room_send_message(room_buffer,
                                                   message.formatted_message,
                                                   message.message_type):
-                        self.encryption_queue.pop()
+                        self.encryption_queue[room_id].pop()
                         self.encryption_queue[room_id].appendleft(message)
                         break
                 except OlmTrustError:
