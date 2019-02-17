@@ -1071,11 +1071,6 @@ def matrix_upload_command_cb(data, buffer, args):
         if not room_buffer:
             continue
 
-        if room_buffer.room.encrypted:
-            room_buffer.error("Uploading to encrypted rooms is "
-                              "not yet implemented")
-            return W.WEECHAT_RC_OK
-
         upload = Upload(
             server.name,
             server.config.address,

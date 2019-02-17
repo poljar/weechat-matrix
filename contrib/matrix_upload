@@ -20,9 +20,12 @@ import magic
 import requests
 import argparse
 from urllib.parse import urlparse
+from itertools import zip_longest
 import urllib3
 
 from nio import Api, UploadResponse, UploadError
+from nio.crypto import encrypt_attachment
+
 from json.decoder import JSONDecodeError
 
 urllib3.disable_warnings()
@@ -95,6 +98,41 @@ class Upload(object):
         return self.totalsize
 
 
+def chunk_bytes(iterable, n):
+    args = [iter(iterable)] * n
+    return (
+        bytes(
+            (filter(lambda x: x is not None, chunk))
+        ) for chunk in zip_longest(*args)
+    )
+
+
+class EncryptedUpload(Upload):
+    def __init__(self, file, chunksize=1 << 13):
+        super().__init__(file, chunksize)
+        self.source_mimetype = self.mimetype
+        self.mimetype = "application/octet-stream"
+
+        with open(self.filename, "rb") as file:
+            self.ciphertext, self.file_keys = encrypt_attachment(file.read())
+
+    def send_progress(self):
+        message = {
+            "type": "progress",
+            "data": self.readsofar
+        }
+        to_stdout(message)
+
+    def __iter__(self):
+        for chunk in chunk_bytes(self.ciphertext, self.chunksize):
+            self.readsofar += len(chunk)
+            self.send_progress()
+            yield chunk
+
+    def __len__(self):
+        return len(self.ciphertext)
+
+
 class IterableToFileAdapter(object):
     def __init__(self, iterable):
         self.iterator = iter(iterable)
@@ -109,9 +147,18 @@ class IterableToFileAdapter(object):
 
 def upload_process(args):
     file_path = os.path.expanduser(args.file)
+    thumbnail = None
 
     try:
-        upload = Upload(file_path, 10)
+        if args.encrypt:
+            upload = EncryptedUpload(file_path)
+
+            if upload.source_mimetype.startswith("image"):
+                # TODO create a thumbnail
+                thumbnail = None
+        else:
+            upload = Upload(file_path)
+
     except (FileNotFoundError, OSError, IOError) as e:
         error(e)
 
@@ -153,9 +200,14 @@ def upload_process(args):
         "type": "status",
         "status": "started",
         "total": upload.totalsize,
-        "mimetype": upload.mimetype,
         "file_name": upload.filename,
     }
+
+    if isinstance(upload, EncryptedUpload):
+        message["mimetype"] = upload.source_mimetype
+    else:
+        message["mimetype"] = upload.mimetype
+
     to_stdout(message)
 
     session = requests.Session()
@@ -188,6 +240,9 @@ def upload_process(args):
         "status": "done",
         "url": response.content_uri
     }
+
+    if isinstance(upload, EncryptedUpload):
+        message["file_keys"] = upload.file_keys
 
     to_stdout(message)
 

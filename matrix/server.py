@@ -24,7 +24,16 @@ import time
 import copy
 from collections import defaultdict, deque
 from atomicwrites import atomic_write
-from typing import Any, Deque, Dict, Optional, List, NamedTuple, DefaultDict
+from typing import (
+    Any,
+    Deque,
+    Dict,
+    Optional,
+    List,
+    NamedTuple,
+    DefaultDict,
+    Union
+)
 
 from uuid import UUID
 
@@ -64,6 +73,7 @@ from .config import ConfigSection, Option, ServerBufferType
 from .globals import SCRIPT_NAME, SERVERS, W, MAX_EVENTS, TYPING_NOTICE_TIMEOUT
 from .utf import utf8_decode
 from .utils import create_server_buffer, key_from_value, server_buffer_prnt
+from .uploads import Upload
 
 from .colors import Formatted, FormattedString, DEFAULT_ATTRIBUTES
 
@@ -82,7 +92,7 @@ EncrytpionQueueItem = NamedTuple(
     "EncrytpionQueueItem",
     [
         ("message_type", str),
-        ("formatted_message", Formatted),
+        ("message", Union[Formatted, Upload]),
     ],
 )
 
@@ -797,38 +807,25 @@ class MatrixServer(object):
         try:
             room_buffer = self.find_room_from_id(upload.room_id)
         except (ValueError, KeyError):
-            return False
+            return True
 
         assert self.client
 
         if room_buffer.room.encrypted:
-            room_buffer.error("Uploading to encrypted rooms is "
-                              "not yet implemented")
-            return False
+            assert upload.encrypt
 
-        # TODO the content is different if the room is encrypted.
-        content = {
-            "msgtype": Api.mimetype_to_msgtype(upload.mimetype),
-            "body": upload.file_name,
-            "url": upload.content_uri,
-        }
+        content = upload.content
 
         try:
             uuid = self.room_send_event(upload.room_id, content)
         except (EncryptionError, GroupEncryptionError):
-            # TODO put the message in a queue to resend after group sessions
-            # are shared
-            # message = EncrytpionQueueItem(msgtype, formatted)
-            # self.encryption_queue[room.room_id].append(message)
+            message = EncrytpionQueueItem(upload.msgtype, upload)
+            self.encryption_queue[upload.room_id].append(message)
             return False
-
-        http_url = Api.mxc_to_http(upload.content_uri)
-        description = ("/{}".format(upload.file_name) if upload.file_name
-                       else "")
 
         attributes = DEFAULT_ATTRIBUTES.copy()
         formatted = Formatted([FormattedString(
-            "{url}{desc}".format(url=http_url, desc=description),
+            upload.render,
             attributes
         )])
 
@@ -1386,14 +1383,27 @@ class MatrixServer(object):
             room_buffer = self.room_buffers[room_id]
 
             while self.encryption_queue[room_id]:
-                message = self.encryption_queue[room_id].popleft()
+                item = self.encryption_queue[room_id].popleft()
                 try:
-                    if not self.room_send_message(room_buffer,
-                                                  message.formatted_message,
-                                                  message.message_type):
+                    if item.message_type in [
+                        "m.file",
+                        "m.video",
+                        "m.audio",
+                        "m.image"
+                    ]:
+                        ret = self.room_send_upload(item.message)
+                    else:
+                        ret = self.room_send_message(
+                            room_buffer,
+                            item.message,
+                            item.message_type
+                        )
+
+                    if not ret:
                         self.encryption_queue[room_id].pop()
                         self.encryption_queue[room_id].appendleft(message)
                         break
+
                 except OlmTrustError:
                     self.encryption_queue[room_id].clear()
                     break

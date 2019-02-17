@@ -21,6 +21,7 @@ from __future__ import unicode_literals
 import attr
 import time
 import json
+from typing import Dict, Any
 from uuid import uuid1, UUID
 from enum import Enum
 
@@ -32,6 +33,7 @@ except ImportError:
 from .globals import SCRIPT_NAME, SERVERS, W, UPLOADS
 from .utf import utf8_decode
 from matrix import globals as G
+from nio import Api
 
 
 class UploadState(Enum):
@@ -168,6 +170,62 @@ class Upload(object):
     def abort(self):
         pass
 
+    @property
+    def msgtype(self):
+        # type: () -> str
+        assert self.mimetype
+        return Api.mimetype_to_msgtype(self.mimetype)
+
+    @property
+    def content(self):
+        # type: () -> Dict[Any, Any]
+        assert self.content_uri
+
+        if self.encrypt:
+            content = {
+                "body": self.file_name,
+                "msgtype": self.msgtype,
+                "file": self.file_keys,
+            }
+            content["file"]["url"] = self.content_uri
+            content["file"]["mimetype"] = self.mimetype
+
+            # TODO thumbnail if it's an image
+
+            return content
+
+        return {
+            "msgtype": self.msgtype,
+            "body": self.file_name,
+            "url": self.content_uri,
+        }
+
+    @property
+    def render(self):
+        # type: () -> str
+        assert self.content_uri
+
+        if self.encrypt:
+            http_url = Api.encrypted_mxc_to_plumb(
+                self.content_uri,
+                self.file_keys["key"]["k"],
+                self.file_keys["hashes"]["sha256"],
+                self.file_keys["iv"]
+            )
+            url = http_url if http_url else self.content_uri
+
+            description = "{}".format(self.file_name)
+            return ("{del_color}<{ncolor}{desc}{del_color}>{ncolor} "
+                    "{del_color}[{ncolor}{url}{del_color}]{ncolor}").format(
+                        del_color=W.color("chat_delimiters"),
+                        ncolor=W.color("reset"),
+                        desc=description, url=url)
+
+        http_url = Api.mxc_to_http(self.content_uri)
+        description = ("/{}".format(self.file_name) if self.file_name
+                       else "")
+        return "{url}{desc}".format(url=http_url, desc=description)
+
 
 @attr.s
 class UploadsBuffer(object):
@@ -293,6 +351,7 @@ def handle_child_message(upload, message):
         elif message["status"] == "done":
             upload.state = UploadState.finished
             upload.content_uri = message["url"]
+            upload.file_keys = message.get("file_keys", None)
 
             server = SERVERS.get(upload.server_name, None)
 
