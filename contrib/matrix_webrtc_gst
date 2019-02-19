@@ -1,0 +1,353 @@
+#!/usr/bin/python3 -u
+# Copyright © 2019 Damir Jelić <poljar@termina.org.uk>
+#
+# Permission to use, copy, modify, and/or distribute this software for
+# any purpose with or without fee is hereby granted, provided that the
+# above copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER
+# RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF
+# CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+"""Webrtc client transporting the signaling over stdin/stdout."""
+
+import os
+import sys
+import json
+import signal
+import argparse
+import asyncio
+
+import gi
+import gbulb
+
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk
+gi.require_version('Gst', '1.0')
+from gi.repository import Gst
+gi.require_version('GstWebRTC', '1.0')
+from gi.repository import GstWebRTC
+gi.require_version('GstSdp', '1.0')
+from gi.repository import GstSdp
+
+asyncio.set_event_loop_policy(gbulb.GLibEventLoopPolicy())
+
+PIPELINE_DESC = """
+webrtcbin name=sendrecv bundle-policy=max-bundle
+    videotestsrc is-live=true pattern=ball ! videoconvert ! queue !
+        vp8enc deadline=1 ! rtpvp8pay ! queue !
+         application/x-rtp,media=video,encoding-name=VP8,payload=97 ! sendrecv.
+    audiotestsrc is-live=true wave=red-noise ! audioconvert ! audioresample !
+        queue ! opusenc ! rtpopuspay ! queue !
+        application/x-rtp,media=audio,encoding-name=OPUS,payload=96 ! sendrecv.
+"""
+
+
+class IceCandidate:
+    def __init__(self, candidate: str, sdpMLineIndex: int, sdpMid=None):
+        self.candidate = candidate
+        self.sdpMLineIndex = sdpMLineIndex
+        self.sdpMid = sdpMid
+
+
+def object_from_string(message_str):
+    try:
+        message = json.loads(message_str)
+    except json.decoder.JSONDecodeError:
+        return
+
+    if message["type"] in ["answer", "offer"]:
+        msg_type = (GstWebRTC.WebRTCSDPType.ANSWER
+                    if message["type"] == "answer" else
+                    GstWebRTC.WebRTCSDPType.OFFER)
+
+        res, sdpmsg = GstSdp.SDPMessage.new()
+        GstSdp.sdp_message_parse_buffer(bytes(message["sdp"].encode()), sdpmsg)
+
+        return GstWebRTC.WebRTCSessionDescription.new(msg_type, sdpmsg)
+
+    elif message["type"] == "candidate":
+        candidate = IceCandidate(
+            message["candidate"],
+            message["sdpMLineIndex"],
+            message.get("sdpMid", None)
+        )
+        return candidate
+
+
+def object_to_string(obj):
+    if isinstance(obj, GstWebRTC.WebRTCSessionDescription):
+        message = {
+            "sdp": obj.sdp.as_text(),
+            "type": GstWebRTC.WebRTCSDPType.to_string(obj.type)
+        }
+
+    elif isinstance(obj, IceCandidate):
+        message = {
+            "candidate": obj.candidate,
+            "sdpMLineIndex": obj.sdpMLineIndex,
+            "type": "candidate",
+        }
+
+        if obj.sdpMid:
+            message["sdpMid"] = obj.sdpMid
+
+    return json.dumps(message, sort_keys=True)
+
+
+class StinStdoutSignaling:
+    def __init__(self):
+        self._read_pipe = os.sys.stdin
+        self._read_transport = None
+        self._reader = None
+        self._write_pipe = os.sys.stdout
+
+    async def _connect(self):
+        if self._reader is not None:
+            return
+
+        loop = asyncio.get_event_loop()
+        self._reader = asyncio.StreamReader(loop=loop)
+        self._read_transport, _ = await loop.connect_read_pipe(
+            lambda: asyncio.StreamReaderProtocol(self._reader),
+            self._read_pipe)
+
+    async def close(self):
+        if self._reader is not None:
+            self._read_transport.close()
+            self._reader = None
+
+    async def receive(self):
+        await self._connect()
+        data = await self._reader.readline()
+        return object_from_string(data.decode(self._read_pipe.encoding))
+
+    async def send(self, obj):
+        self._write_pipe.write(object_to_string(obj) + "\n")
+
+
+class WebRTCClient(Gtk.Box):
+    def __init__(self, role):
+        super().__init__()
+
+        self.role = role
+
+        self.signaling = StinStdoutSignaling()
+        self.pipe = Gst.parse_launch(PIPELINE_DESC)
+
+        self.webrtc = self.pipe.get_by_name('sendrecv')
+        self.webrtc.connect('on-negotiation-needed', self.on_negotiation_needed)
+        self.webrtc.connect('on-ice-candidate', self.send_ice_candidate_message)
+        self.webrtc.connect('pad-added', self.on_incoming_stream)
+
+        self.bin = Gst.parse_bin_from_description("videotestsrc", True)
+        self.connect('realize', self._on_realize)
+        self.sink = None
+
+    def _on_realize(self, widget):
+        factory = self.pipe.get_factory()
+        gtksink = factory.make('gtksink')
+        self.pack_start(gtksink.props.widget, True, True, 0)
+        gtksink.props.widget.show()
+        self.sink = gtksink
+
+
+    def send_sdp_offer(self, offer):
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self.signaling.send(offer))
+
+    def on_offer_created(self, promise, _, __):
+        promise.wait()
+        reply = promise.get_reply()
+        offer = reply['offer']
+
+        promise = Gst.Promise.new()
+        self.webrtc.emit('set-local-description', offer, promise)
+
+        promise.interrupt()
+        self.send_sdp_offer(offer)
+
+    def on_negotiation_needed(self, element):
+        promise = Gst.Promise.new_with_change_func(
+            self.on_offer_created,
+            element,
+            None
+        )
+        element.emit('create-offer', None, promise)
+
+    def on_answer_create(self, promise, _, __):
+        promise.wait()
+        reply = promise.get_reply()
+        answer = reply['answer']
+
+        promise = Gst.Promise.new()
+        self.webrtc.emit('set-local-description', answer, promise)
+        promise.interrupt()
+
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self.signaling.send(answer))
+
+    def send_answer(self):
+        promise = Gst.Promise.new_with_change_func(
+            self.on_answer_create,
+            self.webrtc,
+            None
+        )
+        self.webrtc.emit('create-answer', None, promise)
+
+    def send_ice_candidate_message(self, _, mlineindex, candidate):
+        candidate = IceCandidate(candidate, mlineindex)
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self.signaling.send(candidate))
+
+    def on_incoming_decodebin_stream(self, _, pad):
+        if not pad.has_current_caps():
+            return
+
+        caps = pad.get_current_caps()
+
+        if not caps:
+            return
+
+        s = caps[0]
+        name = s.get_name()
+
+        if name.startswith('video'):
+            q = Gst.ElementFactory.make('queue')
+            conv = Gst.ElementFactory.make('videoconvert')
+
+            self.pipe.add(q, conv, self.sink)
+            self.pipe.sync_children_states()
+
+            pad.link(q.get_static_pad('sink'))
+            q.link(conv)
+            conv.link(self.sink)
+
+        elif name.startswith('audio'):
+            q = Gst.ElementFactory.make('queue')
+            conv = Gst.ElementFactory.make('audioconvert')
+            resample = Gst.ElementFactory.make('audioresample')
+            sink = Gst.ElementFactory.make('autoaudiosink')
+
+            self.pipe.add(q, conv, resample, sink)
+            self.pipe.sync_children_states()
+
+            pad.link(q.get_static_pad('sink'))
+            q.link(conv)
+            conv.link(resample)
+            resample.link(sink)
+
+    def on_incoming_stream(self, _, pad):
+        if pad.direction != Gst.PadDirection.SRC:
+            return
+
+        decodebin = Gst.ElementFactory.make('decodebin')
+        decodebin.connect('pad-added', self.on_incoming_decodebin_stream)
+
+        self.pipe.add(decodebin)
+        decodebin.sync_state_with_parent()
+        self.webrtc.link(decodebin)
+
+    def start_pipeline(self):
+        self.pipe.set_state(Gst.State.PLAYING)
+
+    async def loop(self):
+        print(self.role)
+        if self.role == "offer":
+            self.start_pipeline()
+
+        while True:
+            message = await self.signaling.receive()
+
+            if isinstance(message, GstWebRTC.WebRTCSessionDescription):
+                promise = Gst.Promise.new()
+                self.webrtc.emit(
+                    'set-remote-description',
+                    message,
+                    promise
+                )
+                promise.interrupt()
+
+                if message.type == GstWebRTC.WebRTCSDPType.OFFER:
+                    self.start_pipeline()
+                    self.send_answer()
+
+            elif isinstance(message, IceCandidate):
+                self.webrtc.emit(
+                    'add-ice-candidate',
+                    message.sdpMLineIndex,
+                    message.candidate
+                )
+
+        return 0
+
+
+def check_plugins():
+    needed = ["opus", "vpx", "nice", "webrtc", "dtls", "srtp", "rtp",
+              "rtpmanager", "videotestsrc", "audiotestsrc"]
+    missing = list(
+        filter(lambda p: Gst.Registry.get().find_plugin(p) is None, needed)
+    )
+    if len(missing):
+        print('Missing gstreamer plugins:', missing)
+        return False
+    return True
+
+
+def quit_handler(signum, frame):
+    loop = asyncio.get_event_loop()
+    loop.stop()
+
+
+if __name__=='__main__':
+    Gst.init(None)
+
+    if not check_plugins():
+        sys.exit(1)
+
+    parser = argparse.ArgumentParser(
+        description="Video stream from the command line"
+    )
+    parser.add_argument("role", choices=["offer", "answer"])
+
+    args = parser.parse_args()
+
+    client = WebRTCClient(args.role)
+    window = Gtk.ApplicationWindow(title="Simple WebRTC client")
+
+    hangup = Gtk.Button.new_from_icon_name("call-stop", 6)
+    microphone = Gtk.Button.new_from_icon_name("audio-input-microphone", 6)
+    cammera = Gtk.Button.new_from_icon_name("camera-web", 6)
+
+    buttonbox = Gtk.HBox()
+    buttonbox.add(cammera)
+    buttonbox.add(microphone)
+    buttonbox.add(hangup)
+
+    box = Gtk.VBox()
+    box.pack_start(client, True, True, 0)
+    box.pack_start(buttonbox, False, False, 0)
+
+    window.add(box)
+
+    window.show_all()
+
+    signal.signal(signal.SIGQUIT, quit_handler)
+
+    def on_destroy(win):
+        loop = asyncio.get_event_loop()
+        loop.close
+
+    window.connect('destroy', on_destroy)
+    loop = asyncio.get_event_loop()
+
+    try:
+        res = loop.run_until_complete(client.loop())
+    finally:
+        loop.close()
+
+    sys.exit(res)
