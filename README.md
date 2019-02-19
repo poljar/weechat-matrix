@@ -56,12 +56,12 @@ Configuration is completed primarily through the Weechat interface.  First start
 
 1. Now set your username and password:
 
-       /set matrix.server.matrix.org.username johndoe
-       /set matrix.server.matrix.org.password jd_is_awesome
+       /set matrix.server.matrix_org.username johndoe
+       /set matrix.server.matrix_org.password jd_is_awesome
 
 1. Now try to connect:
 
-       /matrix connect matrix.org
+       /matrix connect matrix_org
 
 1. If everything works, save the configuration
 
