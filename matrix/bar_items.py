@@ -32,7 +32,10 @@ def matrix_bar_item_plugin(data, item, window, buffer, extra_info):
                 name=server.name,
             )
 
-    return ""
+    ptr_plugin = W.buffer_get_pointer(buffer, "plugin")
+    name = W.plugin_get_name(ptr_plugin)
+
+    return name
 
 
 @utf8_decode
@@ -65,6 +68,24 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
                 del_color=W.color("bar_delim"),
                 name=server.name,
             )
+
+    name = W.buffer_get_string(buffer, "name")
+
+    if name:
+        localvar_type = W.buffer_get_string(buffer, "localvar_type")
+        is_channel = localvar_type == "channel"
+
+        if is_channel:
+            name = W.buffer_get_string(buffer, "localvar_channel")
+
+        return "{}{}{}{}{}{}".format(
+                W.color("bar_delim") if is_channel else "",
+                "(" if is_channel else "",
+                W.color("status_name"),
+                name,
+                W.color("bar_delim") if is_channel else "",
+                ")" if is_channel else "",
+        )
 
     return ""
 
@@ -126,6 +147,12 @@ def matrix_bar_nicklist_count(data, item, window, buffer, extra_info):
             room_buffer = server.find_room_from_ptr(buffer)
             room = room_buffer.room
             return str(room.member_count)
+
+    nick_count = W.buffer_get_integer(buffer, "nicklist_nicks_count")
+    nicklist_enabled = bool(W.buffer_get_integer(buffer, "nicklist"))
+
+    if nicklist_enabled:
+        return str(nick_count)
 
     return ""
 
