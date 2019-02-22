@@ -335,15 +335,13 @@ def finalize_connection(server):
     server.connecting = False
     server.reconnect_delay = 0
 
-    negotiated_protocol = server.socket.selected_alpn_protocol()
+    negotiated_protocol = (server.socket.selected_alpn_protocol() or
+            server.socket.selected_npn_protocol())
 
-    if negotiated_protocol is None:
-        negotiated_protocol = server.socket.selected_npn_protocol()
-
-    if negotiated_protocol == "http/1.1":
-        server.transport_type = TransportType.HTTP
-    elif negotiated_protocol == "h2":
+    if negotiated_protocol == "h2":
         server.transport_type = TransportType.HTTP2
+    else:
+        server.transport_type = TransportType.HTTP
 
     data = server.client.connect(server.transport_type)
     server.send(data)
