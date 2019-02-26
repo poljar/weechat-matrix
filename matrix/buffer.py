@@ -803,6 +803,11 @@ class WeechatChannelBuffer(object):
     def short_name(self):
         return W.buffer_get_string(self._ptr, "short_name")
 
+    @property
+    def number(self):
+        """Get the buffer number, starts at 1."""
+        return int(W.buffer_get_integer(self._ptr, "number"))
+
     @short_name.setter
     def short_name(self, name):
         W.buffer_set(self._ptr, "short_name", name)

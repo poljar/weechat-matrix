@@ -526,6 +526,57 @@ def typing_notification_cb(data, signal, buffer_ptr):
     return W.WEECHAT_RC_OK
 
 
+def buffer_command_cb(data, _, command):
+    """Override the buffer command to allow switching buffers by short name."""
+    command = command[7:].strip()
+
+    buffer_subcommands = ["list", "add", "clear", "move", "swap", "cycle",
+                          "merge", "unmerge", "hide", "unhide", "renumber",
+                          "close", "notify", "localvar", "set", "get"]
+
+    if not command:
+        return W.WEECHAT_RC_OK
+
+    command_words = command.split()
+
+    if len(command_words) >= 1:
+        if command_words[0] in buffer_subcommands:
+            return W.WEECHAT_RC_OK
+
+        elif command_words[0].startswith("*"):
+            return W.WEECHAT_RC_OK
+
+        try:
+            int(command_words[0])
+            return W.WEECHAT_RC_OK
+        except ValueError:
+            pass
+
+    room_buffers = []
+
+    for server in SERVERS.values():
+        room_buffers.extend(server.room_buffers.values())
+
+    sorted_buffers = sorted(
+        room_buffers,
+        key=lambda b: b.weechat_buffer.number
+    )
+
+    for room_buffer in sorted_buffers:
+        buffer = room_buffer.weechat_buffer
+
+        if command in buffer.short_name:
+            displayed = W.current_buffer() == buffer._ptr
+
+            if displayed:
+                continue
+
+            W.buffer_set(buffer._ptr, 'display', '1')
+            return W.WEECHAT_RC_OK_EAT
+
+    return W.WEECHAT_RC_OK
+
+
 if __name__ == "__main__":
     if W.register(WEECHAT_SCRIPT_NAME, WEECHAT_SCRIPT_AUTHOR,
                   WEECHAT_SCRIPT_VERSION, WEECHAT_SCRIPT_LICENSE,
@@ -548,6 +599,7 @@ if __name__ == "__main__":
         init_bar_items()
         init_completion()
 
+        W.hook_command_run("/buffer", "buffer_command_cb", "")
         W.hook_signal("buffer_switch", "buffer_switch_cb", "")
         W.hook_signal("input_text_changed", "typing_notification_cb", "")
 
