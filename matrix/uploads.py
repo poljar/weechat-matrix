@@ -32,6 +32,7 @@ except ImportError:
 
 from .globals import SCRIPT_NAME, SERVERS, W, UPLOADS
 from .utf import utf8_decode
+from .message_renderer import Render
 from matrix import globals as G
 from nio import Api
 
@@ -206,25 +207,15 @@ class Upload(object):
         assert self.content_uri
 
         if self.encrypt:
-            http_url = Api.encrypted_mxc_to_plumb(
-                self.content_uri,
+            return Render.encrypted_media(
+                self.conetent_uri,
+                self.file_name,
                 self.file_keys["key"]["k"],
                 self.file_keys["hashes"]["sha256"],
-                self.file_keys["iv"]
+                self.file_keys["iv"],
             )
-            url = http_url if http_url else self.content_uri
 
-            description = "{}".format(self.file_name)
-            return ("{del_color}<{ncolor}{desc}{del_color}>{ncolor} "
-                    "{del_color}[{ncolor}{url}{del_color}]{ncolor}").format(
-                        del_color=W.color("chat_delimiters"),
-                        ncolor=W.color("reset"),
-                        desc=description, url=url)
-
-        http_url = Api.mxc_to_http(self.content_uri)
-        description = ("/{}".format(self.file_name) if self.file_name
-                       else "")
-        return "{url}{desc}".format(url=http_url, desc=description)
+        return Render.media(self.content_uri, self.file_name)
 
 
 @attr.s

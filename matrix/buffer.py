@@ -57,6 +57,7 @@ from .colors import Formatted
 from .config import RedactType
 from .globals import SCRIPT_NAME, SERVERS, W, TYPING_NOTICE_TIMEOUT
 from .utf import utf8_decode
+from .message_renderer import Render
 from .utils import (
     server_ts_to_weechat,
     shorten_sender,
@@ -1163,24 +1164,7 @@ class RoomBuffer(object):
             return
 
         censor = self.find_nick(event.sender)
-
-        reason = (
-            ""
-            if not event.reason
-            else ', reason: "{reason}"'.format(reason=event.reason)
-        )
-
-        redaction_msg = (
-            "{del_color}<{log_color}Message redacted by: "
-            "{censor}{log_color}{reason}{del_color}>"
-            "{ncolor}"
-        ).format(
-            del_color=W.color("chat_delimiters"),
-            ncolor=W.color("reset"),
-            log_color=W.color("logger.color.backlog_line"),
-            censor=censor,
-            reason=reason,
-        )
+        redaction_msg = Render.redacted(censor, event.reason)
 
         line = lines[0]
         message = line.message
@@ -1208,33 +1192,6 @@ class RoomBuffer(object):
 
             line.message = new_message
             line.tags = tags
-
-    def _handle_redacted_message(self, event):
-        nick = self.find_nick(event.sender)
-        date = server_ts_to_weechat(event.server_timestamp)
-        tags = self.get_event_tags(event)
-        tags.append(SCRIPT_NAME + "_redacted")
-
-        reason = (
-            ', reason: "{reason}"'.format(reason=event.reason)
-            if event.reason
-            else ""
-        )
-
-        censor = self.find_nick(event.redacter)
-
-        data = (
-            "{del_color}<{log_color}Message redacted by: "
-            "{censor}{log_color}{reason}{del_color}>{ncolor}"
-        ).format(
-            del_color=W.color("chat_delimiters"),
-            ncolor=W.color("reset"),
-            log_color=W.color("logger.color.backlog_line"),
-            censor=censor,
-            reason=reason,
-        )
-
-        self.weechat_buffer.message(nick, data, date, tags)
 
     def _handle_topic(self, event, is_state):
         nick = self.find_nick(event.sender)
@@ -1359,12 +1316,8 @@ class RoomBuffer(object):
 
         elif isinstance(event, RoomMessageText):
             nick = self.find_nick(event.sender)
-            formatted = None
 
-            if event.formatted_body:
-                formatted = Formatted.from_html(event.formatted_body)
-
-            data = formatted.to_weechat() if formatted else event.body
+            data = Render.message(event.body, event.formatted_body)
 
             extra_prefix = (self.warning_prefix if event.decrypted
                             and not event.verified else "")
@@ -1388,11 +1341,7 @@ class RoomBuffer(object):
         elif isinstance(event, RoomMessageMedia):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
-            http_url = Api.mxc_to_http(event.url, self.homeserver.geturl())
-            url = http_url if http_url else event.url
-
-            description = "/{}".format(event.body) if event.body else ""
-            data = "{url}{desc}".format(url=url, desc=description)
+            data = Render.media(event.url, event.body, self.homeserver.geturl())
 
             extra_prefix = (self.warning_prefix if event.decrypted
                             and not event.verified else "")
@@ -1404,21 +1353,14 @@ class RoomBuffer(object):
         elif isinstance(event, RoomEncryptedMedia):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
-            http_url = Api.encrypted_mxc_to_plumb(
+            data = Render.encrypted_media(
                 event.url,
+                event.body,
                 event.key["k"],
                 event.hashes["sha256"],
                 event.iv,
                 self.homeserver.geturl()
             )
-            url = http_url if http_url else event.url
-
-            description = "{}".format(event.body) if event.body else "file"
-            data = ("{del_color}<{ncolor}{desc}{del_color}>{ncolor} "
-                    "{del_color}[{ncolor}{url}{del_color}]{ncolor}").format(
-                        del_color=W.color("chat_delimiters"),
-                        ncolor=W.color("reset"),
-                        desc=description, url=url)
 
             extra_prefix = (self.warning_prefix if event.decrypted
                             and not event.verified else "")
@@ -1430,7 +1372,10 @@ class RoomBuffer(object):
         elif isinstance(event, RoomMessageUnknown):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
-            data = ("Unknown message of type {t}").format(t=event.type)
+            data = Render.unknown(
+                event.type,
+                event.event_dict.get("content", None)
+            )
             extra_prefix = (self.warning_prefix if event.decrypted
                             and not event.verified else "")
 
@@ -1442,7 +1387,15 @@ class RoomBuffer(object):
             self._redact_line(event)
 
         elif isinstance(event, RedactedEvent):
-            self._handle_redacted_message(event)
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.server_timestamp)
+            tags = self.get_event_tags(event)
+            tags.append(SCRIPT_NAME + "_redacted")
+
+            censor = self.find_nick(event.redacter)
+            data = Render.redacted(censor, event.reason)
+
+            self.weechat_buffer.message(nick, data, date, tags)
 
         elif isinstance(event, RoomEncryptionEvent):
             message = (
@@ -1459,12 +1412,8 @@ class RoomBuffer(object):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
 
-            data = ("{del_color}<{log_color}Unable to decrypt: "
-                    "The sender's device has not sent us "
-                    "the keys for this message{del_color}>{ncolor}").format(
-                del_color=W.color("chat_delimiters"),
-                log_color=W.color("logger.color.backlog_line"),
-                ncolor=W.color("reset"))
+            data = Render.megolm()
+
             session_id_tag = SCRIPT_NAME + "_sessionid_" + event.session_id
             self.weechat_buffer.message(
                 nick,
@@ -1625,24 +1574,9 @@ class RoomBuffer(object):
             "no_log",
             "no_highlight",
         ]
-        reason = (
-            ', reason: "{reason}"'.format(reason=event.reason)
-            if event.reason
-            else ""
-        )
 
         censor = self.find_nick(event.redacter)
-
-        data = (
-            "{del_color}<{log_color}Message redacted by: "
-            "{censor}{log_color}{reason}{del_color}>{ncolor}"
-        ).format(
-            del_color=W.color("chat_delimiters"),
-            ncolor=W.color("reset"),
-            log_color=W.color("logger.color.backlog_line"),
-            censor=censor,
-            reason=reason,
-        )
+        data = Render.redacted(censor, event.reason)
 
         tags += self.get_event_tags(event)
         nick = self.find_nick(event.sender)
