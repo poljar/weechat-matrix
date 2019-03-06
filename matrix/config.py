@@ -528,9 +528,10 @@ class MatrixConfig(WeechatConfig):
                 0,
                 "off",
                 ("If turned on the buffer name will consist of the server "
-                 "name and the room name instead of the room_id. Note, this "
-                 "requires a change to the logger.file.mask setting since "
-                 "conflicts can happen otherwise."),
+                 "name and the room name instead of the Matrix room ID. Note, "
+                 "this requires a change to the logger.file.mask setting "
+                 "since conflicts can happen otherwise "
+                 "(requires a script reload)."),
             ),
         ]
 
