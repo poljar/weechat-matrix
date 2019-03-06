@@ -399,6 +399,7 @@ class MatrixConfig(WeechatConfig):
         self.upload_buffer = ""
         self.debug_category = "all"
         self.page_up_hook = None
+        self.human_buffer_names = None
 
         look_options = [
             Option(
@@ -518,6 +519,18 @@ class MatrixConfig(WeechatConfig):
                 "2",
                 ("Number of spaces to add as a margin around around a code "
                  "block"),
+            ),
+            Option(
+                "human_buffer_names",
+                "boolean",
+                "",
+                0,
+                0,
+                "off",
+                ("If turned on the buffer name will consist of the server "
+                 "name and the room name instead of the room_id. Note, this "
+                 "requires a change to the logger.file.mask setting since "
+                 "conflicts can happen otherwise."),
             ),
         ]
 
@@ -768,6 +781,10 @@ class MatrixConfig(WeechatConfig):
             "",
             "",
         )
+
+    def read(self):
+        super().read()
+        self.human_buffer_names = self.look.human_buffer_names
 
     def free(self):
         section_ptr = W.config_search_section(self._ptr, "server")

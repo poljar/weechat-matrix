@@ -803,14 +803,22 @@ class WeechatChannelBuffer(object):
     def short_name(self):
         return W.buffer_get_string(self._ptr, "short_name")
 
+    @short_name.setter
+    def short_name(self, name):
+        W.buffer_set(self._ptr, "short_name", name)
+
+    @property
+    def name(self):
+        return W.buffer_get_string(self._ptr, "name")
+
+    @name.setter
+    def name(self, name):
+        W.buffer_set(self._ptr, "name", name)
+
     @property
     def number(self):
         """Get the buffer number, starts at 1."""
         return int(W.buffer_get_integer(self._ptr, "number"))
-
-    @short_name.setter
-    def short_name(self, name):
-        W.buffer_set(self._ptr, "short_name", name)
 
     def find_lines(self, predicate, max_lines=None):
         lines = []
@@ -846,6 +854,7 @@ class RoomBuffer(object):
 
         self.last_read_event = None
         self._read_markers_enabled = True
+        self.server_name = server_name
 
         buffer_name = "{}.{}".format(server_name, room.room_id)
 
@@ -1072,6 +1081,10 @@ class RoomBuffer(object):
     def update_buffer_name(self):
         room_name = self.room.display_name
         self.weechat_buffer.short_name = room_name
+
+        if G.CONFIG.human_buffer_names:
+            buffer_name = "{}.{}".format(self.server_name, room_name)
+            self.weechat_buffer.name = buffer_name
 
     def _redact_line(self, event):
         def predicate(event_id, line):
