@@ -63,7 +63,8 @@ from matrix.completion import (init_completion, matrix_command_completion_cb,
                                matrix_server_command_completion_cb,
                                matrix_server_completion_cb,
                                matrix_user_completion_cb,
-                               matrix_own_devices_completion_cb)
+                               matrix_own_devices_completion_cb,
+                               matrix_room_completion_cb)
 from matrix.config import (MatrixConfig, config_log_category_cb,
                            config_log_level_cb, config_server_buffer_cb,
                            matrix_config_reload_cb, config_pgup_cb)

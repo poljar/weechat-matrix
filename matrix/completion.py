@@ -280,6 +280,20 @@ def matrix_user_completion_cb(data, completion_item, buffer, completion):
     return W.WEECHAT_RC_OK
 
 
+@utf8_decode
+def matrix_room_completion_cb(data, completion_item, buffer, completion):
+    """Completion callback for matrix room names."""
+    for server in SERVERS.values():
+        for room_buffer in server.room_buffers.values():
+            name = room_buffer.weechat_buffer.short_name
+
+            W.hook_completion_list_add(
+                completion, name, 0, W.WEECHAT_LIST_POS_SORT
+            )
+
+    return W.WEECHAT_RC_OK
+
+
 def init_completion():
     W.hook_completion(
         "matrix_server_commands",
@@ -341,5 +355,12 @@ def init_completion():
         "matrix_own_devices",
         "Matrix own devices completion",
         "matrix_own_devices_completion_cb",
+        "",
+    )
+
+    W.hook_completion(
+        "matrix_rooms",
+        "Matrix room name completion",
+        "matrix_room_completion_cb",
         "",
     )
