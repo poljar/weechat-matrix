@@ -1013,13 +1013,16 @@ class RoomBuffer(object):
         # freenode bridge users better
         if (user.user_id.startswith("@_discord_") or
                 user.user_id.startswith("@_slack_") or
-                user.user_id.startswith("@whatsapp_")):
+                user.user_id.startswith("@whatsapp_") or
+                user.user_id.startswith("@_xmpp_")):
             if user.display_name:
                 short_name = user.display_name[0:50]
         elif user.user_id.startswith("@freenode_"):
             short_name = shorten_sender(user.user_id[9:])
         elif user.user_id.startswith("@_ircnet_"):
             short_name = shorten_sender(user.user_id[8:])
+        elif user.user_id.startswith("@gitter_"):
+            short_name = shorten_sender(user.user_id[7:])
 
         # TODO make this configurable
         if not short_name or short_name in self.displayed_nicks.values():
