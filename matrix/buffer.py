@@ -19,6 +19,7 @@ from __future__ import unicode_literals
 
 import time
 import attr
+import pprint
 from builtins import super
 from functools import partial
 from collections import deque
@@ -47,6 +48,8 @@ from nio import (
     OlmTrustError,
     UnknownEvent,
     FullyReadEvent,
+    BadEvent,
+    UnknownBadEvent,
 )
 
 from . import globals as G
@@ -1442,6 +1445,21 @@ class RoomBuffer(object):
 
         elif isinstance(event, UnknownEvent):
             pass
+
+        elif isinstance(event, BadEvent):
+            nick = self.find_nick(event.sender)
+            date = server_ts_to_weechat(event.server_timestamp)
+            data = ("Bad event received, event type: {t}").format(t=event.type)
+            extra_prefix = self.warning_prefix
+
+            self.weechat_buffer.message(
+                nick, data, date, self.get_event_tags(event), extra_prefix
+            )
+
+        elif isinstance(event, UnknownBadEvent):
+            self.error("Unkwnown bad event: {}".format(
+                pprint.pformat(event.event_dict)
+            ))
 
         else:
             W.prnt(
