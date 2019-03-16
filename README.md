@@ -52,7 +52,7 @@ Configuration is completed primarily through the Weechat interface.  First start
 
 1. Start by loading the Weechat-Matrix plugin:
 
-       /script load matrix.py test
+       /script load matrix.py
 
 1. Now set your username and password:
 
