@@ -17,28 +17,46 @@ support is still experimental.
 
 # Installation
 
-Installation is easy.  As your regular user, just run: `make install` in this repository directory.
+1. Install libolm
 
-The following Python modules must also be available on your system:
+    - Ubuntu
+        ```
+        sudo apt-get install libolm-dev
+        ```
 
-- pyOpenSSL
-- typing
-- webcolors
-- future (Python2 users only, see below)
-- atomicwrites
-- [matrix-nio](https://github.com/poljar/matrix-nio)
-- attrs
-- logbook
-- pygments
+    - Debian (see https://git.matrix.org/git/olm)
 
-Note that weechat only supports Python2 OR Python3, and that setting is
-determined at the time that Weechat is compiled.  Weechat-Matrix can work with
-either Python2 or Python3, but when you install dependencies you will have to
-take into account which version of Python your Weechat was built to use.
+    - Archlinux based distribution (see https://aur.archlinux.org/packages/libolm/)
+      use your favorite pacman frontend with AUR support (yaourt, yay, pikaur, …)
 
-To check the python version that weechat is using, run:
+2. Clone the repo and install dependencies
+    ```
+    git clone https://github.com/poljar/weechat-matrix.git
+    cd weechat-matrix
+    pip install -r requirements.txt
+    ```
 
-    /python version
+    Another option is to install the dependencies manually:
+    - pyOpenSSL
+    - typing
+    - webcolors
+    - future (Python2 users only, see below)
+    - atomicwrites
+    - [matrix-nio](https://github.com/poljar/matrix-nio)
+    - attrs
+    - logbook
+    - pygments
+
+3. As your regular user, just run: `make install` in this repository directory.
+
+    Note that weechat only supports Python2 OR Python3, and that setting is
+    determined at the time that Weechat is compiled.  Weechat-Matrix can work with
+    either Python2 or Python3, but when you install dependencies you will have to
+    take into account which version of Python your Weechat was built to use.
+
+    To check the python version that weechat is using, run:
+
+        /python version
 
 ## Uploads
 
