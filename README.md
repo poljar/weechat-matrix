@@ -17,10 +17,27 @@ support is still experimental.
 
 # Installation
 
-Installation is easy.  As your regular user, just run: `make install` in this repository directory.
+1. Install libolm
 
-The following Python modules must also be available on your system:
+Ubuntu
+```
+sudo apt-get install libolm-dev
+```
 
+Debian (see https://git.matrix.org/git/olm)
+
+Archlinux based distribution (see https://aur.archlinux.org/packages/libolm/)
+
+use your favorite pacman frontend with AUR support (yaourt, yay, pikaur, …)
+
+2. clone the repo and install dependencies
+```
+git clone https://github.com/poljar/weechat-matrix.git
+cd weechat-matrix
+pip install -r requirements.txt
+```
+
+An other option is to install the dependencies manually:
 - pyOpenSSL
 - typing
 - webcolors
@@ -30,6 +47,9 @@ The following Python modules must also be available on your system:
 - attrs
 - logbook
 - pygments
+
+3. As your regular user, just run: `make install` in this repository directory.
+
 
 Note that weechat only supports Python2 OR Python3, and that setting is
 determined at the time that Weechat is compiled.  Weechat-Matrix can work with
