@@ -48,6 +48,7 @@ from nio import (
     SyncResponse,
     PartialSyncResponse,
     ShareGroupSessionResponse,
+    ShareGroupSessionError,
     KeysQueryResponse,
     KeysClaimResponse,
     DevicesResponse,
@@ -838,6 +839,14 @@ class MatrixServer(object):
 
         return True
 
+    def share_group_session(self, room_id, ignore_missing_sessions=False):
+        _, request = self.client.share_group_session(
+            room_id,
+            ignore_missing_sessions
+        )
+        self.send(request)
+        self.group_session_shared[room_id] = True
+
     def room_send_event(
         self,
         room_id,    # type: str
@@ -856,9 +865,7 @@ class MatrixServer(object):
         except GroupEncryptionError:
             try:
                 if not self.group_session_shared[room_id]:
-                    _, request = self.client.share_group_session(room_id)
-                    self.group_session_shared[room_id] = True
-                    self.send(request)
+                    self.share_group_session(room_id)
                 raise
 
             except EncryptionError:
@@ -1282,6 +1289,9 @@ class MatrixServer(object):
             self.get_joined_members(self.rooms_with_missing_members.pop())
         elif isinstance(response, RoomSendResponse):
             self.handle_own_messages_error(response)
+        elif isinstance(response, ShareGroupSessionError):
+            self.group_session_shared[response.room_id] = False
+            self.share_group_session(response.room_id)
 
     def handle_response(self, response):
         # type: (Response) -> None
@@ -1363,8 +1373,7 @@ class MatrixServer(object):
         elif isinstance(response, KeysClaimResponse):
             self.keys_claimed[response.room_id] = False
             try:
-                self.group_session_shared[response.room_id] = True
-                _, request = self.client.share_group_session(
+                self.share_group_session(
                     response.room_id,
                     ignore_missing_sessions=True
                 )
@@ -1374,8 +1383,6 @@ class MatrixServer(object):
                 room_buffer.error(m)
                 self.encryption_queue[response.room_id].clear()
                 return
-
-            self.send(request)
 
         elif isinstance(response, ShareGroupSessionResponse):
             room_id = response.room_id
