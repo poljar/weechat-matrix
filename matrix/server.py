@@ -45,6 +45,7 @@ from nio import (
     Response,
     Rooms,
     RoomSendResponse,
+    RoomSendError,
     SyncResponse,
     PartialSyncResponse,
     ShareGroupSessionResponse,
@@ -1287,7 +1288,7 @@ class MatrixServer(object):
         elif isinstance(response, JoinedMembersError):
             self.rooms_with_missing_members.append(response.room_id)
             self.get_joined_members(self.rooms_with_missing_members.pop())
-        elif isinstance(response, RoomSendResponse):
+        elif isinstance(response, RoomSendError):
             self.handle_own_messages_error(response)
         elif isinstance(response, ShareGroupSessionError):
             self.group_session_shared[response.room_id] = False
