@@ -66,7 +66,11 @@ from nio import (
     LoginError,
     JoinedMembersResponse,
     JoinedMembersError,
-    RoomKeyEvent
+    RoomKeyEvent,
+    KeyVerificationStart,
+    KeyVerificationCancel,
+    KeyVerificationKey,
+    KeyVerificationMac
 )
 
 from . import globals as G
@@ -1206,6 +1210,28 @@ class MatrixServer(object):
             room_buffer.undecrypted_events.remove(undecrypted_event)
             room_buffer.replace_undecrypted_line(event)
 
+    def accept_key_verification(self, event):
+        _, request = self.client.accept_key_verification(event)
+        self.send_or_queue(request)
+
+    def send_key_verification_key(self, sas):
+        _, request = self.client.to_device(
+            "m.key.verification.key",
+            sas.share_key(),
+            sas.other_user,
+            sas.other_device,
+        )
+        self.send_or_queue(request)
+
+    def send_key_verification_mac(self, sas):
+        _, request = self.client.to_device(
+            "m.key.verification.mac",
+            sas.get_mac(),
+            sas.other_user,
+            sas.other_device,
+        )
+        self.send_or_queue(request)
+
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
         if self.next_batch == response.next_batch:
@@ -1215,22 +1241,51 @@ class MatrixServer(object):
         self._handle_room_info(response)
 
         for event in response.to_device_events:
-            if not isinstance(event, RoomKeyEvent):
-                continue
+            if isinstance(event, RoomKeyEvent):
+                message = {
+                    "sender": event.sender,
+                    "sender_key": event.sender_key,
+                    "room_id": event.room_id,
+                    "session_id": event.session_id,
+                    "algorithm": event.algorithm,
+                    "server": self.name,
+                }
+                W.hook_hsignal_send("matrix_room_key_received", message)
 
-            message = {
-                "sender": event.sender,
-                "sender_key": event.sender_key,
-                "room_id": event.room_id,
-                "session_id": event.session_id,
-                "algorithm": event.algorithm,
-                "server": self.name,
-            }
-            W.hook_hsignal_send("matrix_room_key_received", message)
+                # TODO try to decrypt some cached undecrypted messages with the
+                # new key
+                # self.decrypt_printed_messages(event)
+            elif isinstance(event, KeyVerificationStart):
+                self.accept_key_verification(event)
+                # print(event)
 
-            # TODO try to decrypt some cached undecrypted messages with the
-            # new key
-            # self.decrypt_printed_messages(event)
+            elif isinstance(event, KeyVerificationCancel):
+                print(event)
+
+            elif isinstance(event, KeyVerificationMac):
+                sas = self.client.active_key_verifications.get(
+                    event.transaction_id, None
+                )
+
+                if sas:
+                    self.send_key_verification_mac(sas)
+                else:
+                    print("NO SAS??")
+                print(event)
+
+            elif isinstance(event, KeyVerificationKey):
+                sas = self.client.active_key_verifications.get(
+                    event.transaction_id, None
+                )
+
+                if sas:
+                    emoji = sas.get_emoji()
+                    self.info(" ".join(emoji))
+                    self.send_key_verification_key(sas)
+                else:
+                    print("NO SAS??")
+                print(event)
+
 
         # Full sync response handle everything.
         if isinstance(response, SyncResponse):
