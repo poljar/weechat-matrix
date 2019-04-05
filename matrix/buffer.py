@@ -1017,9 +1017,13 @@ class RoomBuffer(object):
         if (user.user_id.startswith("@_discord_") or
                 user.user_id.startswith("@_slack_") or
                 user.user_id.startswith("@whatsapp_") or
+                user.user_id.startswith("@facebook_") or
+                user.user_id.startswith("@telegram_") or
                 user.user_id.startswith("@_xmpp_")):
             if user.display_name:
                 short_name = user.display_name[0:50]
+        elif user.user_id.startswith("@twilio_"):
+            short_name = shorten_sender(user.user_id[7:])
         elif user.user_id.startswith("@freenode_"):
             short_name = shorten_sender(user.user_id[9:])
         elif user.user_id.startswith("@_ircnet_"):
@@ -1430,9 +1434,9 @@ class RoomBuffer(object):
             data = ("{del_color}<{log_color}Unable to decrypt: "
                     "The sender's device has not sent us "
                     "the keys for this message{del_color}>{ncolor}").format(
-                            del_color=W.color("chat_delimiters"),
-                            log_color=W.color("logger.color.backlog_line"),
-                            ncolor=W.color("reset"))
+                del_color=W.color("chat_delimiters"),
+                log_color=W.color("logger.color.backlog_line"),
+                ncolor=W.color("reset"))
             session_id_tag = SCRIPT_NAME + "_sessionid_" + event.session_id
             self.weechat_buffer.message(
                 nick,
