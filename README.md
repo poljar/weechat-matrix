@@ -19,12 +19,7 @@ support is still experimental.
 
 1. Install libolm
 
-    - Ubuntu
-        ```
-        sudo apt-get install libolm-dev
-        ```
-
-    - Debian (see https://git.matrix.org/git/olm)
+    - Debian/Ubuntu (see https://git.matrix.org/git/olm)
 
     - Archlinux based distribution (see https://aur.archlinux.org/packages/libolm/)
       use your favorite pacman frontend with AUR support (yaourt, yay, pikaur, …)
