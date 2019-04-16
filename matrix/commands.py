@@ -1266,7 +1266,7 @@ def matrix_command_help(args):
                 "Examples:"
                 "\n  /matrix server listfull"
                 "\n  /matrix server add matrix matrix.org:80"
-                "\n  /matrix server del matrix"
+                "\n  /matrix server delete matrix"
             ).format(
                 delimiter_color=W.color("chat_delimiters"),
                 cmd_color=W.color("chat_buffer"),
