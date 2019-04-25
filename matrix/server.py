@@ -247,7 +247,6 @@ class MatrixServer(object):
 
         self._connected = False     # type: bool
         self.connecting = False     # type: bool
-        self.keys_queried = False   # type: bool
         self.reconnect_delay = 0    # type: int
         self.reconnect_time = None  # type: Optional[float]
         self.sync_time = None       # type: Optional[float]
@@ -288,6 +287,10 @@ class MatrixServer(object):
         self.lazy_load_hook = None       # type: Optional[str]
         self.partial_sync_hook = None    # type: Optional[str]
 
+        # These flags remember if we made some requests so that we don't
+        # make them again while we wait on a response, the flags need to be
+        # cleared when we disconnect.
+        self.keys_queried = False                      # type: bool
         self.keys_claimed = defaultdict(bool)          # type: Dict[str, bool]
         self.group_session_shared = defaultdict(bool)  # type: Dict[str, bool]
 
@@ -553,6 +556,11 @@ class MatrixServer(object):
         self.lag = 0
         W.bar_item_update("lag")
         self.reconnect_time = None
+
+        # Clear our request flags.
+        self.keys_queried = False
+        self.keys_claimed = defaultdict(bool)
+        self.group_session_shared = defaultdict(bool)
 
         if self.server_buffer:
             message = ("{prefix}matrix: disconnected from server").format(
