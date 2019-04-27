@@ -70,7 +70,8 @@ from nio import (
     KeyVerificationStart,
     KeyVerificationCancel,
     KeyVerificationKey,
-    KeyVerificationMac
+    KeyVerificationMac,
+    KeyVerificationEvent
 )
 
 from . import globals as G
@@ -368,6 +369,55 @@ class MatrixServer(object):
             self.get_session_path(),
             extra_path=extra_path
         )
+        self.client.add_to_device_callback(
+            self.key_verification_cb,
+            KeyVerificationEvent
+        )
+
+    def key_verification_cb(self, event):
+        # TODO don't accept the verification automatically.
+        if isinstance(event, KeyVerificationStart):
+            self.info_highlight("{} via {} has started a key verification "
+                                "process.".format(
+                                    event.sender,
+                                    event.from_device
+                                ))
+            try:
+                self.accept_key_verification(event)
+            except LocalProtocolError as e:
+                self.info(e)
+
+        elif isinstance(event, KeyVerificationKey):
+            sas = self.client.key_verifications.get(event.transaction_id, None)
+            if not sas:
+                return
+
+            emoji = sas.get_emoji()
+
+            emojies = [x[0] for x in emoji]
+            descriptions = [x[1] for x in emoji]
+            device = sas.other_olm_device
+
+            emoji_str = u"{:^10}{:^10}{:^10}{:^10}{:^10}{:^10}{:^10}".format(
+                *emojies
+            )
+            desc = u"{:^11}{:^11}{:^11}{:^11}{:^11}{:^11}{:^11}".format(
+                *descriptions
+            )
+            short_string = u"\n".join([emoji_str, desc])
+
+            self.info_highlight(u"Short authentication string for {} via {}:\n"
+                                u"{}".format(
+                                    device.user_id,
+                                    device.id,
+                                    short_string
+                                ))
+
+        elif isinstance(event, KeyVerificationMac):
+            try:
+                self.accept_short_auth_string(event.transaction_id)
+            except LocalProtocolError as e:
+                self.info(e)
 
     def update_option(self, option, option_name):
         if option_name == "address":
@@ -471,6 +521,14 @@ class MatrixServer(object):
     def _finalize_send(self):
         # type: (MatrixServer) -> None
         self.send_buffer = b""
+
+    def info_highlight(self, message):
+        buf = ""
+        if self.server_buffer:
+            buf = self.server_buffer
+
+        msg = "{}{}: {}".format(W.prefix("network"), SCRIPT_NAME, message)
+        W.prnt_date_tags(buf, 0, "notify_highlight", msg)
 
     def info(self, message):
         buf = ""
@@ -1211,26 +1269,16 @@ class MatrixServer(object):
             room_buffer.replace_undecrypted_line(event)
 
     def accept_key_verification(self, event):
-        _, request = self.client.accept_key_verification(event)
-        self.send_or_queue(request)
+        _, request = self.client.accept_key_verification(event.transaction_id)
+        self.send(request)
 
-    def send_key_verification_key(self, sas):
-        _, request = self.client.to_device(
-            "m.key.verification.key",
-            sas.share_key(),
-            sas.other_user,
-            sas.other_device,
-        )
-        self.send_or_queue(request)
+    def to_device(self, message):
+        _, request = self.client.to_device(message)
+        self.send(request)
 
-    def send_key_verification_mac(self, sas):
-        _, request = self.client.to_device(
-            "m.key.verification.mac",
-            sas.get_mac(),
-            sas.other_user,
-            sas.other_device,
-        )
-        self.send_or_queue(request)
+    def accept_short_auth_string(self, transaction_id):
+        _, request = self.client.accept_short_auth_string(transaction_id)
+        self.send(request)
 
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
@@ -1255,37 +1303,6 @@ class MatrixServer(object):
                 # TODO try to decrypt some cached undecrypted messages with the
                 # new key
                 # self.decrypt_printed_messages(event)
-            elif isinstance(event, KeyVerificationStart):
-                self.accept_key_verification(event)
-                # print(event)
-
-            elif isinstance(event, KeyVerificationCancel):
-                print(event)
-
-            elif isinstance(event, KeyVerificationMac):
-                sas = self.client.active_key_verifications.get(
-                    event.transaction_id, None
-                )
-
-                if sas:
-                    self.send_key_verification_mac(sas)
-                else:
-                    print("NO SAS??")
-                print(event)
-
-            elif isinstance(event, KeyVerificationKey):
-                sas = self.client.active_key_verifications.get(
-                    event.transaction_id, None
-                )
-
-                if sas:
-                    emoji = sas.get_emoji()
-                    self.info(" ".join(emoji))
-                    self.send_key_verification_key(sas)
-                else:
-                    print("NO SAS??")
-                print(event)
-
 
         # Full sync response handle everything.
         if isinstance(response, SyncResponse):
@@ -1700,6 +1717,17 @@ def matrix_timer_cb(server_name, remaining_calls):
     if server.lag > G.CONFIG.network.lag_reconnect * 1000:
         server.disconnect()
         return W.WEECHAT_RC_OK
+
+    sent_to_device = []
+
+    for i, message in enumerate(server.client.outgoing_to_device_messages):
+        if i >= 5:
+            break
+        server.to_device(message)
+        sent_to_device.append(message)
+
+    for message in sent_to_device:
+        server.client.mark_to_device_message_as_sent(message)
 
     if server.sync_time and current_time > server.sync_time:
         timeout = 0 if server.transport_type == TransportType.HTTP else 30000
