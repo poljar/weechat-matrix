@@ -394,14 +394,24 @@ class MatrixServer(object):
 
             emoji = sas.get_emoji()
 
-            emojies = [x[0] for x in emoji]
+            emojis = [x[0] for x in emoji]
             descriptions = [x[1] for x in emoji]
             device = sas.other_olm_device
 
-            emoji_str = u"{:^10}{:^10}{:^10}{:^10}{:^10}{:^10}{:^10}".format(
-                *emojies
-            )
-            desc = u"{:^11}{:^11}{:^11}{:^11}{:^11}{:^11}{:^11}".format(
+            emoji_centered_width = 10
+
+            def center_emoji(emoji, width):
+                # Assume each emoji has width 2
+                emoji_width = 2
+
+                # This is a trick to account for the fact that emojis are wider
+                # than other monospace characters.
+                placeholder = '.' * emoji_width
+                return placeholder.center(width).replace(placeholder, emoji)
+
+            emoji_str = u"".join(center_emoji(e, emoji_centered_width)
+                                 for e in emojis)
+            desc = u"{:^10}{:^10}{:^10}{:^10}{:^10}{:^10}{:^10}".format(
                 *descriptions
             )
             short_string = u"\n".join([emoji_str, desc])
