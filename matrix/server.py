@@ -389,28 +389,46 @@ class MatrixServer(object):
             if not sas:
                 return
 
+            device = sas.other_olm_device
             emoji = sas.get_emoji()
 
             emojis = [x[0] for x in emoji]
             descriptions = [x[1] for x in emoji]
-            device = sas.other_olm_device
 
-            emoji_centered_width = 10
+            centered_width = 12
 
             def center_emoji(emoji, width):
                 # Assume each emoji has width 2
                 emoji_width = 2
 
+                # These are emojis that need VARIATION-SELECTOR-16 (U+FE0F) so
+                # that they are rendered with coloured glyphs. For these, we
+                # need to add an extra space after them so that they are
+                # rendered properly in weechat.
+                variation_selector_emojis = [
+                    '☁️',
+                    '❤️',
+                    '☂️',
+                    '✏️',
+                    '✂️',
+                    '☎️',
+                    '✈️'
+                ]
+
+                # Hack to make weechat behave properly when one of the above is
+                # printed.
+                if emoji in variation_selector_emojis:
+                    emoji += " "
+
                 # This is a trick to account for the fact that emojis are wider
                 # than other monospace characters.
                 placeholder = '.' * emoji_width
+
                 return placeholder.center(width).replace(placeholder, emoji)
 
-            emoji_str = u"".join(center_emoji(e, emoji_centered_width)
+            emoji_str = u"".join(center_emoji(e, centered_width)
                                  for e in emojis)
-            desc = u"{:^10}{:^10}{:^10}{:^10}{:^10}{:^10}{:^10}".format(
-                *descriptions
-            )
+            desc = u"".join(d.center(centered_width) for d in descriptions)
             short_string = u"\n".join([emoji_str, desc])
 
             self.info_highlight(u"Short authentication string for {} via {}:\n"
