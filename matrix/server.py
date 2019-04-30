@@ -71,7 +71,9 @@ from nio import (
     KeyVerificationCancel,
     KeyVerificationKey,
     KeyVerificationMac,
-    KeyVerificationEvent
+    KeyVerificationEvent,
+    ToDeviceResponse,
+    ToDeviceError
 )
 
 from . import globals as G
@@ -298,6 +300,7 @@ class MatrixServer(object):
         self.keys_queried = False                      # type: bool
         self.keys_claimed = defaultdict(bool)          # type: Dict[str, bool]
         self.group_session_shared = defaultdict(bool)  # type: Dict[str, bool]
+        self.to_device_sent = []
 
         self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
@@ -651,6 +654,7 @@ class MatrixServer(object):
         self.keys_queried = False
         self.keys_claimed = defaultdict(bool)
         self.group_session_shared = defaultdict(bool)
+        self.to_device_sent = []
 
         if self.server_buffer:
             message = ("{prefix}matrix: disconnected from server").format(
@@ -1402,6 +1406,12 @@ class MatrixServer(object):
             self.group_session_shared[response.room_id] = False
             self.share_group_session(response.room_id)
 
+        elif isinstance(response, ToDeviceError):
+            try:
+                self.to_device_sent.remove(response.to_device_message)
+            except ValueError:
+                pass
+
     def handle_response(self, response):
         # type: (Response) -> None
         response_lag = response.elapsed
@@ -1418,6 +1428,12 @@ class MatrixServer(object):
 
         if isinstance(response, ErrorResponse):
             self.handle_error_response(response)
+
+        elif isinstance(response, ToDeviceResponse):
+            try:
+                self.to_device_sent.remove(response.to_device_message)
+            except ValueError:
+                pass
 
         elif isinstance(response, LoginResponse):
             self._handle_login(response)
@@ -1746,16 +1762,15 @@ def matrix_timer_cb(server_name, remaining_calls):
         server.disconnect()
         return W.WEECHAT_RC_OK
 
-    sent_to_device = []
-
     for i, message in enumerate(server.client.outgoing_to_device_messages):
         if i >= 5:
             break
-        server.to_device(message)
-        sent_to_device.append(message)
 
-    for message in sent_to_device:
-        server.client.mark_to_device_message_as_sent(message)
+        if message in server.to_device_sent:
+            continue
+
+        server.to_device(message)
+        server.to_device_sent.append(message)
 
     if server.sync_time and current_time > server.sync_time:
         timeout = 0 if server.transport_type == TransportType.HTTP else 30000
