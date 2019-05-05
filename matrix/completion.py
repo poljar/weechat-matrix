@@ -207,7 +207,7 @@ def matrix_olm_device_completion_cb(data, completion_item, buffer, completion):
     if len(fields) < 2:
         return W.WEECHAT_RC_OK
 
-    user = fields[1]
+    user = fields[-1]
 
     if user not in device_store.users:
         return W.WEECHAT_RC_OK

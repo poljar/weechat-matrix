@@ -378,17 +378,14 @@ class MatrixServer(object):
         )
 
     def key_verification_cb(self, event):
-        # TODO don't accept the verification automatically.
         if isinstance(event, KeyVerificationStart):
-            self.info_highlight("{} via {} has started a key verification "
-                                "process.".format(
-                                    event.sender,
-                                    event.from_device
+            self.info_highlight("{user} via {device} has started a key "
+                                "verification process.\n"
+                                "To accept use /olm verification "
+                                "accept {user} {device}".format(
+                                    user=event.sender,
+                                    device=event.from_device
                                 ))
-            try:
-                self.accept_key_verification(event)
-            except LocalProtocolError as e:
-                self.info(e)
 
         elif isinstance(event, KeyVerificationKey):
             sas = self.client.key_verifications.get(event.transaction_id, None)
@@ -437,18 +434,30 @@ class MatrixServer(object):
             desc = u"".join(d.center(centered_width) for d in descriptions)
             short_string = u"\n".join([emoji_str, desc])
 
-            self.info_highlight(u"Short authentication string for {} via {}:\n"
-                                u"{}".format(
-                                    device.user_id,
-                                    device.id,
-                                    short_string
+            self.info_highlight(u"Short authentication string for "
+                                u"{user} via {device}:\n{string}\n"
+                                u"Confirm that the strings match with "
+                                u"/olm verification confirm {user} "
+                                u"{device}".format(
+                                    user=device.user_id,
+                                    device=device.id,
+                                    string=short_string
                                 ))
 
         elif isinstance(event, KeyVerificationMac):
             try:
-                self.accept_short_auth_string(event.transaction_id)
-            except LocalProtocolError as e:
-                self.info(e)
+                sas = self.client.key_verifications[event.transaction_id]
+            except KeyError:
+                return
+
+            device = sas.other_olm_device
+
+            if sas.verified:
+                self.info_highlight("Device {} of user {} succesfully "
+                                    "verified".format(
+                                        device.id,
+                                        device.user_id
+                                    ))
 
     def update_option(self, option, option_name):
         if option_name == "address":
@@ -1300,17 +1309,37 @@ class MatrixServer(object):
             room_buffer.undecrypted_events.remove(undecrypted_event)
             room_buffer.replace_undecrypted_line(event)
 
-    def accept_key_verification(self, event):
-        _, request = self.client.accept_key_verification(event.transaction_id)
+    def start_verification(self, device):
+        _, request = self.client.start_key_verification(device)
+        self.send(request)
+        self.info("Starting an interactive device verification with "
+                  "{} {}".format(device.user_id, device.id))
+
+    def accept_sas(self, sas):
+        _, request = self.client.accept_key_verification(sas.transaction_id)
+        self.send(request)
+
+    def cancel_sas(self, sas):
+        _, request = self.client.cancel_key_verification(sas.transaction_id)
         self.send(request)
 
     def to_device(self, message):
         _, request = self.client.to_device(message)
         self.send(request)
 
-    def accept_short_auth_string(self, transaction_id):
-        _, request = self.client.accept_short_auth_string(transaction_id)
+    def confirm_sas(self, sas):
+        _, request = self.client.accept_short_auth_string(sas.transaction_id)
         self.send(request)
+
+        device = sas.other_olm_device
+
+        if sas.verified:
+            self.info("Device {} of user {} succesfully verified".format(
+                device.id,
+                device.user_id
+            ))
+        else:
+            self.info("Waiting for {} to confirm...".format(device.user_id))
 
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do

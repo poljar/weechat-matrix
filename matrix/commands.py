@@ -23,14 +23,14 @@ from builtins import str
 from future.moves.itertools import zip_longest
 from collections import defaultdict
 from functools import partial
-from nio import EncryptionError
+from nio import EncryptionError, LocalProtocolError
 
 from . import globals as G
 from .colors import Formatted
 from .globals import SERVERS, W, UPLOADS, SCRIPT_NAME
 from .server import MatrixServer
 from .utf import utf8_decode
-from .utils import key_from_value, tags_from_line_data
+from .utils import key_from_value
 from .uploads import UploadsBuffer, Upload
 
 
@@ -151,6 +151,18 @@ class WeechatCommandParser(object):
         import_parser = subparsers.add_parser("import")
         import_parser.add_argument("file")
         import_parser.add_argument("passphrase")
+
+        sas_parser = subparsers.add_parser("verification")
+        sas_parser.add_argument(
+            "action",
+            choices=[
+                "start",
+                "accept",
+                "confirm",
+                "cancel",
+            ])
+        sas_parser.add_argument("user_id")
+        sas_parser.add_argument("device_id")
 
         return WeechatCommandParser._run_parser(parser, args)
 
@@ -385,17 +397,19 @@ def hook_commands():
          "blacklist <user-id> <device-id> ||"
          "unverify <user-id> <device-id> ||"
          "verify <user-id> <device-id> ||"
+         "verification start|accept|cancel|confirm <user-id> <device-id> ||"
          "export <file-name> <passphrase> ||"
          "import <file-name> <passphrase>"
          ),
         # Description
-        ("       info: show info about known devices and their keys\n"
-         "  blacklist: blacklist a device\n"
-         "unblacklist: unblacklist a device\n"
-         "   unverify: unverify a device\n"
-         "     verify: verify a device\n"
-         "     export: export encryption keys\n"
-         "     import: import encryption keys\n\n"
+        ("        info: show info about known devices and their keys\n"
+         "   blacklist: blacklist a device\n"
+         " unblacklist: unblacklist a device\n"
+         "    unverify: unverify a device\n"
+         "      verify: verify a device\n"
+         "verification: manage interactive device verification\n"
+         "      export: export encryption keys\n"
+         "      import: import encryption keys\n\n"
          "Examples:"
          "\n  /olm verify @example:example.com *"
          "\n  /olm info all example*"
@@ -406,6 +420,7 @@ def hook_commands():
          'unblacklist %(olm_user_ids) %(olm_devices) ||'
          'unverify %(olm_user_ids) %(olm_devices) ||'
          'verify %(olm_user_ids) %(olm_devices) ||'
+         'verification start|accept|cancel|confirm %(olm_user_ids) %(olm_devices) ||'
          'export %(filename) ||'
          'import %(filename)'
          ),
@@ -710,6 +725,52 @@ def olm_import_command(server, args):
     server.info("Succesfully imported keys")
 
 
+def olm_sas_command(server, args):
+    try:
+        device_store = server.client.device_store
+    except LocalProtocolError:
+        server.error("The device store is not loaded")
+        return W.WEECHAT_RC_OK
+
+    try:
+        device = device_store[args.user_id][args.device_id]
+    except KeyError:
+        server.error("Device {} of user {} not found".format(
+            args.user_id,
+            args.device_id
+        ))
+        return W.WEECHAT_RC_OK
+
+    if device.deleted:
+        server.error("Device {} of user {} is deleted.".format(
+            args.user_id,
+            args.device_id
+        ))
+        return W.WEECHAT_RC_OK
+
+    if args.action == "start":
+        server.start_verification(device)
+    elif args.action in ["accept", "confirm", "cancel"]:
+        sas = server.client.get_active_sas(args.user_id, args.device_id)
+
+        if not sas:
+            server.error("No active key verification found for "
+                         "device {} of user {}.".format(
+                             args.user_id,
+                             args.device_id
+                         ))
+            return W.WEECHAT_RC_OK
+
+        try:
+            if args.action == "accept":
+                server.accept_sas(sas)
+            elif args.action == "confirm":
+                server.confirm_sas(sas)
+
+        except LocalProtocolError as e:
+            server.error(str(e))
+
+
 @utf8_decode
 def matrix_olm_command_cb(data, buffer, args):
     def command(server, data, buffer, args):
@@ -736,6 +797,8 @@ def matrix_olm_command_cb(data, buffer, args):
             olm_blacklist_command(server, parsed_args)
         elif parsed_args.subcommand == "unblacklist":
             olm_unblacklist_command(server, parsed_args)
+        elif parsed_args.subcommand == "verification":
+            olm_sas_command(server, parsed_args)
         else:
             message = ("{prefix}matrix: Command not implemented.".format(
                 prefix=W.prefix("error")))
