@@ -392,6 +392,9 @@ class MatrixServer(object):
             if not sas:
                 return
 
+            if sas.canceled:
+                return
+
             device = sas.other_olm_device
             emoji = sas.get_emoji()
 
