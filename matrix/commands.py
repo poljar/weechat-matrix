@@ -766,6 +766,8 @@ def olm_sas_command(server, args):
                 server.accept_sas(sas)
             elif args.action == "confirm":
                 server.confirm_sas(sas)
+            elif args.action == "cancel":
+                server.cancel_sas(sas)
 
         except LocalProtocolError as e:
             server.error(str(e))
