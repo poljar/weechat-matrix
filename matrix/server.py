@@ -1328,7 +1328,7 @@ class MatrixServer(object):
         self.send(request)
 
     def confirm_sas(self, sas):
-        _, request = self.client.accept_short_auth_string(sas.transaction_id)
+        _, request = self.client.confirm_short_auth_string(sas.transaction_id)
         self.send(request)
 
         device = sas.other_olm_device
