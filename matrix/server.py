@@ -462,6 +462,13 @@ class MatrixServer(object):
                                         device.user_id
                                     ))
 
+        elif isinstance(event, KeyVerificationCancel):
+            self.info_highlight("The interactive device verification with "
+                                "user {} got canceled: {}.".format(
+                                    event.sender,
+                                    event.reason
+                                ))
+
     def update_option(self, option, option_name):
         if option_name == "address":
             self._change_client()
