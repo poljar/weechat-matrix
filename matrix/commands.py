@@ -756,8 +756,8 @@ def olm_sas_command(server, args):
         if not sas:
             server.error("No active key verification found for "
                          "device {} of user {}.".format(
-                             args.user_id,
-                             args.device_id
+                             args.device_id,
+                             args.user_id
                          ))
             return W.WEECHAT_RC_OK
 
