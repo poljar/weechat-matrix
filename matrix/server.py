@@ -1234,7 +1234,7 @@ class MatrixServer(object):
                 else:
                     inviter_msg = ""
 
-                self.info(
+                self.info_highlight(
                     "You have been invited to {} {}({}{}{}){}"
                     "{}".format(
                         room.display_name,
@@ -1247,7 +1247,9 @@ class MatrixServer(object):
                     )
                 )
             else:
-                self.info("You have been invited to {}.".format(room_id))
+                self.info_highlight("You have been invited to {}.".format(
+                    room_id
+                ))
 
         for room_id, info in response.rooms.leave.items():
             if room_id not in self.buffers:
