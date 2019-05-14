@@ -126,17 +126,19 @@ def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
 @utf8_decode
 def matrix_bar_nicklist_count(data, item, window, buffer, extra_info):
     # pylint: disable=unused-argument
+    color = W.color("status_nicklist_count")
+
     for server in SERVERS.values():
         if buffer in server.buffers.values():
             room_buffer = server.find_room_from_ptr(buffer)
             room = room_buffer.room
-            return str(room.member_count)
+            return "{}{}".format(color, room.member_count)
 
     nick_count = W.buffer_get_integer(buffer, "nicklist_nicks_count")
     nicklist_enabled = bool(W.buffer_get_integer(buffer, "nicklist"))
 
     if nicklist_enabled:
-        return str(nick_count)
+        return "{}{}".format(color, nick_count)
 
     return ""
 
