@@ -134,10 +134,10 @@ def matrix_bar_nicklist_count(data, item, window, buffer, extra_info):
             room = room_buffer.room
             return "{}{}".format(color, room.member_count)
 
-    nick_count = W.buffer_get_integer(buffer, "nicklist_nicks_count")
     nicklist_enabled = bool(W.buffer_get_integer(buffer, "nicklist"))
 
     if nicklist_enabled:
+        nick_count = W.buffer_get_integer(buffer, "nicklist_visible_count")
         return "{}{}".format(color, nick_count)
 
     return ""
