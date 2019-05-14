@@ -71,23 +71,7 @@ def matrix_bar_item_name(data, item, window, buffer, extra_info):
 
     name = W.buffer_get_string(buffer, "name")
 
-    if name:
-        localvar_type = W.buffer_get_string(buffer, "localvar_type")
-        is_channel = localvar_type == "channel"
-
-        if is_channel:
-            name = W.buffer_get_string(buffer, "localvar_channel")
-
-        return "{}{}{}{}{}{}".format(
-                W.color("bar_delim") if is_channel else "",
-                "(" if is_channel else "",
-                W.color("status_name"),
-                name,
-                W.color("bar_delim") if is_channel else "",
-                ")" if is_channel else "",
-        )
-
-    return ""
+    return "{}{}".format(W.color("status_name"), name)
 
 
 @utf8_decode
