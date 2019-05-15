@@ -144,6 +144,14 @@ class WeechatCommandParser(object):
         unblacklist_parser.add_argument("user_filter")
         unblacklist_parser.add_argument("device_filter", nargs="?")
 
+        ignore_parser = subparsers.add_parser("ignore")
+        ignore_parser.add_argument("user_filter")
+        ignore_parser.add_argument("device_filter", nargs="?")
+
+        unignore_parser = subparsers.add_parser("unignore")
+        unignore_parser.add_argument("user_filter")
+        unignore_parser.add_argument("device_filter", nargs="?")
+
         export_parser = subparsers.add_parser("export")
         export_parser.add_argument("file")
         export_parser.add_argument("passphrase")
@@ -381,10 +389,12 @@ def hook_commands():
         "olm",
         "Matrix olm encryption configuration command",
         # Synopsis
-        ("info all|blacklisted|private|unverified|verified <filter>||"
+        ("info all|blacklisted|ignored|private|unverified|verified <filter>||"
          "blacklist <user-id> <device-id> ||"
          "unverify <user-id> <device-id> ||"
          "verify <user-id> <device-id> ||"
+         "ignore <user-id> <device-id> ||"
+         "unignore <user-id> <device-id> ||"
          "export <file-name> <passphrase> ||"
          "import <file-name> <passphrase>"
          ),
@@ -394,6 +404,8 @@ def hook_commands():
          "unblacklist: unblacklist a device\n"
          "   unverify: unverify a device\n"
          "     verify: verify a device\n"
+         "     ignore: ignore an unverifiable but non-blacklist-worthy device\n"
+         "   unignore: unignore a device\n"
          "     export: export encryption keys\n"
          "     import: import encryption keys\n\n"
          "Examples:"
@@ -401,11 +413,13 @@ def hook_commands():
          "\n  /olm info all example*"
          ),
         # Completions
-        ('info all|blacklisted|private|unverified|verified ||'
+        ('info all|blacklisted|ignored|private|unverified|verified ||'
          'blacklist %(olm_user_ids) %(olm_devices) ||'
          'unblacklist %(olm_user_ids) %(olm_devices) ||'
          'unverify %(olm_user_ids) %(olm_devices) ||'
          'verify %(olm_user_ids) %(olm_devices) ||'
+         'ignore %(olm_user_ids) %(olm_devices) ||'
+         'unignore %(olm_user_ids) %(olm_devices) ||'
          'export %(filename) ||'
          'import %(filename)'
          ),
@@ -691,6 +705,28 @@ def olm_unblacklist_command(server, args):
     )
 
 
+def olm_ignore_command(server, args):
+    olm_action_command(
+        server,
+        args,
+        "Ignored",
+        "ignored",
+        "join",
+        server.client.ignore_device
+    )
+
+
+def olm_unignore_command(server, args):
+    olm_action_command(
+        server,
+        args,
+        "Unignored",
+        "unignored",
+        "join",
+        server.client.unignore_device
+    )
+
+
 def olm_export_command(server, args):
     file_path = os.path.expanduser(args.file)
     try:
@@ -736,6 +772,10 @@ def matrix_olm_command_cb(data, buffer, args):
             olm_blacklist_command(server, parsed_args)
         elif parsed_args.subcommand == "unblacklist":
             olm_unblacklist_command(server, parsed_args)
+        elif parsed_args.subcommand == "ignore":
+            olm_ignore_command(server, parsed_args)
+        elif parsed_args.subcommand == "unignore":
+            olm_unignore_command(server, parsed_args)
         else:
             message = ("{prefix}matrix: Command not implemented.".format(
                 prefix=W.prefix("error")))
