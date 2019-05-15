@@ -486,13 +486,15 @@ def hook_commands():
         hook_page_up()
 
 
-def format_device(device_id, fp_key):
+def format_device(device_id, fp_key, display_name):
     fp_key = partition_key(fp_key)
-    message = ("    - Device ID:    {device_color}{device_id}{ncolor}\n"
-               "      - Device key: {key_color}{fp_key}{ncolor}").format(
+    message = ("    - Device ID:      {device_color}{device_id}{ncolor}\n"
+               "      - Display name: {device_color}{display_name}{ncolor}\n"
+               "      - Device key:   {key_color}{fp_key}{ncolor}").format(
                        device_color=W.color("chat_channel"),
                        device_id=device_id,
                        ncolor=W.color("reset"),
+                       display_name=display_name,
                        key_color=W.color("chat_server"),
                        fp_key=fp_key)
     return message
@@ -526,7 +528,8 @@ def olm_info_command(server, args):
 
                 device_strings.append(format_device(
                     device.id,
-                    device.ed25519
+                    device.ed25519,
+                    device.display_name
                 ))
 
             if not device_strings:
@@ -647,7 +650,8 @@ def olm_action_command(server, args, category, error_category, prefix, action):
         for device in device_list:
             device_strings.append(format_device(
                 device.id,
-                device.ed25519
+                device.ed25519,
+                device.display_name
             ))
         if not device_strings:
             continue
