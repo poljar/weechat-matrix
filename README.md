@@ -17,7 +17,7 @@ support is still experimental.
 
 # Installation
 
-1. Install libolm 2.3.0+
+1. Install libolm 3.1+
 
     - Debian/Ubuntu install libolm-dev if new enough
 
