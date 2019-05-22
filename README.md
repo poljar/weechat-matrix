@@ -17,12 +17,15 @@ support is still experimental.
 
 # Installation
 
-1. Install libolm
+1. Install libolm 2.3.0+
 
-    - Debian/Ubuntu (see https://git.matrix.org/git/olm)
+    - Debian/Ubuntu install libolm-dev if new enough
 
     - Archlinux based distribution (see https://aur.archlinux.org/packages/libolm/)
       use your favorite pacman frontend with AUR support (yaourt, yay, pikaur, …)
+
+    - Failing any of the above see https://git.matrix.org/git/olm
+      for instructions about building it from sources
 
 2. Clone the repo and install dependencies
     ```
