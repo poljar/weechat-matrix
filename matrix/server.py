@@ -66,7 +66,14 @@ from nio import (
     LoginError,
     JoinedMembersResponse,
     JoinedMembersError,
-    RoomKeyEvent
+    RoomKeyEvent,
+    KeyVerificationStart,
+    KeyVerificationCancel,
+    KeyVerificationKey,
+    KeyVerificationMac,
+    KeyVerificationEvent,
+    ToDeviceResponse,
+    ToDeviceError
 )
 
 from . import globals as G
@@ -293,6 +300,7 @@ class MatrixServer(object):
         self.keys_queried = False                      # type: bool
         self.keys_claimed = defaultdict(bool)          # type: Dict[str, bool]
         self.group_session_shared = defaultdict(bool)  # type: Dict[str, bool]
+        self.to_device_sent = []
 
         self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
@@ -364,6 +372,102 @@ class MatrixServer(object):
             self.get_session_path(),
             extra_path=extra_path
         )
+        self.client.add_to_device_callback(
+            self.key_verification_cb,
+            KeyVerificationEvent
+        )
+
+    def key_verification_cb(self, event):
+        if isinstance(event, KeyVerificationStart):
+            self.info_highlight("{user} via {device} has started a key "
+                                "verification process.\n"
+                                "To accept use /olm verification "
+                                "accept {user} {device}".format(
+                                    user=event.sender,
+                                    device=event.from_device
+                                ))
+
+        elif isinstance(event, KeyVerificationKey):
+            sas = self.client.key_verifications.get(event.transaction_id, None)
+            if not sas:
+                return
+
+            if sas.canceled:
+                return
+
+            device = sas.other_olm_device
+            emoji = sas.get_emoji()
+
+            emojis = [x[0] for x in emoji]
+            descriptions = [x[1] for x in emoji]
+
+            centered_width = 12
+
+            def center_emoji(emoji, width):
+                # Assume each emoji has width 2
+                emoji_width = 2
+
+                # These are emojis that need VARIATION-SELECTOR-16 (U+FE0F) so
+                # that they are rendered with coloured glyphs. For these, we
+                # need to add an extra space after them so that they are
+                # rendered properly in weechat.
+                variation_selector_emojis = [
+                    '☁️',
+                    '❤️',
+                    '☂️',
+                    '✏️',
+                    '✂️',
+                    '☎️',
+                    '✈️'
+                ]
+
+                # Hack to make weechat behave properly when one of the above is
+                # printed.
+                if emoji in variation_selector_emojis:
+                    emoji += " "
+
+                # This is a trick to account for the fact that emojis are wider
+                # than other monospace characters.
+                placeholder = '.' * emoji_width
+
+                return placeholder.center(width).replace(placeholder, emoji)
+
+            emoji_str = u"".join(center_emoji(e, centered_width)
+                                 for e in emojis)
+            desc = u"".join(d.center(centered_width) for d in descriptions)
+            short_string = u"\n".join([emoji_str, desc])
+
+            self.info_highlight(u"Short authentication string for "
+                                u"{user} via {device}:\n{string}\n"
+                                u"Confirm that the strings match with "
+                                u"/olm verification confirm {user} "
+                                u"{device}".format(
+                                    user=device.user_id,
+                                    device=device.id,
+                                    string=short_string
+                                ))
+
+        elif isinstance(event, KeyVerificationMac):
+            try:
+                sas = self.client.key_verifications[event.transaction_id]
+            except KeyError:
+                return
+
+            device = sas.other_olm_device
+
+            if sas.verified:
+                self.info_highlight("Device {} of user {} succesfully "
+                                    "verified".format(
+                                        device.id,
+                                        device.user_id
+                                    ))
+
+        elif isinstance(event, KeyVerificationCancel):
+            self.info_highlight("The interactive device verification with "
+                                "user {} got canceled: {}.".format(
+                                    event.sender,
+                                    event.reason
+                                ))
 
     def update_option(self, option, option_name):
         if option_name == "address":
@@ -468,6 +572,14 @@ class MatrixServer(object):
         # type: (MatrixServer) -> None
         self.send_buffer = b""
 
+    def info_highlight(self, message):
+        buf = ""
+        if self.server_buffer:
+            buf = self.server_buffer
+
+        msg = "{}{}: {}".format(W.prefix("network"), SCRIPT_NAME, message)
+        W.prnt_date_tags(buf, 0, "notify_highlight", msg)
+
     def info(self, message):
         buf = ""
         if self.server_buffer:
@@ -561,6 +673,7 @@ class MatrixServer(object):
         self.keys_queried = False
         self.keys_claimed = defaultdict(bool)
         self.group_session_shared = defaultdict(bool)
+        self.to_device_sent = []
 
         if self.server_buffer:
             message = ("{prefix}matrix: disconnected from server").format(
@@ -1121,7 +1234,7 @@ class MatrixServer(object):
                 else:
                     inviter_msg = ""
 
-                self.info(
+                self.info_highlight(
                     "You have been invited to {} {}({}{}{}){}"
                     "{}".format(
                         room.display_name,
@@ -1134,7 +1247,9 @@ class MatrixServer(object):
                     )
                 )
             else:
-                self.info("You have been invited to {}.".format(room_id))
+                self.info_highlight("You have been invited to {}.".format(
+                    room_id
+                ))
 
         for room_id, info in response.rooms.leave.items():
             if room_id not in self.buffers:
@@ -1206,6 +1321,38 @@ class MatrixServer(object):
             room_buffer.undecrypted_events.remove(undecrypted_event)
             room_buffer.replace_undecrypted_line(event)
 
+    def start_verification(self, device):
+        _, request = self.client.start_key_verification(device)
+        self.send(request)
+        self.info("Starting an interactive device verification with "
+                  "{} {}".format(device.user_id, device.id))
+
+    def accept_sas(self, sas):
+        _, request = self.client.accept_key_verification(sas.transaction_id)
+        self.send(request)
+
+    def cancel_sas(self, sas):
+        _, request = self.client.cancel_key_verification(sas.transaction_id)
+        self.send(request)
+
+    def to_device(self, message):
+        _, request = self.client.to_device(message)
+        self.send(request)
+
+    def confirm_sas(self, sas):
+        _, request = self.client.confirm_short_auth_string(sas.transaction_id)
+        self.send(request)
+
+        device = sas.other_olm_device
+
+        if sas.verified:
+            self.info("Device {} of user {} succesfully verified".format(
+                device.id,
+                device.user_id
+            ))
+        else:
+            self.info("Waiting for {} to confirm...".format(device.user_id))
+
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
         if self.next_batch == response.next_batch:
@@ -1215,22 +1362,20 @@ class MatrixServer(object):
         self._handle_room_info(response)
 
         for event in response.to_device_events:
-            if not isinstance(event, RoomKeyEvent):
-                continue
+            if isinstance(event, RoomKeyEvent):
+                message = {
+                    "sender": event.sender,
+                    "sender_key": event.sender_key,
+                    "room_id": event.room_id,
+                    "session_id": event.session_id,
+                    "algorithm": event.algorithm,
+                    "server": self.name,
+                }
+                W.hook_hsignal_send("matrix_room_key_received", message)
 
-            message = {
-                "sender": event.sender,
-                "sender_key": event.sender_key,
-                "room_id": event.room_id,
-                "session_id": event.session_id,
-                "algorithm": event.algorithm,
-                "server": self.name,
-            }
-            W.hook_hsignal_send("matrix_room_key_received", message)
-
-            # TODO try to decrypt some cached undecrypted messages with the
-            # new key
-            # self.decrypt_printed_messages(event)
+                # TODO try to decrypt some cached undecrypted messages with the
+                # new key
+                # self.decrypt_printed_messages(event)
 
         # Full sync response handle everything.
         if isinstance(response, SyncResponse):
@@ -1302,6 +1447,12 @@ class MatrixServer(object):
             self.group_session_shared[response.room_id] = False
             self.share_group_session(response.room_id)
 
+        elif isinstance(response, ToDeviceError):
+            try:
+                self.to_device_sent.remove(response.to_device_message)
+            except ValueError:
+                pass
+
     def handle_response(self, response):
         # type: (Response) -> None
         response_lag = response.elapsed
@@ -1318,6 +1469,12 @@ class MatrixServer(object):
 
         if isinstance(response, ErrorResponse):
             self.handle_error_response(response)
+
+        elif isinstance(response, ToDeviceResponse):
+            try:
+                self.to_device_sent.remove(response.to_device_message)
+            except ValueError:
+                pass
 
         elif isinstance(response, LoginResponse):
             self._handle_login(response)
@@ -1645,6 +1802,16 @@ def matrix_timer_cb(server_name, remaining_calls):
     if server.lag > G.CONFIG.network.lag_reconnect * 1000:
         server.disconnect()
         return W.WEECHAT_RC_OK
+
+    for i, message in enumerate(server.client.outgoing_to_device_messages):
+        if i >= 5:
+            break
+
+        if message in server.to_device_sent:
+            continue
+
+        server.to_device(message)
+        server.to_device_sent.append(message)
 
     if server.sync_time and current_time > server.sync_time:
         timeout = 0 if server.transport_type == TransportType.HTTP else 30000
