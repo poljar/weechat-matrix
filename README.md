@@ -1,5 +1,5 @@
 [![Build Status](https://img.shields.io/travis/poljar/weechat-matrix.svg?style=flat-square)](https://travis-ci.org/poljar/weechat-matrix)
-[![#weechat-matrix](https://img.shields.io/badge/matrix-%23weechat--matrix-blue.svg?style=flat-square)](https://matrix.to/#/!twcBhHVdZlQWuuxBhN:termina.org.uk?via=termina.org.uk&via=matrix.org)
+[![#weechat-matrix:termina.org.uk](https://img.shields.io/badge/matrix-%23weechat--matrix-blue.svg?style=flat-square)](https://matrix.to/#/!twcBhHVdZlQWuuxBhN:termina.org.uk?via=termina.org.uk&via=matrix.org)
 [![license](https://img.shields.io/badge/license-ISC-blue.svg?style=flat-square)](https://github.com/poljar/weechat-matrix/blob/master/LICENSE)
 
 # What is Weechat-Matrix?
