@@ -106,9 +106,18 @@ def room_buffer_input_cb(server_name, buffer, input_data):
     try:
         server.room_send_message(room_buffer, formatted_data, "m.text")
     except OlmTrustError as e:
-        m = ("Untrusted devices found in room: {}".format(e))
-        room_buffer.error(m)
-        pass
+        if True and room_buffer.last_message:
+            room_buffer.error("Ignoring unverified devices.")
+
+            if (room_buffer.last_message.to_weechat() ==
+                    formatted_data.to_weechat()):
+                server.room_send_message(room_buffer, formatted_data, "m.text",
+                                         ignore_unverified_devices=True)
+        else:
+            # If the item is a normal user message store it in the
+            # buffer to enable the send-anyways functionality.
+            room_buffer.error("Untrusted devices found in room: {}".format(e))
+            room_buffer.last_message = formatted_data
 
     return W.WEECHAT_RC_OK
 
@@ -858,6 +867,8 @@ class RoomBuffer(object):
         self.last_read_event = None
         self._read_markers_enabled = True
         self.server_name = server_name
+
+        self.last_message = None
 
         buffer_name = "{}.{}".format(server_name, room.room_id)
 

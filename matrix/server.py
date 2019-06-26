@@ -300,6 +300,7 @@ class MatrixServer(object):
         self.keys_queried = False                      # type: bool
         self.keys_claimed = defaultdict(bool)          # type: Dict[str, bool]
         self.group_session_shared = defaultdict(bool)  # type: Dict[str, bool]
+        self.ignore_while_sharing = defaultdict(bool)
         self.to_device_sent = []
 
         self.config = ServerConfig(self.name, config_ptr)
@@ -673,6 +674,7 @@ class MatrixServer(object):
         self.keys_queried = False
         self.keys_claimed = defaultdict(bool)
         self.group_session_shared = defaultdict(bool)
+        self.ignore_while_sharing = defaultdict(bool)
         self.to_device_sent = []
 
         if self.server_buffer:
@@ -961,10 +963,19 @@ class MatrixServer(object):
 
         return True
 
-    def share_group_session(self, room_id, ignore_missing_sessions=False):
+    def share_group_session(
+        self,
+        room_id,
+        ignore_missing_sessions=False,
+        ignore_unverified_devices=False
+    ):
+
+        self.ignore_while_sharing[room_id] = ignore_unverified_devices
+
         _, request = self.client.share_group_session(
             room_id,
-            ignore_missing_sessions
+            ignore_missing_sessions=ignore_missing_sessions,
+            ignore_unverified_devices=ignore_unverified_devices
         )
         self.send(request)
         self.group_session_shared[room_id] = True
@@ -973,7 +984,8 @@ class MatrixServer(object):
         self,
         room_id,    # type: str
         content,    # type: Dict[str, str]
-        event_type="m.room.message"
+        event_type="m.room.message",      # type: str
+        ignore_unverified_devices=False,  # type: bool
     ):
         # type: (...) -> UUID
         assert self.client
@@ -987,7 +999,10 @@ class MatrixServer(object):
         except GroupEncryptionError:
             try:
                 if not self.group_session_shared[room_id]:
-                    self.share_group_session(room_id)
+                    self.share_group_session(
+                        room_id,
+                        ignore_unverified_devices=ignore_unverified_devices
+                    )
                 raise
 
             except EncryptionError:
@@ -1002,6 +1017,7 @@ class MatrixServer(object):
         room_buffer,  # type: RoomBuffer
         formatted,    # type: Formatted
         msgtype="m.text",  # type: str
+        ignore_unverified_devices=False,  # type: bool
     ):
         # type: (...) -> bool
         room = room_buffer.room
@@ -1015,7 +1031,11 @@ class MatrixServer(object):
             content["formatted_body"] = formatted.to_html()
 
         try:
-            uuid = self.room_send_event(room.room_id, content)
+            uuid = self.room_send_event(
+                room.room_id,
+                content,
+                ignore_unverified_devices=ignore_unverified_devices
+            )
         except (EncryptionError, GroupEncryptionError):
             message = EncrytpionQueueItem(msgtype, formatted)
             self.encryption_queue[room.room_id].append(message)
@@ -1445,7 +1465,11 @@ class MatrixServer(object):
             self.handle_own_messages_error(response)
         elif isinstance(response, ShareGroupSessionError):
             self.group_session_shared[response.room_id] = False
-            self.share_group_session(response.room_id)
+            self.share_group_session(
+                response.room_id,
+                False,
+                self.ignore_while_sharing[response.room_id]
+            )
 
         elif isinstance(response, ToDeviceError):
             try:
@@ -1541,18 +1565,31 @@ class MatrixServer(object):
             try:
                 self.share_group_session(
                     response.room_id,
-                    ignore_missing_sessions=True
+                    True,
+                    self.ignore_while_sharing[response.room_id]
                 )
             except OlmTrustError as e:
                 m = ("Untrusted devices found in room: {}".format(e))
                 room_buffer = self.find_room_from_id(response.room_id)
                 room_buffer.error(m)
+
+                try:
+                    item = self.encryption_queue[response.room_id][0]
+                    if item.message_type not in ["m.file", "m.video",
+                                                 "m.audio", "m.image"]:
+                        room_buffer.last_message = item.message
+                except IndexError:
+                    pass
+
                 self.encryption_queue[response.room_id].clear()
                 return
 
         elif isinstance(response, ShareGroupSessionResponse):
             room_id = response.room_id
             self.group_session_shared[response.room_id] = False
+            ignore_unverified = self.ignore_while_sharing[response.room_id]
+            self.ignore_while_sharing[response.room_id] = False
+
             room_buffer = self.room_buffers[room_id]
 
             while self.encryption_queue[room_id]:
@@ -1569,7 +1606,8 @@ class MatrixServer(object):
                         ret = self.room_send_message(
                             room_buffer,
                             item.message,
-                            item.message_type
+                            item.message_type,
+                            ignore_unverified_devices=ignore_unverified
                         )
 
                     if not ret:
@@ -1579,6 +1617,13 @@ class MatrixServer(object):
 
                 except OlmTrustError:
                     self.encryption_queue[room_id].clear()
+
+                    # If the item is a normal user message store it in the
+                    # buffer to enable the send-anyways functionality.
+                    if item.message_type not in ["m.file", "m.video",
+                                                 "m.audio", "m.image"]:
+                        room_buffer.last_message = item.message
+
                     break
 
     def create_room_buffer(self, room_id, prev_batch):
