@@ -106,7 +106,8 @@ def room_buffer_input_cb(server_name, buffer, input_data):
     try:
         server.room_send_message(room_buffer, formatted_data, "m.text")
     except OlmTrustError as e:
-        if True and room_buffer.last_message:
+        if (G.CONFIG.network.resending_ignores_devices
+                and room_buffer.last_message):
             room_buffer.error("Ignoring unverified devices.")
 
             if (room_buffer.last_message.to_weechat() ==

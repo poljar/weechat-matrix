@@ -675,6 +675,20 @@ class MatrixConfig(WeechatConfig):
                  "the markers_enabled variable can be manipulated with the "
                  "/room command, see /help room"),
             ),
+            Option(
+                "resending_ignores_devices",
+                "boolean",
+                "",
+                0,
+                0,
+                "on",
+                ("If on resending the same message to a room that contains "
+                 "unverified devices will mark the devices as ignored and "
+                 "continue sending the message. If off resending the message "
+                 "will again fail and devices need to be marked as verified "
+                 "one by one or the /send-anyways command needs to be used to "
+                 "ignore them."),
+            ),
         ]
 
         color_options = [
