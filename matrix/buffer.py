@@ -105,6 +105,7 @@ def room_buffer_input_cb(server_name, buffer, input_data):
 
     try:
         server.room_send_message(room_buffer, formatted_data, "m.text")
+        room_buffer.last_message = None
     except OlmTrustError as e:
         if (G.CONFIG.network.resending_ignores_devices
                 and room_buffer.last_message):
@@ -114,6 +115,7 @@ def room_buffer_input_cb(server_name, buffer, input_data):
                     formatted_data.to_weechat()):
                 server.room_send_message(room_buffer, formatted_data, "m.text",
                                          ignore_unverified_devices=True)
+                room_buffer.last_message = None
         else:
             # If the item is a normal user message store it in the
             # buffer to enable the send-anyways functionality.
