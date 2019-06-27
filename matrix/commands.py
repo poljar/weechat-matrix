@@ -480,6 +480,23 @@ def hook_commands():
         "",
     )
 
+    W.hook_command(
+        # Command name and short description
+        "send-anyways",
+        "Send the last message in a room ignorin unverified devices.",
+        # Synopsis
+        "",
+        # Description
+        "Send the last message in a room despite there being unverified "
+        "devices. The unverified devices will be marked as ignored after "
+        "running this command.",
+        # Completions
+        "",
+        # Callback
+        "matrix_send_anyways_cb",
+        "",
+    )
+
     W.hook_command_run("/buffer clear", "matrix_command_buf_clear_cb", "")
 
     if G.CONFIG.network.fetch_backlog_on_pgup:
@@ -1735,3 +1752,36 @@ def matrix_command_cb(data, buffer, args):
         W.prnt("", message)
 
     return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_send_anyways_cb(data, buffer, args):
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            room_buffer = server.find_room_from_ptr(buffer)
+
+            if not server.connected:
+                room_buffer.error("Server is diconnected")
+                break
+
+            if not room_buffer.last_message:
+                room_buffer.error("No previously sent message found.")
+                break
+
+            server.room_send_message(
+                room_buffer,
+                room_buffer.last_message,
+                "m.text",
+                ignore_unverified_devices=True
+            )
+            room_buffer.last_message = None
+
+            break
+    else:
+        message = (
+            "{prefix}matrix: The 'send-anyways' command needs to be "
+            "run on a matrix room buffer"
+        ).format(prefix=W.prefix("error"))
+        W.prnt("", message)
+
+    return W.WEECHAT_RC_ERROR
