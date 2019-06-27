@@ -124,7 +124,8 @@ class WeechatCommandParser(object):
                 "blacklisted",
                 "private",
                 "unverified",
-                "verified"
+                "verified",
+                "ignored"
             ])
         info_parser.add_argument("filter", nargs="?")
 
@@ -629,6 +630,14 @@ def olm_info_command(server, args):
             args.filter,
             "Blacklisted",
             olm.is_device_blacklisted
+        )
+
+    elif args.category == "ignored":
+        print_devices(
+            olm.device_store,
+            args.filter,
+            "Ignored",
+            olm.is_device_ignored
         )
 
 
