@@ -803,9 +803,6 @@ class MatrixServer(object):
         self.send_or_queue(request)
 
     def room_send_state(self, room_buffer, body, event_type):
-        if room_buffer.room.encrypted:
-            return
-
         _, request = self.client.room_put_state(
             room_buffer.room.room_id, event_type, body
         )
