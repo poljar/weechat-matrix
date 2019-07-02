@@ -270,6 +270,7 @@ class MatrixServer(object):
             pass
 
         self.address = None
+        self.homeserver = None
         self.client = None
         self.access_token = None                         # type: Optional[str]
         self.next_batch = None                           # type: Optional[str]
@@ -349,29 +350,31 @@ class MatrixServer(object):
             device_file.write(self.device_id)
 
     @staticmethod
-    def _parse_url(address):
+    def _parse_url(address, port):
+        if not address.startswith("http"):
+            address = "https://{}".format(address)
+
         parsed_url = urlparse(address)
 
-        if parsed_url.netloc:
-            netloc, path = (parsed_url.netloc, parsed_url.path)
-        else:
-            try:
-                netloc, path = address.split("/", 1)
-            except ValueError:
-                netloc, path = (address, "")
+        homeserver = parsed_url._replace(
+            netloc=parsed_url.hostname + ":{}".format(port)
+        )
 
-        return netloc, path.strip("/")
+        return homeserver
 
     def _change_client(self):
-        netloc, extra_path = MatrixServer._parse_url(self.config.address)
-        host = "{}:{}".format(netloc, self.config.port)
-        self.address = netloc
+        homeserver = MatrixServer._parse_url(
+            self.config.address,
+            self.config.port
+        )
+        self.address = homeserver.hostname
+        self.homeserver = homeserver
+
         self.client = HttpClient(
-            host,
+            homeserver.geturl(),
             self.config.username,
             self.device_id,
             self.get_session_path(),
-            extra_path=extra_path
         )
         self.client.add_to_device_callback(
             self.key_verification_cb,
