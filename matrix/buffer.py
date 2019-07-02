@@ -849,8 +849,9 @@ class WeechatChannelBuffer(object):
 
 
 class RoomBuffer(object):
-    def __init__(self, room, server_name, prev_batch):
+    def __init__(self, room, server_name, homeserver, prev_batch):
         self.room = room
+        self.homeserver = homeserver
         self._backlog_pending = False
         self.prev_batch = prev_batch
         self.joined = True

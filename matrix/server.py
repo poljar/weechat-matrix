@@ -1628,7 +1628,7 @@ class MatrixServer(object):
 
     def create_room_buffer(self, room_id, prev_batch):
         room = self.client.rooms[room_id]
-        buf = RoomBuffer(room, self.name, prev_batch)
+        buf = RoomBuffer(room, self.name, self.homeserver, prev_batch)
 
         if room.members_synced:
             buf.members_fetched = True
