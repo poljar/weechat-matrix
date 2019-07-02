@@ -1376,7 +1376,7 @@ class RoomBuffer(object):
         elif isinstance(event, RoomMessageMedia):
             nick = self.find_nick(event.sender)
             date = server_ts_to_weechat(event.server_timestamp)
-            http_url = Api.mxc_to_http(event.url)
+            http_url = Api.mxc_to_http(event.url, self.homeserver.geturl())
             url = http_url if http_url else event.url
 
             description = "/{}".format(event.body) if event.body else ""
@@ -1396,7 +1396,8 @@ class RoomBuffer(object):
                 event.url,
                 event.key["k"],
                 event.hashes["sha256"],
-                event.iv
+                event.iv,
+                self.homeserver.geturl()
             )
             url = http_url if http_url else event.url
 
