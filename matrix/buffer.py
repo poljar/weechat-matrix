@@ -885,15 +885,11 @@ class RoomBuffer(object):
             buffer_name, server_name, user
         )
 
-        try:
-            _, room_domain = room.room_id.split(":", 1)
-            W.buffer_set(
-                self.weechat_buffer._ptr,
-                "localvar_set_domain",
-                room_domain
-            )
-        except ValueError:
-            pass
+        W.buffer_set(
+            self.weechat_buffer._ptr,
+            "localvar_set_domain",
+            self.homeserver.hostname
+        )
 
         W.buffer_set(
             self.weechat_buffer._ptr,
