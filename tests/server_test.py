@@ -6,20 +6,16 @@ G.CONFIG = MockConfig()
 
 class TestClass(object):
     def test_address_parsing(self):
-        host, extra_path = MatrixServer._parse_url("example.org")
-        assert host == "example.org"
-        assert extra_path == ""
+        homeserver = MatrixServer._parse_url("example.org", 8080)
+        assert homeserver.hostname == "example.org"
+        assert homeserver.geturl() == "https://example.org:8080"
 
-        host, extra_path = MatrixServer._parse_url("example.org/_matrix")
-        assert host == "example.org"
-        assert extra_path == "_matrix"
+        homeserver = MatrixServer._parse_url("example.org/_matrix", 80)
+        assert homeserver.hostname == "example.org"
+        assert homeserver.geturl() == "https://example.org:80/_matrix"
 
-        host, extra_path = MatrixServer._parse_url(
-            "https://example.org/_matrix"
+        homeserver = MatrixServer._parse_url(
+            "https://example.org/_matrix", 80
         )
-        assert host == "example.org"
-        assert extra_path == "_matrix"
-
-        host, extra_path = MatrixServer._parse_url("https://example.org")
-        assert host == "example.org"
-        assert extra_path == ""
+        assert homeserver.hostname == "example.org"
+        assert homeserver.geturl() == "https://example.org:80/_matrix"
