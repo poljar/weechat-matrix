@@ -34,17 +34,6 @@ support is still experimental.
     pip install -r requirements.txt
     ```
 
-    Another option is to install the dependencies manually:
-    - pyOpenSSL
-    - typing
-    - webcolors
-    - future (Python2 users only, see below)
-    - atomicwrites
-    - [matrix-nio](https://github.com/poljar/matrix-nio)
-    - attrs
-    - logbook
-    - pygments
-
 3. As your regular user, just run: `make install` in this repository directory.
 
     Note that weechat only supports Python2 OR Python3, and that setting is
