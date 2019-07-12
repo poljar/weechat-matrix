@@ -41,6 +41,8 @@ support is still experimental.
     either Python2 or Python3, but when you install dependencies you will have to
     take into account which version of Python your Weechat was built to use.
 
+    The minimal supported python2 version is 2.7.10.
+
     To check the python version that weechat is using, run:
 
         /python version
