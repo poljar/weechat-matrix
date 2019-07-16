@@ -82,7 +82,7 @@ class Upload(object):
         to_stdout(message)
 
     def __iter__(self):
-        with open(self.filename, 'rb') as file:
+        with open(self.file, 'rb') as file:
             while True:
                 data = file.read(self.chunksize)
 
