@@ -89,6 +89,28 @@ Python3 `venv` module. In particular, this works if (for a typical
 installation of `matrix.py`) the file
 `~/.weechat/python/venv/bin/activate_this.py` exists.
 
+## Run from git directly
+
+Rather than copying files into `~/.weechat` (step 3 above), it is also
+possible to run from a git checkout directly using symlinks.
+
+For this, you need two symlinks:
+
+```
+ln -s /path/to/weechat-matrix/main.py ~/.weechat/python/matrix.py
+ln -s /path/to/weechat-matrix/matrix ~/.weechat/python/matrix
+```
+
+This first link is the main python file, that can be loaded using
+`/script load matrix.py`. The second link is to the directory with extra
+python files used by the main script. This directory must be linked as
+`~/.weechat/python/matrix` so it ends up in the python library path and
+its files can be imported using e.g. `import matrix` from the main python
+file.
+
+Note that these symlinks are essentially the same as the files that
+would have been copied using `make install`.
+
 ## Uploads
 
 Uploads are done using a helper script, the script found under
