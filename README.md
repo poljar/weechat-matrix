@@ -47,6 +47,44 @@ support is still experimental.
 
         /python version
 
+## Using virtualenv
+If you want to install dependencies inside a virtualenv, rather than
+globally for your system or user, you can use a virtualenv.
+Weechat-Matrix will automatically use any virtualenv it finds in a
+directory called `venv` next to its main Python file (after resolving
+symlinks). Typically, this means `~/.weechat/python/venv`.
+
+To create such a virtualenv, you can use something like below. This only
+needs to happen once:
+
+```
+virtualenv ~/.weechat/python/venv
+```
+
+Then, activate the virtualenv:
+
+```
+. ~/.weechat/python/venv/bin/activate
+```
+
+This needs to be done whenever you want to install packages inside the
+virtualenv (so before running the `pip install` command documented
+above.
+
+
+Once the virtualenv is prepared in the right location, Weechat-Matrix
+will automatically activate it when the plugin is loaded. This should
+not affect other plugins, which seem to have a separate Python
+environment.
+
+Note that this only supports virtualenv tools that support the
+[`activate_this.py` way of
+activation](https://virtualenv.pypa.io/en/latest/userguide/#using-virtualenv-without-bin-python).
+This includes the `virtualenv` command, but excludes pyvenv and the
+Python3 `venv` module. In particular, this works if (for a typical
+installation of `matrix.py`) the file
+`~/.weechat/python/venv/bin/activate_this.py` exists.
+
 ## Uploads
 
 Uploads are done using a helper script, the script found under

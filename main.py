@@ -18,6 +18,17 @@
 from __future__ import unicode_literals
 
 import os
+
+# See if there is a `venv` directory next to our script, and use that if
+# present. This first resolves symlinks, so this also works when we are
+# loaded through a symlink (e.g. from autoload).
+# See https://virtualenv.pypa.io/en/latest/userguide/#using-virtualenv-without-bin-python
+# This does not support pyvenv or the python3 venv module, which do not
+# create an activate_this.py: https://stackoverflow.com/questions/27462582
+activate_this = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'venv', 'bin', 'activate_this.py')
+if os.path.exists(activate_this):
+    exec(open(activate_this).read(), {'__file__': activate_this})
+
 import socket
 import ssl
 import textwrap
