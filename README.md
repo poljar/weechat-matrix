@@ -36,6 +36,10 @@ support is still experimental.
 
 3. As your regular user, just run: `make install` in this repository directory.
 
+    This installs the main python file (`main.py`) into
+    `~/.weechat/python/` (renamed to `matrix.py`) along with the other
+    python files it needs (from the `matrix` subdir).
+
     Note that weechat only supports Python2 OR Python3, and that setting is
     determined at the time that Weechat is compiled.  Weechat-Matrix can work with
     either Python2 or Python3, but when you install dependencies you will have to
