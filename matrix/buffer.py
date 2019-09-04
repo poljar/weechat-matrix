@@ -1103,7 +1103,18 @@ class RoomBuffer(object):
         self.update_buffer_name()
 
     def update_buffer_name(self):
-        room_name = self.room.display_name
+        if self.room.is_named:
+            if self.room.name and self.room.name != "#":
+                room_name = self.room.name
+                room_name = (room_name if room_name.startswith("#")
+                             else "#" + room_name)
+            elif self.room.canonical_alias:
+                room_name = self.room.canonical_alias
+            elif self.room.name == "#":
+                room_name = "##"
+        else:
+            room_name = self.room.display_name
+
         self.weechat_buffer.short_name = room_name
 
         if G.CONFIG.human_buffer_names:
