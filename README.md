@@ -36,6 +36,10 @@ support is still experimental.
 
 3. As your regular user, just run: `make install` in this repository directory.
 
+    This installs the main python file (`main.py`) into
+    `~/.weechat/python/` (renamed to `matrix.py`) along with the other
+    python files it needs (from the `matrix` subdir).
+
     Note that weechat only supports Python2 OR Python3, and that setting is
     determined at the time that Weechat is compiled.  Weechat-Matrix can work with
     either Python2 or Python3, but when you install dependencies you will have to
@@ -46,6 +50,66 @@ support is still experimental.
     To check the python version that weechat is using, run:
 
         /python version
+
+## Using virtualenv
+If you want to install dependencies inside a virtualenv, rather than
+globally for your system or user, you can use a virtualenv.
+Weechat-Matrix will automatically use any virtualenv it finds in a
+directory called `venv` next to its main Python file (after resolving
+symlinks). Typically, this means `~/.weechat/python/venv`.
+
+To create such a virtualenv, you can use something like below. This only
+needs to happen once:
+
+```
+virtualenv ~/.weechat/python/venv
+```
+
+Then, activate the virtualenv:
+
+```
+. ~/.weechat/python/venv/bin/activate
+```
+
+This needs to be done whenever you want to install packages inside the
+virtualenv (so before running the `pip install` command documented
+above.
+
+
+Once the virtualenv is prepared in the right location, Weechat-Matrix
+will automatically activate it when the plugin is loaded. This should
+not affect other plugins, which seem to have a separate Python
+environment.
+
+Note that this only supports virtualenv tools that support the
+[`activate_this.py` way of
+activation](https://virtualenv.pypa.io/en/latest/userguide/#using-virtualenv-without-bin-python).
+This includes the `virtualenv` command, but excludes pyvenv and the
+Python3 `venv` module. In particular, this works if (for a typical
+installation of `matrix.py`) the file
+`~/.weechat/python/venv/bin/activate_this.py` exists.
+
+## Run from git directly
+
+Rather than copying files into `~/.weechat` (step 3 above), it is also
+possible to run from a git checkout directly using symlinks.
+
+For this, you need two symlinks:
+
+```
+ln -s /path/to/weechat-matrix/main.py ~/.weechat/python/matrix.py
+ln -s /path/to/weechat-matrix/matrix ~/.weechat/python/matrix
+```
+
+This first link is the main python file, that can be loaded using
+`/script load matrix.py`. The second link is to the directory with extra
+python files used by the main script. This directory must be linked as
+`~/.weechat/python/matrix` so it ends up in the python library path and
+its files can be imported using e.g. `import matrix` from the main python
+file.
+
+Note that these symlinks are essentially the same as the files that
+would have been copied using `make install`.
 
 ## Uploads
 
