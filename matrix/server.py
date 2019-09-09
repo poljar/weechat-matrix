@@ -22,6 +22,7 @@ import socket
 import ssl
 import time
 import copy
+import asyncio
 from collections import defaultdict, deque
 from atomicwrites import atomic_write
 from typing import (
@@ -39,7 +40,8 @@ from uuid import UUID
 
 from nio import (
     Api,
-    HttpClient,
+    AsyncClient,
+    AsyncClientConfig,
     LocalProtocolError,
     LoginResponse,
     Response,
@@ -252,6 +254,8 @@ class MatrixServer(object):
         self.timer_hook = None               # type: Optional[str]
         self.numeric_address = ""            # type: Optional[str]
 
+        self._sync_task = None
+
         self._connected = False     # type: bool
         self.connecting = False     # type: bool
         self.reconnect_delay = 0    # type: int
@@ -369,13 +373,19 @@ class MatrixServer(object):
         )
         self.address = homeserver.hostname
         self.homeserver = homeserver
+        config = AsyncClientConfig(max_timeouts=0)
 
-        self.client = HttpClient(
+        # print("changing clinet")
+
+        self.client = AsyncClient(
             homeserver.geturl(),
             self.config.username,
             self.device_id,
             self.get_session_path(),
+            config=config,
+            ssl=self.ssl_context
         )
+        self.client.add_response_callback(self._handle_sync, SyncResponse)
         self.client.add_to_device_callback(
             self.key_verification_cb,
             KeyVerificationEvent
@@ -600,53 +610,6 @@ class MatrixServer(object):
         msg = "{}{}: {}".format(W.prefix("error"), SCRIPT_NAME, message)
         W.prnt(buf, msg)
 
-    def send(self, data):
-        # type: (bytes) -> bool
-        self.try_send(data)
-
-        return True
-
-    def reconnect(self):
-        message = ("{prefix}matrix: reconnecting to server...").format(
-            prefix=W.prefix("network")
-        )
-
-        server_buffer_prnt(self, message)
-
-        self.reconnect_time = None
-
-        if not self.connect():
-            self.schedule_reconnect()
-
-    def schedule_reconnect(self):
-        # type: (MatrixServer) -> None
-        self.connecting = True
-        self.reconnect_time = time.time()
-
-        if self.reconnect_delay:
-            self.reconnect_delay = self.reconnect_delay * 2
-        else:
-            self.reconnect_delay = self.config.reconnect_delay
-
-        message = (
-            "{prefix}matrix: reconnecting to server in {t} " "seconds"
-        ).format(prefix=W.prefix("network"), t=self.reconnect_delay)
-
-        server_buffer_prnt(self, message)
-
-    def _close_socket(self):
-        # type: () -> None
-        if self.socket:
-            try:
-                self.socket.shutdown(socket.SHUT_RDWR)
-            except socket.error:
-                pass
-
-            try:
-                self.socket.close()
-            except OSError:
-                pass
-
     def disconnect(self, reconnect=True):
         # type: (bool) -> None
         if self.fd_hook:
@@ -691,6 +654,38 @@ class MatrixServer(object):
         else:
             self.reconnect_delay = 0
 
+    async def _sync_loop(self):
+        print("HEELOOO")
+        if not self.client:
+            return
+
+        self._connected = True
+
+        if self.client.logged_in:
+            msg = (
+                "{prefix}{script_name}: Already logged in, " "syncing..."
+            ).format(prefix=W.prefix("network"), script_name=SCRIPT_NAME)
+            W.prnt(self.server_buffer, msg)
+        else:
+            msg = "{prefix}matrix: Logging in...".format(
+                prefix=W.prefix("network")
+            )
+            W.prnt(self.server_buffer, msg)
+            response = await self.client.login(self.config.password, self.config.device_name)
+
+            if isinstance(response, LoginError):
+                self.error(f"Error logging in: {response}")
+                return
+
+        sync_filter = {
+            "room": {
+                "timeline": {"limit": 100},
+                "state": {"lazy_load_members": True}
+            }
+        }
+
+        await self.client.sync_forever(30000, sync_filter=sync_filter)
+
     def connect(self):
         # type: (MatrixServer) -> int
         if not self.config.address or not self.config.port:
@@ -713,10 +708,10 @@ class MatrixServer(object):
         if not self.server_buffer:
             create_server_buffer(self)
 
-        if not self.timer_hook:
-            self.timer_hook = W.hook_timer(
-                1 * 1000, 0, 0, "matrix_timer_cb", self.name
-            )
+        # if not self.timer_hook:
+        #     self.timer_hook = W.hook_timer(
+        #         1 * 1000, 0, 0, "matrix_timer_cb", self.name
+        #     )
 
         ssl_message = " (SSL)" if self.ssl_context.check_hostname else ""
 
@@ -731,16 +726,18 @@ class MatrixServer(object):
 
         W.prnt(self.server_buffer, message)
 
-        W.hook_connect(
-            self.config.proxy,
-            self.address,
-            self.config.port,
-            1,
-            0,
-            "",
-            "connect_cb",
-            self.name,
-        )
+        self._sync_task = asyncio.ensure_future(self._sync_loop())
+
+        # W.hook_connect(
+        #     self.config.proxy,
+        #     self.address,
+        #     self.config.port,
+        #     1,
+        #     0,
+        #     "",
+        #     "connect_cb",
+        #     self.name,
+        # )
 
         return True
 
@@ -1375,9 +1372,9 @@ class MatrixServer(object):
 
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
-        if self.next_batch == response.next_batch:
-            self.schedule_sync()
-            return
+        # if self.next_batch == response.next_batch:
+            # self.schedule_sync()
+            # return
 
         self._handle_room_info(response)
 
@@ -1399,39 +1396,31 @@ class MatrixServer(object):
 
         # Full sync response handle everything.
         if isinstance(response, SyncResponse):
-            if self.client.should_upload_keys:
-                self.keys_upload()
+            # if self.client.should_upload_keys:
+            #     self.keys_upload()
 
-            if self.client.should_query_keys and not self.keys_queried:
-                self.keys_query()
+            # if self.client.should_query_keys and not self.keys_queried:
+            #     self.keys_query()
 
-            for room_buffer in self.room_buffers.values():
+            # for room_buffer in self.room_buffers.values():
                 # It's our initial sync, we need to fetch room members, so add
                 # the room to the missing members queue.
-                if not self.next_batch:
-                    if (not G.CONFIG.network.lazy_load_room_users
-                            or room_buffer.room.encrypted):
-                        self.rooms_with_missing_members.append(
-                            room_buffer.room.room_id
-                        )
-                if room_buffer.unhandled_users:
-                    self._hook_lazy_user_adding()
-                    break
+                # if not self.next_batch:
+                #     if (not G.CONFIG.network.lazy_load_room_users
+                #             or room_buffer.room.encrypted):
+                #         self.rooms_with_missing_members.append(
+                #             room_buffer.room.room_id
+                #         )
+                # if room_buffer.unhandled_users:
+                #     self._hook_lazy_user_adding()
+                #     break
 
             self.next_batch = response.next_batch
-            self.schedule_sync()
+            # self.schedule_sync()
             W.bar_item_update("matrix_typing_notice")
 
-            if self.rooms_with_missing_members:
-                self.get_joined_members(self.rooms_with_missing_members.pop())
-        else:
-            if not self.partial_sync_hook:
-                hook = W.hook_timer(1 * 100, 0, 0, "matrix_partial_sync_cb",
-                                    self.name)
-                self.partial_sync_hook = hook
-                self.busy = True
-                W.bar_item_update("buffer_modes")
-                W.bar_item_update("matrix_modes")
+            # if self.rooms_with_missing_members:
+            #     self.get_joined_members(self.rooms_with_missing_members.pop())
 
     def handle_delete_device_auth(self, response):
         device_id = self.device_deletion_queue.pop(response.uuid, None)

@@ -32,6 +32,7 @@ if os.path.exists(activate_this):
 import socket
 import ssl
 import textwrap
+import asyncio
 # pylint: disable=redefined-builtin
 from builtins import str
 from itertools import chain
@@ -90,6 +91,8 @@ from matrix.utf import utf8_decode
 from matrix.utils import server_buffer_prnt, server_buffer_set_title
 
 from matrix.uploads import UploadsBuffer, upload_cb
+
+from matrix.event_loop import *
 
 # yapf: disable
 WEECHAT_SCRIPT_NAME = SCRIPT_NAME
@@ -432,10 +435,10 @@ def matrix_unload_cb():
     return W.WEECHAT_RC_OK
 
 
-def autoconnect(servers):
-    for server in servers.values():
-        if server.config.autoconnect:
-            server.connect()
+# def autoconnect(servers):
+#     for server in servers.values():
+#         if server.config.autoconnect:
+#             server.connect()
 
 
 def debug_buffer_close_cb(data, buffer):
@@ -599,6 +602,12 @@ if __name__ == "__main__":
                        "directory").format(prefix=W.prefix("error"))
             W.prnt("", message)
 
+        loop = WeechatLoop()
+        asyncio.set_event_loop(loop)
+
+        asyncio.ensure_future(test())
+
+
         handler = WeechatHandler()
         handler.format_string = "{record.channel}: {record.message}"
         handler.push_application()
@@ -612,10 +621,10 @@ if __name__ == "__main__":
         init_completion()
 
         W.hook_command_run("/buffer", "buffer_command_cb", "")
-        W.hook_signal("buffer_switch", "buffer_switch_cb", "")
+        # W.hook_signal("buffer_switch", "buffer_switch_cb", "")
         W.hook_signal("input_text_changed", "typing_notification_cb", "")
 
         if not SERVERS:
             create_default_server(G.CONFIG)
 
-        autoconnect(SERVERS)
+        # autoconnect(SERVERS)
