@@ -1547,7 +1547,7 @@ def matrix_server_command_delete(args):
                 W.prnt("", message)
                 return
 
-            for buf in server.buffers.values():
+            for buf in list(server.buffers.values()):
                 W.buffer_close(buf)
 
             if server.server_buffer:
@@ -1555,6 +1555,10 @@ def matrix_server_command_delete(args):
 
             for option in server.config._option_ptrs.values():
                 W.config_option_free(option)
+
+            if server.timer_hook:
+                W.unhook(server.timer_hook)
+                server.timer_hook = None
 
             message = (
                 "matrix: server {color}{server}{ncolor} has been " "deleted"
