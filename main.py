@@ -573,7 +573,6 @@ def buffer_switch_cb(_, _signal, buffer_ptr):
 
         if not room_buffer.members_fetched:
             room_id = room_buffer.room.room_id
-            print("HELLO FETCHING FOR {}".format(room_id))
             server.get_joined_members(room_id)
 
         # The buffer is empty and we are seeing it for the first time.
