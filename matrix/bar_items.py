@@ -112,7 +112,7 @@ def matrix_bar_item_buffer_modes(data, item, window, buffer, extra_info):
                     and server.client.room_contains_unverified(room.room_id)):
                 modes.append(G.CONFIG.look.encryption_warning_sign)
 
-            if not server.connected:
+            if not server.connected or not server.client.logged_in:
                 modes.append(G.CONFIG.look.disconnect_sign)
 
             if room_buffer.backlog_pending or server.busy:

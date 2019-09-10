@@ -96,6 +96,10 @@ def room_buffer_input_cb(server_name, buffer, input_data):
         room_buffer.error("You are not connected to the server")
         return W.WEECHAT_RC_ERROR
 
+    if not server.client.logged_in:
+        room_buffer.error("You are not logged in.")
+        return W.WEECHAT_RC_ERROR
+
     data = W.string_input_for_buffer(input_data)
 
     if not data:

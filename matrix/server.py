@@ -862,7 +862,7 @@ class MatrixServer(object):
                 be sent.
             event_id(str): the event id where to set the marker
         """
-        if not self.connected:
+        if not self.connected or not self.client.logged_in:
             return
 
         _, request = self.client.room_read_markers(
@@ -878,7 +878,7 @@ class MatrixServer(object):
             room_buffer(RoomBuffer): the room for which the typing notice needs
                 to be sent.
         """
-        if not self.connected:
+        if not self.connected or not self.client.logged_in:
             return
 
         input = room_buffer.weechat_buffer.input
@@ -1098,8 +1098,9 @@ class MatrixServer(object):
         self.send_or_queue(request)
 
     def get_joined_members(self, room_id):
-        if not self.connected:
+        if not self.connected or not self.client.logged_in:
             return
+
         if room_id in self.member_request_list:
             return
 
@@ -1836,7 +1837,7 @@ def matrix_timer_cb(server_name, remaining_calls):
         server.reconnect()
         return W.WEECHAT_RC_OK
 
-    if not server.connected:
+    if not server.connected or not server.client.logged_in:
         return W.WEECHAT_RC_OK
 
     # check lag, disconnect if it's too big
