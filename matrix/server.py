@@ -134,7 +134,10 @@ class ServerConfig(ConfigSection):
                 0,
                 0,
                 "",
-                "Hostname or IP address for the server",
+                (
+                    "Hostname or address of the server (note: content is "
+                    "evaluated, see /help eval)"
+                )
             ),
             Option(
                 "port", "integer", "", 0, 65535, "443", "Port for the server"
@@ -146,7 +149,8 @@ class ServerConfig(ConfigSection):
                 0,
                 0,
                 "",
-                ("Name of weechat proxy to use (see /help proxy)"),
+                ("Name of weechat proxy to use (see /help proxy) (note: "
+                 "content is evaluated, see /help eval)"),
             ),
             Option(
                 "ssl_verify",
@@ -158,7 +162,16 @@ class ServerConfig(ConfigSection):
                 ("Check that the SSL connection is fully trusted"),
             ),
             Option(
-                "username", "string", "", 0, 0, "", "Username to use on server"
+                "username",
+                "string",
+                "",
+                0,
+                0,
+                "",
+                (
+                    "Username to use on the server (note: content is "
+                    "evaluated, see /help eval)"
+                )
             ),
             Option(
                 "password",
@@ -168,7 +181,7 @@ class ServerConfig(ConfigSection):
                 0,
                 "",
                 (
-                    "Password for server (note: content is evaluated, see "
+                    "Password for the server (note: content is evaluated, see "
                     "/help eval)"
                 ),
             ),
@@ -179,7 +192,12 @@ class ServerConfig(ConfigSection):
                 0,
                 0,
                 "Weechat Matrix",
-                "Device name to use while logging in to the matrix server",
+                (
+                    "Device name to use when logging in, this "
+                    "is only used on the firt login. Afther that the /devices "
+                    "command can be used to change the device name. (note: "
+                    "content is evaluated, see /help eval)"
+                )
             ),
             Option(
                 "autoreconnect_delay",
@@ -221,12 +239,14 @@ class ServerConfig(ConfigSection):
             )
 
     autoconnect = ConfigSection.option_property("autoconnect", "boolean")
-    address = ConfigSection.option_property("address", "string")
+    address = ConfigSection.option_property("address", "string", evaluate=True)
     port = ConfigSection.option_property("port", "integer")
-    proxy = ConfigSection.option_property("proxy", "string")
+    proxy = ConfigSection.option_property("proxy", "string", evaluate=True)
     ssl_verify = ConfigSection.option_property("ssl_verify", "boolean")
-    username = ConfigSection.option_property("username", "string")
-    device_name = ConfigSection.option_property("device_name", "string")
+    username = ConfigSection.option_property("username", "string",
+        evaluate=True)
+    device_name = ConfigSection.option_property("device_name", "string",
+        evaluate=True)
     reconnect_delay = ConfigSection.option_property("autoreconnect_delay", "integer")
     password = ConfigSection.option_property(
         "password", "string", evaluate=True
