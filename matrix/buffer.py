@@ -1373,7 +1373,7 @@ class RoomBuffer(object):
         nick = self.find_nick(event.sender)
         data = Render.room_encryption(nick)
         # TODO this should also have tags
-        self.weechat_buffer.info(message)
+        self.weechat_buffer.info(data)
 
     def print_megolm(self, event, extra_tags=None):
         extra_tags = extra_tags or []
