@@ -861,6 +861,7 @@ class RoomBuffer(object):
         self.joined = True
         self.leave_event_id = None  # type: Optional[str]
         self.members_fetched = False
+        self.first_view = True
         self.unhandled_users = []   # type: List[str]
         self.inactive_users = []
 

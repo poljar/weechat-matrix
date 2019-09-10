@@ -938,11 +938,11 @@ def matrix_me_command_cb(data, buffer, args):
                 W.prnt(server.server_buffer, message)
                 return W.WEECHAT_RC_ERROR
 
+            room_buffer = server.find_room_from_ptr(buffer)
+
             if not server.client.logged_in:
                 room_buffer.error("You are not logged in.")
                 return W.WEECHAT_RC_ERROR
-
-            room_buffer = server.find_room_from_ptr(buffer)
 
             if not args:
                 return W.WEECHAT_RC_OK

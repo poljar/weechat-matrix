@@ -82,13 +82,12 @@ from matrix.completion import (init_completion, matrix_command_completion_cb,
 from matrix.config import (MatrixConfig, config_log_category_cb,
                            config_log_level_cb, config_server_buffer_cb,
                            matrix_config_reload_cb, config_pgup_cb)
-from matrix.globals import SCRIPT_NAME, SERVERS, W, MAX_EVENTS
+from matrix.globals import SCRIPT_NAME, SERVERS, W
 from matrix.server import (MatrixServer, create_default_server,
                            matrix_config_server_change_cb,
                            matrix_config_server_read_cb,
                            matrix_config_server_write_cb, matrix_timer_cb,
-                           send_cb, matrix_load_users_cb,
-                           matrix_partial_sync_cb)
+                           send_cb, matrix_load_users_cb)
 from matrix.utf import utf8_decode
 from matrix.utils import server_buffer_prnt, server_buffer_set_title
 
@@ -325,7 +324,7 @@ def receive_cb(server_name, file_descriptor):
             server.disconnect()
             break
 
-        response = server.client.next_response(MAX_EVENTS)
+        response = server.client.next_response()
 
         # Check if we need to send some data back
         data_to_send = server.client.data_to_send()
@@ -493,9 +492,6 @@ def matrix_unload_cb():
 
     G.CONFIG.free()
 
-    # for server in SERVERS.values():
-    #     server.store_olm()
-
     return W.WEECHAT_RC_OK
 
 
@@ -565,21 +561,27 @@ def buffer_switch_cb(_, _signal, buffer_ptr):
         if not room_buffer:
             continue
 
-        if room_buffer.should_send_read_marker:
-            event_id = room_buffer.last_event_id
+        last_event_id = room_buffer.last_event_id
 
+        if room_buffer.should_send_read_marker:
             # A buffer may not have any events, in that case no event id is
             # here returned
-            if event_id:
+            if last_event_id:
                 server.room_send_read_marker(
-                    room_buffer.room.room_id, event_id)
-                room_buffer.last_read_event = event_id
+                    room_buffer.room.room_id, last_event_id)
+                room_buffer.last_read_event = last_event_id
 
-        if room_buffer.members_fetched:
-            return W.WEECHAT_RC_OK
+        if not room_buffer.members_fetched:
+            room_id = room_buffer.room.room_id
+            print("HELLO FETCHING FOR {}".format(room_id))
+            server.get_joined_members(room_id)
 
-        room_id = room_buffer.room.room_id
-        server.get_joined_members(room_id)
+        # The buffer is empty and we are seeing it for the first time.
+        # Let us fetch some messages from the room history so it doesn't feel so
+        # empty.
+        if room_buffer.first_view and not last_event_id:
+            if server.room_get_messages(room_buffer.room.room_id):
+                room_buffer.first_view = True
 
         break
 

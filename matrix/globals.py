@@ -42,7 +42,6 @@ SERVERS = dict()  # type: Dict[str, MatrixServer]
 CONFIG = None  # type: Optional[MatrixConfig]
 ENCRYPTION = True  # type: bool
 SCRIPT_NAME = "matrix"  # type: str
-MAX_EVENTS = 100
 TYPING_NOTICE_TIMEOUT = 4000  # 4 seconds typing notice lifetime
 LOGGER = Logger("weechat-matrix")
 UPLOADS = OrderedDict()  # type: Dict[str, Upload]
