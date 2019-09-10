@@ -1429,19 +1429,22 @@ class RoomBuffer(object):
         elif isinstance(event, MegolmEvent):
             self.print_megolm(event, extra_tags)
 
+    def force_load_member(self, event):
+        if (event.sender not in self.displayed_nicks and
+            event.sender in self.room.users):
+
+            try:
+                self.unhandled_users.remove(event.sender)
+            except ValueError:
+                pass
+
+            self.add_user(event.sender, 0, True, True)
+
     def handle_timeline_event(self, event, extra_tags=None):
         # TODO this should be done for every messagetype that gets printed in
         # the buffer
         if isinstance(event, (RoomMessage, MegolmEvent)):
-            if (event.sender not in self.displayed_nicks and
-                    event.sender in self.room.users):
-
-                try:
-                    self.unhandled_users.remove(event.sender)
-                except ValueError:
-                    pass
-
-                self.add_user(event.sender, 0, True, True)
+            self.force_load_member(event)
 
         if event.transaction_id:
             self.handle_own_message_in_timeline(event)
@@ -1635,6 +1638,7 @@ class RoomBuffer(object):
         # messing up the room state the state change will need to be separated
         # from the print logic.
         if isinstance(event, RoomMessage):
+            self.force_load_member(event)
             self.handle_room_messages(event, tags)
 
         elif isinstance(event, MegolmEvent):
