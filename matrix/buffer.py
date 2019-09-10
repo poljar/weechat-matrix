@@ -489,6 +489,12 @@ class WeechatChannelBuffer(object):
 
         self._print(message)
 
+    def info(self, string):
+        message = "{prefix}{script}: {message}".format(
+            prefix=W.prefix("network"), script=SCRIPT_NAME, message=string
+        )
+        self._print(message)
+
     @staticmethod
     def _color_for_tags(color):
         # type: (str) -> str
@@ -1273,7 +1279,157 @@ class RoomBuffer(object):
             self.self_message(message)
         return
 
-    def handle_timeline_event(self, event):
+    def print_room_message(self, event, extra_tags=None):
+        extra_tags = extra_tags or []
+        nick = self.find_nick(event.sender)
+
+        data = Render.message(event.body, event.formatted_body)
+
+        extra_prefix = (self.warning_prefix if event.decrypted
+                        and not event.verified else "")
+
+        date = server_ts_to_weechat(event.server_timestamp)
+        self.weechat_buffer.message(
+            nick, data, date, self.get_event_tags(event) + extra_tags,
+            extra_prefix
+        )
+
+    def print_room_emote(self, event, extra_tags=None):
+        extra_tags = extra_tags or []
+        nick = self.find_nick(event.sender)
+        date = server_ts_to_weechat(event.server_timestamp)
+
+        extra_prefix = (self.warning_prefix if event.decrypted
+                        and not event.verified else "")
+
+        self.weechat_buffer.action(
+            nick, event.body, date, self.get_event_tags(event) + extra_tags,
+            extra_prefix
+        )
+
+    def print_room_notice(self, event, extra_tags=None):
+        extra_tags = extra_tags or []
+        nick = self.find_nick(event.sender)
+        date = server_ts_to_weechat(event.server_timestamp)
+        extra_prefix = (self.warning_prefix if event.decrypted
+                        and not event.verified else "")
+
+        self.weechat_buffer.notice(
+            nick, event.body, date, self.get_event_tags(event) + extra_tags,
+            extra_prefix
+        )
+
+    def print_room_media(self, event, extra_tags=None):
+        extra_tags = extra_tags or []
+        nick = self.find_nick(event.sender)
+        date = server_ts_to_weechat(event.server_timestamp)
+        if isinstance(event, RoomMessageMedia):
+            data = Render.media(event.url, event.body, self.homeserver.geturl())
+        else:
+            data = Render.encrypted_media(
+                event.url, event.body, event.key["k"], event.hashes["sha256"],
+                event.iv, self.homeserver.geturl()
+            )
+
+        extra_prefix = (self.warning_prefix if event.decrypted
+                        and not event.verified else "")
+
+        self.weechat_buffer.message(
+            nick, data, date, self.get_event_tags(event) + extra_tags,
+            extra_prefix
+        )
+
+    def print_unknown(self, event, extra_tags=None):
+        extra_tags = extra_tags or []
+        nick = self.find_nick(event.sender)
+        date = server_ts_to_weechat(event.server_timestamp)
+        data = Render.unknown(
+            event.type,
+            event.event_dict.get("content", None)
+        )
+        extra_prefix = (self.warning_prefix if event.decrypted
+                        and not event.verified else "")
+
+        self.weechat_buffer.message(
+            nick, data, date, self.get_event_tags(event) + extra_tags,
+            extra_prefix
+        )
+
+    def print_redacted(self, event, extra_tags=None):
+        extra_tags = extra_tags or []
+
+        nick = self.find_nick(event.sender)
+        date = server_ts_to_weechat(event.server_timestamp)
+        tags = self.get_event_tags(event)
+        tags.append(SCRIPT_NAME + "_redacted")
+        tags += extra_tags
+
+        censor = self.find_nick(event.redacter)
+        data = Render.redacted(censor, event.reason)
+
+        self.weechat_buffer.message(nick, data, date, tags)
+
+    def print_room_encryption(self, event, extra_tags=None):
+        nick = self.find_nick(event.sender)
+        data = Render.room_encryption(nick)
+        # TODO this should also have tags
+        self.weechat_buffer.info(message)
+
+    def print_megolm(self, event, extra_tags=None):
+        extra_tags = extra_tags or []
+        nick = self.find_nick(event.sender)
+        date = server_ts_to_weechat(event.server_timestamp)
+
+        data = Render.megolm()
+
+        session_id_tag = SCRIPT_NAME + "_sessionid_" + event.session_id
+        self.weechat_buffer.message(
+            nick,
+            data,
+            date,
+            self.get_event_tags(event) + [session_id_tag] + extra_tags
+        )
+
+        self.undecrypted_events.append(event)
+
+    def print_bad_event(self, event, extra_tags=None):
+        extra_tags = extra_tags or []
+        nick = self.find_nick(event.sender)
+        date = server_ts_to_weechat(event.server_timestamp)
+        data = Render.bad(event)
+        extra_prefix = self.warning_prefix
+
+        self.weechat_buffer.message(
+            nick, data, date, self.get_event_tags(event) + extra_tags,
+            extra_prefix
+        )
+
+    def handle_room_messages(self, event, extra_tags=None):
+        if isinstance(event, RoomMessageEmote):
+            self.print_room_emote(event, extra_tags)
+
+        elif isinstance(event, RoomMessageText):
+            self.print_room_message(event, extra_tags)
+
+        elif isinstance(event, RoomMessageNotice):
+            self.print_room_notice(event, extra_tags)
+
+        elif isinstance(event, RoomMessageMedia):
+            self.print_room_media(event, extra_tags)
+
+        elif isinstance(event, RoomEncryptedMedia):
+            self.print_room_media(event, extra_tags)
+
+        elif isinstance(event, RoomMessageUnknown):
+            self.print_unknown(event, extra_tags)
+
+        elif isinstance(event, RoomEncryptionEvent):
+            self.print_room_encryption(event, extra_tags)
+
+        elif isinstance(event, MegolmEvent):
+            self.print_megolm(event, extra_tags)
+
+    def handle_timeline_event(self, event, extra_tags=None):
         # TODO this should be done for every messagetype that gets printed in
         # the buffer
         if isinstance(event, (RoomMessage, MegolmEvent)):
@@ -1303,139 +1459,44 @@ class RoomBuffer(object):
         # Emotes are a subclass of RoomMessageText, so put them before the text
         # ones
         elif isinstance(event, RoomMessageEmote):
-            nick = self.find_nick(event.sender)
-            date = server_ts_to_weechat(event.server_timestamp)
-
-            extra_prefix = (self.warning_prefix if event.decrypted
-                            and not event.verified else "")
-
-            self.weechat_buffer.action(
-                nick, event.body, date, self.get_event_tags(event),
-                extra_prefix
-            )
+            self.print_room_emote(event, extra_tags)
 
         elif isinstance(event, RoomMessageText):
-            nick = self.find_nick(event.sender)
-
-            data = Render.message(event.body, event.formatted_body)
-
-            extra_prefix = (self.warning_prefix if event.decrypted
-                            and not event.verified else "")
-
-            date = server_ts_to_weechat(event.server_timestamp)
-            self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event), extra_prefix
-            )
+            self.print_room_message(event, extra_tags)
 
         elif isinstance(event, RoomMessageNotice):
-            nick = self.find_nick(event.sender)
-            date = server_ts_to_weechat(event.server_timestamp)
-            extra_prefix = (self.warning_prefix if event.decrypted
-                            and not event.verified else "")
-
-            self.weechat_buffer.notice(
-                nick, event.body, date, self.get_event_tags(event),
-                extra_prefix
-            )
+            self.print_room_notice(event, extra_tags)
 
         elif isinstance(event, RoomMessageMedia):
-            nick = self.find_nick(event.sender)
-            date = server_ts_to_weechat(event.server_timestamp)
-            data = Render.media(event.url, event.body, self.homeserver.geturl())
-
-            extra_prefix = (self.warning_prefix if event.decrypted
-                            and not event.verified else "")
-
-            self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event), extra_prefix
-            )
+            self.print_room_media(event, extra_tags)
 
         elif isinstance(event, RoomEncryptedMedia):
-            nick = self.find_nick(event.sender)
-            date = server_ts_to_weechat(event.server_timestamp)
-            data = Render.encrypted_media(
-                event.url,
-                event.body,
-                event.key["k"],
-                event.hashes["sha256"],
-                event.iv,
-                self.homeserver.geturl()
-            )
-
-            extra_prefix = (self.warning_prefix if event.decrypted
-                            and not event.verified else "")
-
-            self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event), extra_prefix
-            )
+            self.print_room_media(event, extra_tags)
 
         elif isinstance(event, RoomMessageUnknown):
-            nick = self.find_nick(event.sender)
-            date = server_ts_to_weechat(event.server_timestamp)
-            data = Render.unknown(
-                event.type,
-                event.event_dict.get("content", None)
-            )
-            extra_prefix = (self.warning_prefix if event.decrypted
-                            and not event.verified else "")
-
-            self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event), extra_prefix
-            )
+            self.print_unknown(event, extra_tags)
 
         elif isinstance(event, RedactionEvent):
-            self._redact_line(event)
+            self._redact_line(event, extra_tags)
 
         elif isinstance(event, RedactedEvent):
-            nick = self.find_nick(event.sender)
-            date = server_ts_to_weechat(event.server_timestamp)
-            tags = self.get_event_tags(event)
-            tags.append(SCRIPT_NAME + "_redacted")
-
-            censor = self.find_nick(event.redacter)
-            data = Render.redacted(censor, event.reason)
-
-            self.weechat_buffer.message(nick, data, date, tags)
+            self.print_redacted(event, extra_tags)
 
         elif isinstance(event, RoomEncryptionEvent):
-            message = (
-                "This room is encrypted, encryption is "
-                "currently unsuported. Message sending is disabled for "
-                "this room."
-            )
-            self.weechat_buffer.error(message)
+            self.print_room_encryption(event, extra_tags)
 
         elif isinstance(event, PowerLevelsEvent):
+            # TODO we should print out a message for this event
             self._handle_power_level(event)
 
         elif isinstance(event, MegolmEvent):
-            nick = self.find_nick(event.sender)
-            date = server_ts_to_weechat(event.server_timestamp)
-
-            data = Render.megolm()
-
-            session_id_tag = SCRIPT_NAME + "_sessionid_" + event.session_id
-            self.weechat_buffer.message(
-                nick,
-                data,
-                date,
-                self.get_event_tags(event) + [session_id_tag]
-            )
-
-            self.undecrypted_events.append(event)
+            self.print_megolm(event, extra_tags)
 
         elif isinstance(event, UnknownEvent):
             pass
 
         elif isinstance(event, BadEvent):
-            nick = self.find_nick(event.sender)
-            date = server_ts_to_weechat(event.server_timestamp)
-            data = ("Bad event received, event type: {t}").format(t=event.type)
-            extra_prefix = self.warning_prefix
-
-            self.weechat_buffer.message(
-                nick, data, date, self.get_event_tags(event), extra_prefix
-            )
+            self.print_bad_event(event, extra_tags)
 
         elif isinstance(event, UnknownBadEvent):
             self.error("Unkwnown bad event: {}".format(
@@ -1567,42 +1628,23 @@ class RoomBuffer(object):
         # bottom and sort the buffer lines.
         lines[0].message = data
 
-    def old_redacted(self, event):
-        tags = [
-            SCRIPT_NAME + "_message",
-            "notify_message",
-            "no_log",
-            "no_highlight",
-        ]
-
-        censor = self.find_nick(event.redacter)
-        data = Render.redacted(censor, event.reason)
-
-        tags += self.get_event_tags(event)
-        nick = self.find_nick(event.sender)
-        user = self.weechat_buffer._get_user(nick)
-        date = server_ts_to_weechat(event.server_timestamp)
-        self.weechat_buffer._print_message(user, data, date, tags)
-
     def old_message(self, event):
-        tags = [
-            SCRIPT_NAME + "_message",
-            "notify_message",
-            "no_log",
-            "no_highlight",
-        ]
-        tags += self.get_event_tags(event)
-        nick = self.find_nick(event.sender)
+        tags = list(self.weechat_buffer.tags["old_message"])
+        # TODO events that change the room state (topics, membership changes,
+        # etc...) should be printed out as well, but for this to work without
+        # messing up the room state the state change will need to be separated
+        # from the print logic.
+        if isinstance(event, RoomMessage):
+            self.handle_room_messages(event, tags)
 
-        formatted = None
+        elif isinstance(event, MegolmEvent):
+            self.print_megolm(event, tags)
 
-        if event.formatted_body:
-            formatted = Formatted.from_html(event.formatted_body)
+        elif isinstance(event, RedactedEvent):
+            self.print_redacted(event, tags)
 
-        data = formatted.to_weechat() if formatted else event.body
-        user = self.weechat_buffer._get_user(nick)
-        date = server_ts_to_weechat(event.server_timestamp)
-        self.weechat_buffer._print_message(user, data, date, tags)
+        elif isinstance(event, BadEvent):
+            self.print_bad_event(event, tags)
 
     def sort_messages(self):
         class LineCopy(object):
@@ -1642,10 +1684,7 @@ class RoomBuffer(object):
         self.prev_batch = response.end
 
         for event in response.chunk:
-            if isinstance(event, RoomMessageText):
-                self.old_message(event)
-            elif isinstance(event, RedactedEvent):
-                self.old_redacted(event)
+            self.old_message(event)
 
         self.sort_messages()
 

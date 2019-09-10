@@ -112,3 +112,8 @@ class Render(object):
                     del_color=W.color("chat_delimiters"),
                     log_color=W.color("logger.color.backlog_line"),
                     ncolor=W.color("reset"))
+
+    @staticmethod
+    def bad(event):
+        """Render a malformed event of a known type"""
+        return "Bad event received, event type: {t}".format(t=event.type)
