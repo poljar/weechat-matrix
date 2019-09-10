@@ -42,6 +42,7 @@ from nio import (
     HttpClient,
     LocalProtocolError,
     LoginResponse,
+    LoginInfoResponse,
     Response,
     Rooms,
     RoomSendResponse,
@@ -261,6 +262,8 @@ class MatrixServer(object):
         self.ssl_context = ssl.create_default_context()  # type: ssl.SSLContext
         self.transport_type = None  # type: Optional[TransportType]
 
+        self.sso_hook = None
+
         # Enable http2 negotiation on the ssl context.
         self.ssl_context.set_alpn_protocols(["h2", "http/1.1"])
 
@@ -304,6 +307,10 @@ class MatrixServer(object):
         self.ignore_while_sharing = defaultdict(bool)
         self.to_device_sent = []
 
+        # Try to load the device id, the device id is loaded every time the
+        # user changes but some login flows don't use a user so try to load the
+        # device for a main user.
+        self._load_device_id("main")
         self.config = ServerConfig(self.name, config_ptr)
         self._create_session_dir()
         # yapf: enable
@@ -330,8 +337,10 @@ class MatrixServer(object):
         home_dir = W.info_get("weechat_dir", "")
         return os.path.join(home_dir, "matrix", self.name)
 
-    def _load_device_id(self):
-        file_name = "{}{}".format(self.config.username, ".device_id")
+    def _load_device_id(self, user=None):
+        user = user or self.config.username
+
+        file_name = "{}{}".format(user, ".device_id")
         path = os.path.join(self.get_session_path(), file_name)
 
         if not os.path.isfile(path):
@@ -343,7 +352,7 @@ class MatrixServer(object):
                 self.device_id = device_id
 
     def save_device_id(self):
-        file_name = "{}{}".format(self.config.username, ".device_id")
+        file_name = "{}{}".format(self.config.username or "main", ".device_id")
         path = os.path.join(self.get_session_path(), file_name)
 
         with atomic_write(path, overwrite=True) as device_file:
@@ -700,13 +709,6 @@ class MatrixServer(object):
             W.prnt("", message)
             return False
 
-        if not self.config.username or not self.config.password:
-            message = "{prefix}User or password not set".format(
-                prefix=W.prefix("error")
-            )
-            W.prnt("", message)
-            return False
-
         if self.connected:
             return True
 
@@ -756,11 +758,41 @@ class MatrixServer(object):
         _, request = self.client.sync(timeout, sync_filter)
         self.send_or_queue(request)
 
-    def login(self):
+    def login_info(self):
         # type: () -> None
         if not self.client:
             return
 
+        if self.client.logged_in:
+            self.login()
+
+        _, request = self.client.login_info()
+        self.send(request)
+
+    """Start a local HTTP server to listen for SSO tokens."""
+    def start_login_sso(self):
+        # type: () -> None
+        if self.sso_hook:
+            # If there is a stale SSO process hanging around kill it. We could
+            # let it stay around but the URL that needs to be opened by the
+            # user is printed out in the callback.
+            W.hook_set(self.sso_hook, "signal", "term")
+            self.sso_hook = None
+
+        process_args = {
+            "buffer_flush": "1",
+        }
+
+        self.sso_hook = W.hook_process_hashtable(
+            "matrix_sso_helper",
+            process_args,
+            0,
+            "sso_login_cb",
+            self.name
+        )
+
+    def login(self, token=None):
+        # type: () -> None
         if self.client.logged_in:
             msg = (
                 "{prefix}{script_name}: Already logged in, " "syncing..."
@@ -776,9 +808,21 @@ class MatrixServer(object):
             self.sync(timeout, sync_filter)
             return
 
-        _, request = self.client.login(
-            self.config.password, self.config.device_name
-        )
+        if (not self.config.username or not self.config.password) and not token:
+            message = "{prefix}User or password not set".format(
+                prefix=W.prefix("error")
+            )
+            W.prnt("", message)
+            return self.disconnect()
+
+        if token:
+            _, request = self.client.login(
+                device_name=self.config.device_name, token=token
+            )
+        else:
+            _, request = self.client.login(
+                password=self.config.password, device_name=self.config.device_name
+            )
         self.send_or_queue(request)
 
         msg = "{prefix}matrix: Logging in...".format(
@@ -1217,6 +1261,22 @@ class MatrixServer(object):
             lines.append(line)
         W.prnt(self.server_buffer, "\n".join(lines))
 
+    """Handle a login info response and chose one of the available flows
+
+    This currently supports only SSO and password logins. If both are available
+    password takes precedence over SSO if a username and password is provided.
+
+    """
+    def _handle_login_info(self, response):
+        if ("m.login.sso" in response.flows
+                and (not self.config.username or self.config.password)):
+            self.start_login_sso()
+        elif "m.login.password" in response.flows:
+            self.login()
+        else:
+            self.error("No supported login flow found")
+            self.disconnect()
+
     def _handle_login(self, response):
         self.access_token = response.access_token
         self.user_id = response.user_id
@@ -1503,6 +1563,9 @@ class MatrixServer(object):
 
         elif isinstance(response, LoginResponse):
             self._handle_login(response)
+
+        elif isinstance(response, LoginInfoResponse):
+            self._handle_login_info(response)
 
         elif isinstance(response, (SyncResponse, PartialSyncResponse)):
             self._handle_sync(response)

@@ -39,9 +39,12 @@ from itertools import chain
 from typing import Any, AnyStr, Deque, Dict, List, Optional, Set, Text, Tuple
 
 import logbook
+import json
 import OpenSSL.crypto as crypto
 from future.utils import bytes_to_native_str as n
 from logbook import Logger, StreamHandler
+from json.decoder import JSONDecodeError
+
 from nio import RemoteProtocolError, RemoteTransportError, TransportType
 
 from matrix import globals as G
@@ -90,6 +93,11 @@ from matrix.utf import utf8_decode
 from matrix.utils import server_buffer_prnt, server_buffer_set_title
 
 from matrix.uploads import UploadsBuffer, upload_cb
+
+try:
+    from urllib.parse import urlunparse
+except ImportError:
+    from urlparse import urlunparse
 
 # yapf: disable
 WEECHAT_SCRIPT_NAME = SCRIPT_NAME
@@ -358,7 +366,66 @@ def finalize_connection(server):
     data = server.client.connect(server.transport_type)
     server.send(data)
 
-    server.login()
+    server.login_info()
+
+
+@utf8_decode
+def sso_login_cb(server_name, command, return_code, out, err):
+    try:
+        server = SERVERS[server_name]
+    except KeyError:
+        message = (
+            "{}{}: SSO callback ran, but no server for it was found.").format(
+                W.prefix("error"), SCRIPT_NAME)
+        W.prnt("", message)
+
+    if return_code == W.WEECHAT_HOOK_PROCESS_ERROR:
+        server.error("Error while running the matrix_sso_helper. Please "
+                     "make sure that the helper script is executable and can "
+                     "be found in your PATH.")
+        server.sso_hook = None
+        server.disconnect()
+        return W.WEECHAT_RC_OK
+
+    # The child process exited mark the hook as done.
+    if return_code == 0:
+        server.sso_hook = None
+
+    if err != "":
+        W.prnt("", "stderr: %s" % err)
+
+    if out == "":
+        return W.WEECHAT_RC_OK
+
+    try:
+        ret = json.loads(out)
+        msgtype = ret.get("type")
+
+        if msgtype == "redirectUrl":
+            redirect_url = "http://{}:{}".format(ret["host"], ret["port"])
+            server.info_highlight(
+                "The server requested a single sign-on, please open "
+                "this URL in your browser. Note that the "
+                "browser needs to run on the same host as Weechat.")
+            server.info_highlight(
+                "{}/_matrix/client/r0/login/sso/redirect?redirectUrl={}".format(
+                      server.homeserver.geturl(), redirect_url))
+
+        elif msgtype == "token":
+            token = ret["loginToken"]
+            server.login(token=token)
+
+        else:
+            server.error("Unknown SSO login message received from child "
+                         "process.")
+
+    except JSONDecodeError:
+        server.error(
+            "Error decoding SSO login message from child process: {}".format(
+                out
+        ))
+
+    return W.WEECHAT_RC_OK
 
 
 @utf8_decode
