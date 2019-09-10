@@ -6,4 +6,5 @@ atomicwrites
 attrs
 logbook
 pygments
-matrix-nio[e2e]>=0.4.1
+matrix-nio[e2e]>=0.6
+aiohttp
