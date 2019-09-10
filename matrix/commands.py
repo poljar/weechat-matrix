@@ -33,6 +33,11 @@ from .utf import utf8_decode
 from .utils import key_from_value
 from .uploads import UploadsBuffer, Upload
 
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+
 
 class ParseError(Exception):
     pass
@@ -1400,7 +1405,7 @@ def matrix_command_help(args):
                 "     delete: delete a server\n"
                 "server-name: server to reconnect (internal name)\n"
                 "   hostname: name or IP address of server\n"
-                "       port: port of server (default: 8448)\n"
+                "       port: port of server (default: 443)\n"
                 "\n"
                 "Examples:"
                 "\n  /matrix server listfull"
@@ -1618,10 +1623,16 @@ def matrix_server_command_add(args):
     SERVERS[server.name] = server
 
     if len(args) >= 2:
-        try:
-            host, port = args[1].split(":", 1)
-        except ValueError:
-            host, port = args[1], None
+        if args[1].startswith("http"):
+            homeserver= urlparse(args[1])
+
+            host = homeserver.hostname
+            port = str(homeserver.port) if homeserver.port else None
+        else:
+            try:
+                host, port = args[1].split(":", 1)
+            except ValueError:
+                host, port = args[1], None
 
         return_code = W.config_option_set(
             server.config._option_ptrs["address"], host, 1
