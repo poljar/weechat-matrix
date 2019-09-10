@@ -1477,7 +1477,7 @@ class RoomBuffer(object):
             self.print_unknown(event, extra_tags)
 
         elif isinstance(event, RedactionEvent):
-            self._redact_line(event, extra_tags)
+            self._redact_line(event)
 
         elif isinstance(event, RedactedEvent):
             self.print_redacted(event, extra_tags)
