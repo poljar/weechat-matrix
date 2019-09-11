@@ -447,6 +447,12 @@ class WeechatChannelBuffer(object):
         return W.buffer_get_string(self._ptr, "input")
 
     @property
+    def num_lines(self):
+        own_lines = W.hdata_pointer(self._hdata, self._ptr, "own_lines")
+        return W.hdata_integer(W.hdata_get("lines"), own_lines, "lines_count")
+
+
+    @property
     def lines(self):
         own_lines = W.hdata_pointer(self._hdata, self._ptr, "own_lines")
 
