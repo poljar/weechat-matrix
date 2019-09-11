@@ -301,6 +301,7 @@ class MatrixServer(object):
         self.lag = 0                                     # type: int
         self.lag_done = False                            # type: bool
         self.busy = False                                # type: bool
+        self.first_sync = True
 
         self.send_fd_hook = None                         # type: Optional[str]
         self.send_buffer = b""                           # type: bytes
@@ -771,14 +772,14 @@ class MatrixServer(object):
     def schedule_sync(self):
         self.sync_time = time.time()
 
-    def sync(self, timeout=None, sync_filter=None, full_state=False):
+    def sync(self, timeout=None, sync_filter=None):
         # type: (Optional[int], Optional[Dict[Any, Any]]) -> None
         if not self.client:
             return
 
         self.sync_time = None
         _, request = self.client.sync(timeout, sync_filter,
-            full_state=full_state)
+            full_state=self.first_sync)
 
         self.send_or_queue(request)
 
@@ -1328,7 +1329,7 @@ class MatrixServer(object):
                 "state": {"lazy_load_members": True}
             }
         }
-        self.sync(timeout=0, sync_filter=sync_filter, full_state=True)
+        self.sync(timeout=0, sync_filter=sync_filter)
 
     def _handle_room_info(self, response):
         for room_id, info in response.rooms.invite.items():
@@ -1463,6 +1464,8 @@ class MatrixServer(object):
 
     def _handle_sync(self, response):
         # we got the same batch again, nothing to do
+        self.first_sync = False
+
         if self.next_batch == response.next_batch:
             self.schedule_sync()
             return
