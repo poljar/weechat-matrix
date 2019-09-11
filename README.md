@@ -153,6 +153,19 @@ Configuration is completed primarily through the Weechat interface.  First start
 
        /save
 
+## Single sign-on:
+
+Single sign-on is supported using a helper script, the script found under
+[contrib/matrix_sso_helper](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_sso_helper)
+should be installed under your `PATH`.
+
+For single sign-on to be the preferred leave the servers username and password
+empty.
+
+After connecting a URL will be presented which needs to be used to perform the
+sign on. Please note that the helper script spawns a HTTP server which waits for
+the sign-on token to be passed back. This makes it necessary to do the sign on
+on the same host as Weechat.
 
 ## Bar items
 
