@@ -1053,7 +1053,9 @@ def matrix_command_pgup_cb(data, buffer, command):
                 W.window_get_integer(window, "first_line_displayed")
             )
 
-            if first_line_displayed:
+            room_buffer = server.find_room_from_ptr(buffer)
+
+            if first_line_displayed or room_buffer.weechat_buffer.num_lines == 0:
                 room_id = key_from_value(server.buffers, buffer)
                 server.room_get_messages(room_id)
 

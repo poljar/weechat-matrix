@@ -907,16 +907,16 @@ class MatrixServer(object):
 
     def room_get_messages(self, room_id):
         if not self.connected or not self.client.logged_in:
-            return
+            return False
 
         room_buffer = self.find_room_from_id(room_id)
 
         # We're already fetching old messages
         if room_buffer.backlog_pending:
-            return
+            return False
 
         if not room_buffer.prev_batch:
-            return
+            return False
 
         uuid, request = self.client.room_messages(
             room_id,
@@ -926,6 +926,8 @@ class MatrixServer(object):
         room_buffer.backlog_pending = True
         self.backlog_queue[uuid] = room_id
         self.send_or_queue(request)
+
+        return True
 
     def room_send_read_marker(self, room_id, event_id):
         """Send read markers for the provided room.
@@ -1248,6 +1250,7 @@ class MatrixServer(object):
     def handle_backlog_response(self, response):
         room_id = self.backlog_queue.pop(response.uuid)
         room_buffer = self.find_room_from_id(room_id)
+        room_buffer.first_view = False
 
         room_buffer.handle_backlog(response)
 
