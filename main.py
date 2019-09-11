@@ -43,7 +43,12 @@ import json
 import OpenSSL.crypto as crypto
 from future.utils import bytes_to_native_str as n
 from logbook import Logger, StreamHandler
-from json.decoder import JSONDecodeError
+
+try:
+    from json.decoder import JSONDecodeError
+except ImportError:
+    JSONDecodeError = ValueError  # type: ignore
+
 
 from nio import RemoteProtocolError, RemoteTransportError, TransportType
 
