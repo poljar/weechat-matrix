@@ -399,14 +399,14 @@ class MatrixServer(object):
         self.address = homeserver.hostname
         self.homeserver = homeserver
 
-        config = ClientConfig(store_sync_tokens=True)
+        # config = ClientConfig(store_sync_tokens=True)
 
         self.client = HttpClient(
             homeserver.geturl(),
             self.config.username,
             self.device_id,
             self.get_session_path(),
-            config=config
+            # config=config
         )
         self.client.add_to_device_callback(
             self.key_verification_cb,
@@ -1315,6 +1315,7 @@ class MatrixServer(object):
         self.client.access_token = response.access_token
         self.device_id = response.device_id
         self.save_device_id()
+        self.client.loaded_sync_token = self.client.store.load_sync_token()
 
         message = "{prefix}matrix: Logged in as {user}".format(
             prefix=W.prefix("network"), user=self.user_id

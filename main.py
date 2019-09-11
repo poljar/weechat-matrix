@@ -493,7 +493,11 @@ def room_close_cb(data, buffer):
 @utf8_decode
 def matrix_unload_cb():
     for server in SERVERS.values():
+        if server.client and server.client.store:
+            server.client.store.save_sync_token(server.client.next_batch)
+
         server.config.free()
+
 
     G.CONFIG.free()
 
