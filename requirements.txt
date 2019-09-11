@@ -7,4 +7,4 @@ attrs
 logbook
 pygments
 matrix-nio[e2e]>=0.6
-aiohttp
+aiohttp ; python_version >= "3.5"
