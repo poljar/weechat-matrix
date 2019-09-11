@@ -586,7 +586,7 @@ def buffer_switch_cb(_, _signal, buffer_ptr):
         if room_buffer.first_view and room_buffer.weechat_buffer.num_lines < 10:
             # TODO we may want to fetch 10 - num_lines messages here for
             # consistency reasons.
-            server.room_get_messages(room_buffer.room.room_id):
+            server.room_get_messages(room_buffer.room.room_id)
 
         break
 
