@@ -142,7 +142,7 @@ def matrix_message_completion_cb(data, completion_item, buffer, completion):
                 if len(message) > REDACTION_COMP_LEN + 2:
                     message = message[:REDACTION_COMP_LEN] + ".."
 
-                item = ('{event_id}:"{message}"').format(
+                item = ('{event_id}|"{message}"').format(
                     event_id=event_id, message=message
                 )
 

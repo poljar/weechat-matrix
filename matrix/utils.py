@@ -166,3 +166,34 @@ def text_block(text, margin=0):
 def colored_text_block(text, margin=0, color_pair=""):
     """ Like text_block, but also colors it."""
     return string_color_and_reset(text_block(text, margin=margin), color_pair)
+
+def parse_redact_args(args):
+    args = args.strip()
+
+    had_example_text = False
+
+    try:
+        event_id, rest = args.split("|", 1)
+        had_example_text = True
+    except ValueError:
+        try:
+            event_id, rest = args.split(" ", 1)
+        except ValueError:
+            event_id, rest = (args, "")
+
+    if had_example_text:
+        try:
+            _, _, reason = rest.split("\"", 2)
+        except ValueError:
+            reason = None
+    else:
+        reason = rest
+
+    event_id = event_id.strip()
+    if reason:
+        reason = reason.strip()
+    # The reason might be an empty string, set it to None if so
+    else:
+        reason = None
+
+    return event_id, reason

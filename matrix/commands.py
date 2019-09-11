@@ -30,7 +30,7 @@ from .colors import Formatted
 from .globals import SERVERS, W, UPLOADS, SCRIPT_NAME
 from .server import MatrixServer
 from .utf import utf8_decode
-from .utils import key_from_value
+from .utils import key_from_value, parse_redact_args
 from .uploads import UploadsBuffer, Upload
 
 try:
@@ -1280,23 +1280,15 @@ def matrix_redact_command_cb(data, buffer, args):
         if buffer in server.buffers.values():
             room_buffer = server.find_room_from_ptr(buffer)
 
-            matches = re.match(
-                r"^(\$[a-zA-Z0-9]+:([a-z0-9])(([a-z0-9-]{1,61})?[a-z0-9]{1})?"
-                r"(\.[a-z0-9](([a-z0-9-]{1,61})?[a-z0-9]{1})?)?"
-                r"(\.[a-zA-Z]{2,4})+)(:\".*\")? ?(.*)?$",
-                args
-            )
+            event_id, reason = parse_redact_args(args)
 
-            if not matches:
+            if not event_id:
                 message = (
                     "{prefix}matrix: Invalid command "
                     "arguments (see /help redact)"
                 ).format(prefix=W.prefix("error"))
                 W.prnt("", message)
                 return W.WEECHAT_RC_ERROR
-
-            groups = matches.groups()
-            event_id, reason = (groups[0], groups[-1])
 
             lines = room_buffer.weechat_buffer.find_lines(
                 partial(predicate, event_id), max_lines=1
