@@ -790,6 +790,7 @@ class MatrixServer(object):
 
         if self.client.logged_in:
             self.login()
+            return
 
         _, request = self.client.login_info()
         self.send(request)
