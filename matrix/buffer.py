@@ -869,6 +869,7 @@ class RoomBuffer(object):
         self.leave_event_id = None  # type: Optional[str]
         self.members_fetched = False
         self.first_view = True
+        self.first_backlog_request = True
         self.unhandled_users = []   # type: List[str]
         self.inactive_users = []
 
@@ -978,6 +979,14 @@ class RoomBuffer(object):
                     return event_id
 
         return ""
+
+    @property
+    def printed_event_ids(self):
+        for line in self.weechat_buffer.lines:
+            for tag in line.tags:
+                if tag.startswith("matrix_id"):
+                    event_id = tag[10:]
+                    yield event_id
 
     @property
     def read_markers_enabled(self):
@@ -1688,10 +1697,22 @@ class RoomBuffer(object):
         self.prev_batch = response.end
 
         for event in response.chunk:
+            # The first backlog request seems to have a race condition going on
+            # where we receive a message in a sync response, get a prev_batch,
+            # yet when we request older messages with the prev_batch the same
+            # message might appear in the room messages response. This only
+            # seems to happen if the message is relatively recently sent.
+            # Because of this we check if our first backlog request contains
+            # some already printed events, if so; skip printing them.
+            if (self.first_backlog_request
+                    and event.event_id in self.printed_event_ids):
+                continue
+
             self.old_message(event)
 
         self.sort_messages()
 
+        self.first_backlog_request = False
         self.backlog_pending = False
 
     def handle_joined_room(self, info):
