@@ -208,6 +208,15 @@ class ServerConfig(ConfigSection):
                 "10",
                 ("Delay (in seconds) before trying to reconnect to server"),
             ),
+            Option(
+                "sso_helper_listening_port",
+                "integer",
+                "",
+                0,
+                65535,
+                "0",
+                ("The port that the SSO helpers web server  should listen on"),
+            ),
         ]
 
         section = W.config_search_section(config_ptr, "server")
@@ -250,6 +259,10 @@ class ServerConfig(ConfigSection):
     reconnect_delay = ConfigSection.option_property("autoreconnect_delay", "integer")
     password = ConfigSection.option_property(
         "password", "string", evaluate=True
+    )
+    sso_helper_listening_port = ConfigSection.option_property(
+        "sso_helper_listening_port",
+        "integer"
     )
 
     def free(self):
@@ -807,6 +820,8 @@ class MatrixServer(object):
 
         process_args = {
             "buffer_flush": "1",
+            "arg1": "--port",
+            "arg2": str(self.config.sso_helper_listening_port)
         }
 
         self.sso_hook = W.hook_process_hashtable(

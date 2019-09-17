@@ -15,6 +15,7 @@
 
 
 import asyncio
+import argparse
 import socket
 import json
 from random import choice
@@ -49,15 +50,19 @@ async def get_token(request):
     }
 
     # Send the token to weechat.
-    print(json.dumps(message))
+    to_weechat(message)
     # Initiate a shutdown.
     shutdown_task = asyncio.ensure_future(shutdown())
     # Respond to the browser.
     return web.Response(text="Continuing in Weechat.")
 
 
-def bind_socket():
+def bind_socket(port=None):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    if port is not None and port != 0:
+        sock.bind(("localhost", port))
+        return sock
 
     while True:
         port = choice(port_range)
@@ -81,9 +86,38 @@ async def wait_for_shutdown_task(_):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Start a web server that waits for a SSO token to be "
+                    "passed with a GET request"
+    )
+    parser.add_argument(
+        "-p", "--port",
+        help=("the port that the web server will be listening on, if 0 a "
+              "random port should be chosen"
+        ),
+        type=int,
+        default=0
+    )
+
+    args = parser.parse_args()
+
     app = web.Application()
     app.add_routes([web.get('/', get_token)])
-    sock = bind_socket()
+
+    if not 0 <= args.port <= 65535:
+        raise ValueError("Port needs to be 0-65535")
+
+    try:
+        sock = bind_socket(args.port)
+    except OSError as e:
+        message = {
+            "type": "error",
+            "message": str(e),
+            "code": e.errno
+        }
+        to_weechat(message)
+        return
+
     host, port = sock.getsockname()
 
     message = {
