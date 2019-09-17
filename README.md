@@ -167,6 +167,21 @@ sign on. Please note that the helper script spawns a HTTP server which waits for
 the sign-on token to be passed back. This makes it necessary to do the sign on
 on the same host as Weechat.
 
+If signing on on the same host as Weechat is undesirable the listening port of
+the SSO helper should be set to a static value using the
+`sso_helper_listening_port` setting:
+
+       /set matrix.server.myserver.sso_helper_listening_port 8443
+
+After setting the listening port the same port on the local machine can be
+forwarded using ssh to the remote host:
+
+        ssh -L 8443:localhost:8443 example.org
+
+This forwards the local port 8443 to the localhost:8443 address on example.org.
+Note that it is necessary to forward the port to the localhost address on the
+remote host because the helper only listens on localhost.
+
 ## Bar items
 
 There are two bar items provided by this script:
