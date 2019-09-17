@@ -419,6 +419,9 @@ def sso_login_cb(server_name, command, return_code, out, err):
             token = ret["loginToken"]
             server.login(token=token)
 
+        elif msgtype == "error":
+            server.error("Error in the SSO helper {}".format(ret["message"]))
+
         else:
             server.error("Unknown SSO login message received from child "
                          "process.")

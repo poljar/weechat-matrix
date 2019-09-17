@@ -119,6 +119,7 @@ def main():
         return
 
     host, port = sock.getsockname()
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     message = {
         "type": "redirectUrl",
