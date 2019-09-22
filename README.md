@@ -167,6 +167,15 @@ sign on. Please note that the helper script spawns a HTTP server which waits for
 the sign-on token to be passed back. This makes it necessary to do the sign on
 on the same host as Weechat.
 
+A hsignal is sent out when the SSO helper spawns as well, the name of the
+hsignal is `matrix_sso_login` and it will contain the name of the server in the
+`server` variable and the full URL that can be used to log in in the `url`
+variable.
+
+To open the login URL automatically in a browser a trigger can be added:
+
+        /trigger add sso_browser hsignal matrix_sso_login "" "" "/exec -bg firefox ${url}"
+
 If signing on on the same host as Weechat is undesirable the listening port of
 the SSO helper should be set to a static value using the
 `sso_helper_listening_port` setting:
