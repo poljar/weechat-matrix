@@ -407,13 +407,22 @@ def sso_login_cb(server_name, command, return_code, out, err):
 
         if msgtype == "redirectUrl":
             redirect_url = "http://{}:{}".format(ret["host"], ret["port"])
+
+            login_url = (
+                "{}/_matrix/client/r0/login/sso/redirect?redirectUrl={}"
+            ).format(server.homeserver.geturl(), redirect_url)
+
             server.info_highlight(
                 "The server requested a single sign-on, please open "
                 "this URL in your browser. Note that the "
                 "browser needs to run on the same host as Weechat.")
-            server.info_highlight(
-                "{}/_matrix/client/r0/login/sso/redirect?redirectUrl={}".format(
-                      server.homeserver.geturl(), redirect_url))
+            server.info_highlight(login_url)
+
+            message = {
+                "server": server.name,
+                "url": login_url
+            }
+            W.hook_hsignal_send("matrix_sso_login", message)
 
         elif msgtype == "token":
             token = ret["loginToken"]
