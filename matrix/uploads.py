@@ -84,6 +84,7 @@ class Upload(object):
     room_id = attr.ib(type=str)
     filepath = attr.ib(type=str)
     encrypt = attr.ib(type=bool, default=False)
+    file_keys = attr.ib(type=Dict, default=None)
 
     done = 0
     total = 0
@@ -208,7 +209,7 @@ class Upload(object):
 
         if self.encrypt:
             return Render.encrypted_media(
-                self.conetent_uri,
+                self.content_uri,
                 self.file_name,
                 self.file_keys["key"]["k"],
                 self.file_keys["hashes"]["sha256"],
