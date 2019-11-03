@@ -1724,7 +1724,7 @@ class MatrixServer(object):
 
                     if not ret:
                         self.encryption_queue[room_id].pop()
-                        self.encryption_queue[room_id].appendleft(message)
+                        self.encryption_queue[room_id].appendleft(item)
                         break
 
                 except OlmTrustError:
