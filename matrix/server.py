@@ -32,7 +32,8 @@ from typing import (
     List,
     NamedTuple,
     DefaultDict,
-    Union
+    Type,
+    Union,
 )
 
 from uuid import UUID
@@ -73,6 +74,7 @@ from nio import (
     KeyVerificationKey,
     KeyVerificationMac,
     KeyVerificationEvent,
+    ToDeviceMessage,
     ToDeviceResponse,
     ToDeviceError
 )
@@ -90,7 +92,7 @@ from .colors import Formatted, FormattedString, DEFAULT_ATTRIBUTES
 try:
     from urllib.parse import urlparse
 except ImportError:
-    from urlparse import urlparse
+    from urlparse import urlparse  # type: ignore
 
 try:
     FileNotFoundError  # type: ignore
@@ -98,8 +100,8 @@ except NameError:
     FileNotFoundError = IOError
 
 
-EncrytpionQueueItem = NamedTuple(
-    "EncrytpionQueueItem",
+EncryptionQueueItem = NamedTuple(
+    "EncryptionQueueItem",
     [
         ("message_type", str),
         ("message", Union[Formatted, Upload]),
@@ -307,7 +309,7 @@ class MatrixServer(object):
 
         self.address = None
         self.homeserver = None
-        self.client = None
+        self.client = None  # type: Optional[HttpClient]
         self.access_token = None                         # type: Optional[str]
         self.next_batch = None                           # type: Optional[str]
         self.transaction_id = 0                          # type: int
@@ -323,7 +325,7 @@ class MatrixServer(object):
         self.device_deletion_queue = dict()              # type: Dict[str, str]
 
         self.encryption_queue = defaultdict(deque)  \
-            # type: DefaultDict[str, Deque[EncrytpionQueueItem]]
+            # type: DefaultDict[str, Deque[EncryptionQueueItem]]
         self.backlog_queue = dict()      # type: Dict[str, str]
 
         self.user_gc_time = time.time()    # type: float
@@ -337,8 +339,8 @@ class MatrixServer(object):
         self.keys_queried = False                      # type: bool
         self.keys_claimed = defaultdict(bool)          # type: Dict[str, bool]
         self.group_session_shared = defaultdict(bool)  # type: Dict[str, bool]
-        self.ignore_while_sharing = defaultdict(bool)
-        self.to_device_sent = []
+        self.ignore_while_sharing = defaultdict(bool)  # type: Dict[str, bool]
+        self.to_device_sent = []  # type: List[ToDeviceMessage]
 
         # Try to load the device id, the device id is loaded every time the
         # user changes but some login flows don't use a user so try to load the
@@ -833,7 +835,8 @@ class MatrixServer(object):
         )
 
     def login(self, token=None):
-        # type: () -> None
+        # type: (...) -> None
+        assert self.client is not None
         if self.client.logged_in:
             msg = (
                 "{prefix}{script_name}: Already logged in, " "syncing..."
@@ -1034,7 +1037,7 @@ class MatrixServer(object):
         try:
             uuid = self.room_send_event(upload.room_id, content)
         except (EncryptionError, GroupEncryptionError):
-            message = EncrytpionQueueItem(upload.msgtype, upload)
+            message = EncryptionQueueItem(upload.msgtype, upload)
             self.encryption_queue[upload.room_id].append(message)
             return False
 
@@ -1127,12 +1130,12 @@ class MatrixServer(object):
                 ignore_unverified_devices=ignore_unverified_devices
             )
         except (EncryptionError, GroupEncryptionError):
-            message = EncrytpionQueueItem(msgtype, formatted)
+            message = EncryptionQueueItem(msgtype, formatted)
             self.encryption_queue[room.room_id].append(message)
             return False
 
         if msgtype == "m.emote":
-            message_class = OwnAction
+            message_class = OwnAction  # type: Type
         else:
             message_class = OwnMessage
 
@@ -1715,6 +1718,7 @@ class MatrixServer(object):
                     ]:
                         ret = self.room_send_upload(item.message)
                     else:
+                        assert isinstance(item.message, Formatted)
                         ret = self.room_send_message(
                             room_buffer,
                             item.message,

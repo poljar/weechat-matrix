@@ -17,7 +17,7 @@
 from __future__ import unicode_literals
 
 import sys
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from logbook import Logger
 from collections import OrderedDict
 
@@ -39,7 +39,7 @@ except ImportError:
     W = weechat
 
 SERVERS = dict()  # type: Dict[str, MatrixServer]
-CONFIG = None  # type: Optional[MatrixConfig]
+CONFIG = None  # type: Any
 ENCRYPTION = True  # type: bool
 SCRIPT_NAME = "matrix"  # type: str
 TYPING_NOTICE_TIMEOUT = 4000  # 4 seconds typing notice lifetime

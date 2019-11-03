@@ -26,7 +26,7 @@ import textwrap
 # pylint: disable=redefined-builtin
 from builtins import str
 from collections import namedtuple
-from typing import List
+from typing import Dict, List, Optional, Union
 
 import webcolors
 from pygments import highlight
@@ -476,7 +476,6 @@ class Formatted(object):
         return "".join(strings).strip()
 
 
-# TODO this should be a typed dict.
 DEFAULT_ATTRIBUTES = {
     "bold": False,
     "italic": False,
@@ -487,7 +486,7 @@ DEFAULT_ATTRIBUTES = {
     "code": None,
     "fgcolor": None,
     "bgcolor": None,
-}
+}  # type: Dict[str, Union[bool, Optional[str]]]
 
 
 class MatrixHtmlParser(HTMLParser):
