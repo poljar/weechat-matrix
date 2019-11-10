@@ -671,9 +671,16 @@ class MatrixServer(object):
         self.reconnect_time = time.time()
 
         if self.reconnect_delay:
-            self.reconnect_delay = self.reconnect_delay * 2
+            self.reconnect_delay = (
+                self.reconnect_delay
+                * G.CONFIG.network.autoreconnect_delay_growing
+            )
         else:
             self.reconnect_delay = self.config.reconnect_delay
+
+        if G.CONFIG.network.autoreconnect_delay_max > 0:
+            self.reconnect_delay = min(self.reconnect_delay,
+                G.CONFIG.network.autoreconnect_delay_max)
 
         message = (
             "{prefix}matrix: reconnecting to server in {t} " "seconds"

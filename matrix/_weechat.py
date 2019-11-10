@@ -75,6 +75,8 @@ class MockConfig(object):
             'print_unconfirmed_messages': None,
             'read_markers_conditions': None,
             'typing_notice_conditions': None,
+            'autoreconnect_delay_growing': None,
+            'autoreconnect_delay_max': None,
         },
     }
 

@@ -630,6 +630,26 @@ class MatrixConfig(WeechatConfig):
                  "value (in seconds)"),
             ),
             Option(
+                "autoreconnect_delay_growing",
+                "integer",
+                "",
+                1,
+                100,
+                "2",
+                ("growing factor for autoreconnect delay to server "
+                 "(1 = always same delay, 2 = delay*2 for each retry, etc.)"),
+            ),
+            Option(
+                "autoreconnect_delay_max",
+                "integer",
+                "",
+                0,
+                604800,
+                "600",
+                ("maximum autoreconnect delay to server "
+                 "(in seconds, 0 = no maximum)"),
+            ),
+            Option(
                 "print_unconfirmed_messages",
                 "boolean",
                 "",
