@@ -1057,6 +1057,7 @@ class RoomBuffer(object):
                 user.user_id.startswith("@whatsapp_") or
                 user.user_id.startswith("@facebook_") or
                 user.user_id.startswith("@telegram_") or
+                user.user_id.startswith("@_telegram_") or
                 user.user_id.startswith("@_xmpp_")):
             if user.display_name:
                 short_name = user.display_name[0:50]
