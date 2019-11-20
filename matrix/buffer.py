@@ -54,7 +54,7 @@ from nio import (
 
 from . import globals as G
 from .colors import Formatted
-from .config import RedactType
+from .config import RedactType, NewChannelPosition
 from .globals import SCRIPT_NAME, SERVERS, W, TYPING_NOTICE_TIMEOUT
 from .utf import utf8_decode
 from .message_renderer import Render
@@ -357,6 +357,9 @@ class WeechatChannelBuffer(object):
 
     def __init__(self, name, server_name, user):
         # type: (str, str, str) -> None
+
+        # Previous buffer num before create
+        cur_num = W.buffer_get_integer(W.current_buffer(), "number")
         self._ptr = W.buffer_new(
             name,
             "room_buffer_input_cb",
@@ -364,6 +367,14 @@ class WeechatChannelBuffer(object):
             "room_buffer_close_cb",
             server_name,
         )
+
+        new_channel_position = G.CONFIG.look.new_channel_position
+        if new_channel_position == NewChannelPosition.NONE:
+            pass
+        elif new_channel_position == NewChannelPosition.NEXT:
+            W.buffer_set(self._ptr, "number", str(cur_num + 1))
+        elif new_channel_position == NewChannelPosition.NEAR_SERVER:
+            pass
 
         self.name = ""
         self.users = {}  # type: Dict[str, WeechatUser]
