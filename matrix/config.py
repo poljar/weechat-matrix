@@ -26,7 +26,7 @@ Server specific configuration options are handled in server.py
 
 from builtins import super
 from collections import namedtuple
-from enum import Enum, unique
+from enum import IntEnum, Enum, unique
 
 import logbook
 
@@ -49,6 +49,13 @@ class ServerBufferType(Enum):
     MERGE_CORE = 0
     MERGE = 1
     INDEPENDENT = 2
+
+
+@unique
+class NewChannelPosition(IntEnum):
+    NONE = 0
+    NEXT = 1
+    NEAR_SERVER = 2
 
 
 nio.logger_group.level = logbook.ERROR
@@ -425,6 +432,19 @@ class MatrixConfig(WeechatConfig):
                 "Merge server buffers",
                 ServerBufferType,
                 config_server_buffer_cb,
+            ),
+            Option(
+                "new_channel_position",
+                "integer",
+                "none|next|near_server",
+                min(NewChannelPosition),
+                max(NewChannelPosition),
+                "none",
+                "force position of new channel in list of buffers "
+                "(none = default position (should be last buffer), "
+                "next = current buffer + 1, near_server = after last "
+                "channel/pv of server)",
+                NewChannelPosition,
             ),
             Option(
                 "max_typing_notice_item_length",
