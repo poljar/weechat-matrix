@@ -374,7 +374,13 @@ class WeechatChannelBuffer(object):
         elif new_channel_position == NewChannelPosition.NEXT:
             W.buffer_set(self._ptr, "number", str(cur_num + 1))
         elif new_channel_position == NewChannelPosition.NEAR_SERVER:
-            pass
+            server = G.SERVERS[server_name]
+            last_similar_buffer_num = max(
+                (room.weechat_buffer.number for room
+                    in server.room_buffers.values()),
+                default=W.buffer_get_integer(server.server_buffer, "number")
+            )
+            W.buffer_set(self._ptr, "number", str(last_similar_buffer_num + 1))
 
         self.name = ""
         self.users = {}  # type: Dict[str, WeechatUser]
