@@ -61,6 +61,7 @@ class MockConfig(object):
             'pygments_style': None,
             'redactions': None,
             'server_buffer': None,
+            'new_channel_position': None,
         },
         'network': {
             'debug_buffer': None,
@@ -228,6 +229,14 @@ def buffer_get_string(_ptr, property):
     if property == "localvar_type":
         return "channel"
     return ""
+
+
+def buffer_get_integer(_ptr, property):
+    return 0
+
+
+def current_buffer():
+    return 1
 
 
 def nicklist_add_group(*_, **__):
