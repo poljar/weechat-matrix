@@ -372,7 +372,7 @@ class WeechatChannelBuffer(object):
         if new_channel_position == NewChannelPosition.NONE:
             pass
         elif new_channel_position == NewChannelPosition.NEXT:
-            W.buffer_set(self._ptr, "number", str(cur_num + 1))
+            self.number = cur_num + 1
         elif new_channel_position == NewChannelPosition.NEAR_SERVER:
             server = G.SERVERS[server_name]
             last_similar_buffer_num = max(
@@ -380,7 +380,7 @@ class WeechatChannelBuffer(object):
                     in server.room_buffers.values()),
                 default=W.buffer_get_integer(server.server_buffer, "number")
             )
-            W.buffer_set(self._ptr, "number", str(last_similar_buffer_num + 1))
+            self.number = last_similar_buffer_num + 1
 
         self.name = ""
         self.users = {}  # type: Dict[str, WeechatUser]
@@ -868,6 +868,10 @@ class WeechatChannelBuffer(object):
     def number(self):
         """Get the buffer number, starts at 1."""
         return int(W.buffer_get_integer(self._ptr, "number"))
+
+    @number.setter
+    def number(self, n):
+        W.buffer_set(self._ptr, "number", str(n))
 
     def find_lines(self, predicate, max_lines=None):
         lines = []
