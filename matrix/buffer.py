@@ -1380,10 +1380,7 @@ class RoomBuffer(object):
         extra_tags = extra_tags or []
         nick = self.find_nick(event.sender)
         date = server_ts_to_weechat(event.server_timestamp)
-        data = Render.unknown(
-            event.type,
-            event.event_dict.get("content", None)
-        )
+        data = Render.unknown(event.type, event.content)
         extra_prefix = (self.warning_prefix if event.decrypted
                         and not event.verified else "")
 
@@ -1540,7 +1537,7 @@ class RoomBuffer(object):
 
         elif isinstance(event, UnknownBadEvent):
             self.error("Unkwnown bad event: {}".format(
-                pprint.pformat(event.event_dict)
+                pprint.pformat(event.source)
             ))
 
         else:
