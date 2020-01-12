@@ -1,43 +1,28 @@
-FROM debian:buster-slim
+FROM debian:testing-slim
 
-ENV DEBIAN_FRONTEND="noninteractive" \
-    LANG="C.UTF-8"
+RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+RUN apt-get update -y; apt-get install -q -y \
+  git \
+  libolm-dev \
+  python3 \
+  python3-pip \
+  weechat-curses \
+  weechat-python \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -fr /root/.cache
 
-RUN apt-get update \
-    && apt-get -qq -y install \
-    cmake \
-    git \
-    python-atomicwrites \
-    python-attr \
-    python-future \
-    python-h2 \
-    python-jsonschema \
-    python-logbook \
-    python-openssl \
-    python-peewee \
-    python-pip \
-    python-pygments \
-    python-typing \
-    python-unpaddedbase64 \
-    python-webcolors \
-    python-wheel \
-    weechat \
-    weechat-python \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install h11 \
-    && rm -rf /root/.cache
+# add chat user
+RUN useradd -ms /bin/bash chat && mkdir /var/build
 
-WORKDIR /root
-RUN git clone https://git.matrix.org/git/olm.git \
-    && cd olm \
-    && cmake . \
-    && make install \
-    && ldconfig
-RUN pip install 'git+https://github.com/poljar/python-olm.git@master#egg=python-olm-0'
-RUN git clone https://github.com/poljar/matrix-nio \
-    && cd matrix-nio \
-    && DESTDIR=/ make install
-RUN git clone https://github.com/poljar/weechat-matrix \
-    && cd weechat-matrix \
-    && make install
+# get and build source code
+WORKDIR /var/build
+RUN git clone https://github.com/poljar/weechat-matrix.git
+WORKDIR /var/build/weechat-matrix
+RUN pip3 install -r requirements.txt
+
+# Install and setup autoloading
+USER chat
+RUN make install
+WORKDIR /home/chat
+RUN mkdir -p .weechat/python/autoload && ln -s /home/chat/.weechat/python/matrix.py /home/chat/.weechat/python/autoload/
