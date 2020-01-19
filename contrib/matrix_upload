@@ -251,7 +251,7 @@ def upload_process(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Download and decrypt matrix attachments"
+        description="Encrypt and upload matrix attachments"
     )
     parser.add_argument("file", help="the file that will be uploaded")
     parser.add_argument(
