@@ -1166,7 +1166,7 @@ class RoomBuffer(object):
 
         if room_name is None:
             # Use placeholder room name
-            room_name = '...'
+            room_name = 'Empty room (?)'
 
         self.weechat_buffer.short_name = room_name
 
