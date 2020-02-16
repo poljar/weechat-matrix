@@ -111,15 +111,17 @@ file.
 Note that these symlinks are essentially the same as the files that
 would have been copied using `make install`.
 
-## Uploads
+## Uploading files
 
-Uploads are done using a helper script, the script found under
-[contrib/matrix_upload](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_upload)
-should be installed under your `PATH`.
+Uploads are done using a helper script, which is found under
+[contrib/matrix_upload](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_upload).
+We recommend you install this under your `PATH`.
 
-## Downloads
+## Downloading encrypted files
 
-Downloads are done by passing the displayed `emxc://` URI to the [contrib/matrix_decrypt](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_decrypt) helper script.
+Encrypted files can be opened by passing the displayed `emxc://` URI to the
+[contrib/matrix_decrypt](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_decrypt)
+helper script.
 
 # Configuration
 
