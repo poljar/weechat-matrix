@@ -117,6 +117,10 @@ Uploads are done using a helper script, the script found under
 [contrib/matrix_upload](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_upload)
 should be installed under your `PATH`.
 
+## Downloads
+
+Downloads are done by passing the displayed `emxc://` URI to the [contrib/matrix_decrypt](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_decrypt) helper script.
+
 # Configuration
 
 Configuration is completed primarily through the Weechat interface.  First start Weechat, and then issue the following commands:
