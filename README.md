@@ -19,7 +19,7 @@ support is still experimental.
 
 1. Install libolm 3.1+
 
-    - Debian/Ubuntu install libolm-dev if new enough
+    - Debian 11+ (testing/sid) or Ubuntu 19.10+ install libolm-dev
 
     - Archlinux based distribution (see https://aur.archlinux.org/packages/libolm/)
       use your favorite pacman frontend with AUR support (yaourt, yay, pikaur, …)
