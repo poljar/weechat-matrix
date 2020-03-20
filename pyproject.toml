@@ -25,9 +25,6 @@ aiohttp = "^3.6.2"
 requests = "^2.23.0"
 typing = "^3.7.4; python_version < 3.5"
 
-[tool.poetry.scripts]
-matrix_decrypt = 'contrib/matrix_decrypt:main'
-
 [build-system]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"
