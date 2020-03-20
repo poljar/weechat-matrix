@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "matrix"
+version = "0.1.0"
+license = "ISC"
+description = "Weechat protocol script for Matrix."
+authors = ["Damir Jelić <poljar@termina.org.uk>"]
+packages = [
+    { include = "matrix" },
+    { include = "contrib/*.py" },
+    { include = "main.py" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+pyOpenSSL = "^19.1.0"
+webcolors = "^1.11.1"
+atomicwrites = "^1.3.0"
+future = "^0.18.2"
+attrs = "^19.3.0"
+logbook = "^1.5.3"
+pygments = "^2.6.1"
+matrix-nio = "^0.9.0"
+python-magic = "^0.4.15"
+aiohttp = "^3.6.2"
+requests = "^2.23.0"
+typing = "^3.7.4; python_version < 3.5"
+
+[tool.poetry.scripts]
+matrix_decrypt = 'contrib/matrix_decrypt:main'
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"

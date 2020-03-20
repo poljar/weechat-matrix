@@ -114,13 +114,13 @@ would have been copied using `make install`.
 ## Uploading files
 
 Uploads are done using a helper script, which is found under
-[contrib/matrix_upload](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_upload).
-We recommend you install this under your `PATH`.
+[contrib/matrix_upload](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_upload.py).
+We recommend you install this under your `PATH` as `matrix_upload`.
 
 ## Downloading encrypted files
 
 Encrypted files can be opened by passing the displayed `emxc://` URI to the
-[contrib/matrix_decrypt](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_decrypt)
+[contrib/matrix_decrypt](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_decrypt.py)
 helper script.
 
 # Configuration
@@ -162,8 +162,8 @@ Configuration is completed primarily through the Weechat interface.  First start
 ## Single sign-on:
 
 Single sign-on is supported using a helper script, the script found under
-[contrib/matrix_sso_helper](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_sso_helper)
-should be installed under your `PATH`.
+[contrib/matrix_sso_helper](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_sso_helper.py)
+should be installed under your `PATH` as `matrix_sso_helper`.
 
 For single sign-on to be the preferred leave the servers username and password
 empty.
