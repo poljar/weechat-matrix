@@ -19,7 +19,7 @@ future = "^0.18.2"
 attrs = "^19.3.0"
 logbook = "^1.5.3"
 pygments = "^2.6.1"
-matrix-nio = "^0.9.0"
+matrix-nio = { version = "^0.9.0", extras = [ "e2e" ] }
 python-magic = "^0.4.15"
 aiohttp = "^3.6.2"
 requests = "^2.23.0"
