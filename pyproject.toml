@@ -23,7 +23,7 @@ matrix-nio = { version = "^0.9.0", extras = [ "e2e" ] }
 python-magic = "^0.4.15"
 aiohttp = "^3.6.2"
 requests = "^2.23.0"
-typing = "^3.7.4; python_version < 3.5"
+typing = { version = "^3.7.4", python = "<3.5" }
 
 [build-system]
 requires = ["poetry>=0.12"]
