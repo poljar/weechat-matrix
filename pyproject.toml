@@ -6,8 +6,8 @@ description = "Weechat protocol script for Matrix."
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
 packages = [
     { include = "matrix" },
-    { include = "contrib/*.py" },
-    { include = "main.py" },
+    { include = "contrib/*.py", format = "sdist" },
+    { include = "main.py", format = "sdist" },
 ]
 
 [tool.poetry.dependencies]
