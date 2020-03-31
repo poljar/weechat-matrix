@@ -160,11 +160,11 @@ class WeechatCommandParser(object):
 
         export_parser = subparsers.add_parser("export")
         export_parser.add_argument("file")
-        export_parser.add_argument("passphrase")
+        export_parser.add_argument(re.escape("passphrase"))
 
         import_parser = subparsers.add_parser("import")
         import_parser.add_argument("file")
-        import_parser.add_argument("passphrase")
+        import_parser.add_argument(re.escape("passphrase"))
 
         sas_parser = subparsers.add_parser("verification")
         sas_parser.add_argument(
