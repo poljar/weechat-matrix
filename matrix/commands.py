@@ -1823,7 +1823,7 @@ def matrix_send_anyways_cb(data, buffer, args):
             room_buffer = server.find_room_from_ptr(buffer)
 
             if not server.connected:
-                room_buffer.error("Server is diconnected")
+                room_buffer.error("Server is disconnected")
                 break
 
             if not server.client.logged_in:
