@@ -1118,6 +1118,7 @@ class MatrixServer(object):
         formatted,    # type: Formatted
         msgtype="m.text",  # type: str
         ignore_unverified_devices=False,  # type: bool
+        in_reply_to_event_id="",  # type: str
     ):
         # type: (...) -> bool
         room = room_buffer.room
@@ -1126,9 +1127,13 @@ class MatrixServer(object):
 
         content = {"msgtype": msgtype, "body": formatted.to_plain()}
 
-        if formatted.is_formatted():
+        if formatted.is_formatted() or in_reply_to_event_id:
             content["format"] = "org.matrix.custom.html"
             content["formatted_body"] = formatted.to_html()
+            if in_reply_to_event_id:
+                content["m.relates_to"] = {
+                    "m.in_reply_to": {"event_id": in_reply_to_event_id}
+                }
 
         try:
             uuid = self.room_send_event(
