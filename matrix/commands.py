@@ -807,15 +807,15 @@ def olm_sas_command(server, args):
         device = device_store[args.user_id][args.device_id]
     except KeyError:
         server.error("Device {} of user {} not found".format(
-            args.user_id,
-            args.device_id
+            args.device_id,
+            args.user_id
         ))
         return W.WEECHAT_RC_OK
 
     if device.deleted:
         server.error("Device {} of user {} is deleted.".format(
-            args.user_id,
-            args.device_id
+            args.device_id,
+            args.user_id
         ))
         return W.WEECHAT_RC_OK
 
