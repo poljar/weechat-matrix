@@ -591,7 +591,7 @@ def olm_info_command(server, args):
 
     olm = server.client.olm
 
-    if args.category == "private":
+    if not hasattr(args, 'category') or args.category == "private":
         fp_key = partition_key(olm.account.identity_keys["ed25519"])
         message = ("Identity keys:\n"
                    "  - User:        {user_color}{user}{ncolor}\n"
