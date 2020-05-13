@@ -507,7 +507,7 @@ class MatrixServer(object):
             device = sas.other_olm_device
 
             if sas.verified:
-                self.info_highlight("Device {} of user {} succesfully "
+                self.info_highlight("Device {} of user {} successfully "
                                     "verified".format(
                                         device.id,
                                         device.user_id
@@ -1156,7 +1156,7 @@ class MatrixServer(object):
         return True
 
     def print_unconfirmed_message(self, room_buffer, message):
-        """Print an outoing message before getting a recieve confirmation.
+        """Print an outgoing message before getting a receive confirmation.
 
         The message is printed out greyed out and only printed out if the
         client is configured to do so. The message needs to be later modified
@@ -1484,7 +1484,7 @@ class MatrixServer(object):
         device = sas.other_olm_device
 
         if sas.verified:
-            self.info("Device {} of user {} succesfully verified".format(
+            self.info("Device {} of user {} successfully verified".format(
                 device.id,
                 device.user_id
             ))

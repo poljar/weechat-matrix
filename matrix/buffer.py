@@ -1054,7 +1054,7 @@ class RoomBuffer(object):
         # operation (the nicks are added to a linked list sorted).
         # The search time is O(N * min(a,b)) where N is the number
         # of nicks already added and a/b are the length of
-        # the strings that are compared at every itteration.
+        # the strings that are compared at every iteration.
         # Because the search time get's increasingly longer we're
         # going to stop adding inactive users, they will be lazily added if
         # they become active.
@@ -1540,7 +1540,7 @@ class RoomBuffer(object):
             self.print_bad_event(event, extra_tags)
 
         elif isinstance(event, UnknownBadEvent):
-            self.error("Unkwnown bad event: {}".format(
+            self.error("Unknown bad event: {}".format(
                 pprint.pformat(event.source)
             ))
 
@@ -1633,7 +1633,7 @@ class RoomBuffer(object):
             line.tags = new_tags
 
     def replace_undecrypted_line(self, event):
-        """Find a undecrypted message in the buffer and replace it with the now
+        """Find an undecrypted message in the buffer and replace it with the now
         decrypted event."""
         # TODO different messages need different formatting
         # To implement this, refactor out the different formatting code
@@ -1660,7 +1660,7 @@ class RoomBuffer(object):
 
         data = formatted.to_weechat() if formatted else event.body
         # TODO this isn't right if the data has multiple lines, that is
-        # everything is printed on a signle line and newlines are shown as a
+        # everything is printed on a single line and newlines are shown as a
         # space.
         # Weechat should support deleting lines and printing new ones at an
         # arbitrary position.

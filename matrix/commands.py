@@ -784,7 +784,7 @@ def olm_export_command(server, args):
     except (OSError, IOError) as e:
         server.error("Error exporting keys: {}".format(str(e)))
 
-    server.info("Succesfully exported keys")
+    server.info("Successfully exported keys")
 
 def olm_import_command(server, args):
     file_path = os.path.expanduser(args.file)
@@ -793,7 +793,7 @@ def olm_import_command(server, args):
     except (OSError, IOError, EncryptionError) as e:
         server.error("Error importing keys: {}".format(str(e)))
 
-    server.info("Succesfully imported keys")
+    server.info("Successfully imported keys")
 
 
 def olm_sas_command(server, args):
