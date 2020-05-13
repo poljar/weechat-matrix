@@ -287,6 +287,27 @@ def hook_commands():
 
     W.hook_command(
         # Command name and short description
+        "reply-matrix",
+        "reply to a message",
+        # Synopsis
+        ('<event-id>[:"<message-part>"] [<reply>]'),
+        # Description
+        (
+            "    event-id: event id of the message that will be replied to\n"
+            "message-part: an initial part of the message (ignored, only "
+            "used\n"
+            "              as visual feedback when using completion)\n"
+            "       reply: the reply\n"
+        ),
+        # Completions
+        ("%(matrix_messages)"),
+        # Function name
+        "matrix_reply_command_cb",
+        "",
+    )
+
+    W.hook_command(
+        # Command name and short description
         "topic",
         "get/set the room topic",
         # Synopsis
@@ -1313,6 +1334,64 @@ def matrix_redact_command_cb(data, buffer, args):
         if buffer == server.server_buffer:
             message = (
                 '{prefix}matrix: command "redact" must be '
+                "executed on a Matrix channel buffer"
+            ).format(prefix=W.prefix("error"))
+            W.prnt("", message)
+            return W.WEECHAT_RC_OK
+
+    return W.WEECHAT_RC_OK
+
+
+@utf8_decode
+def matrix_reply_command_cb(data, buffer, args):
+    def predicate(event_id, line):
+        event_tag = SCRIPT_NAME + "_id_{}".format(event_id)
+        tags = line.tags
+
+        if event_tag in tags:
+            return True
+        return False
+
+    for server in SERVERS.values():
+        if buffer in server.buffers.values():
+            room_buffer = server.find_room_from_ptr(buffer)
+
+            # Intentional use of `parse_redact_args` which serves the
+            # necessary purpose
+            event_id, reply = parse_redact_args(args)
+
+            if not event_id:
+                message = (
+                    "{prefix}matrix: Invalid command "
+                    "arguments (see /help reply)"
+                ).format(prefix=W.prefix("error"))
+                W.prnt("", message)
+                return W.WEECHAT_RC_ERROR
+
+            lines = room_buffer.weechat_buffer.find_lines(
+                partial(predicate, event_id), max_lines=1
+            )
+
+            if not lines:
+                room_buffer.error(
+                    "No such message with event id "
+                    "{event_id} found.".format(event_id=event_id))
+                return W.WEECHAT_RC_OK
+
+            formatted_data = Formatted.from_input_line(reply)
+            server.room_send_message(
+                room_buffer,
+                formatted_data,
+                "m.text",
+                in_reply_to_event_id=event_id,
+            )
+            room_buffer.last_message = None
+
+            return W.WEECHAT_RC_OK
+
+        if buffer == server.server_buffer:
+            message = (
+                '{prefix}matrix: command "reply" must be '
                 "executed on a Matrix channel buffer"
             ).format(prefix=W.prefix("error"))
             W.prnt("", message)

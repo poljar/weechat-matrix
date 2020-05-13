@@ -73,7 +73,8 @@ from matrix.commands import (hook_commands, hook_page_up,
                              matrix_redact_command_cb, matrix_topic_command_cb,
                              matrix_olm_command_cb, matrix_devices_command_cb,
                              matrix_room_command_cb, matrix_uploads_command_cb,
-                             matrix_upload_command_cb, matrix_send_anyways_cb)
+                             matrix_upload_command_cb, matrix_send_anyways_cb,
+                             matrix_reply_command_cb)
 from matrix.completion import (init_completion, matrix_command_completion_cb,
                                matrix_debug_completion_cb,
                                matrix_message_completion_cb,
