@@ -24,7 +24,9 @@ support is still experimental.
     - Archlinux based distribution (see https://aur.archlinux.org/packages/libolm/)
       use your favorite pacman frontend with AUR support (yaourt, yay, pikaur, …)
 
-    - Failing any of the above see https://git.matrix.org/git/olm
+    - macOS `brew install libolm`
+
+    - Failing any of the above see https://gitlab.matrix.org/matrix-org/olm
       for instructions about building it from sources
 
 2. Clone the repo and install dependencies
