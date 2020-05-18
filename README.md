@@ -21,8 +21,7 @@ support is still experimental.
 
     - Debian 11+ (testing/sid) or Ubuntu 19.10+ install libolm-dev
 
-    - Archlinux based distribution (see https://aur.archlinux.org/packages/libolm/)
-      use your favorite pacman frontend with AUR support (yaourt, yay, pikaur, …)
+    - Archlinux based distribution install package `libolm` from the Community repository
 
     - Failing any of the above see https://git.matrix.org/git/olm
       for instructions about building it from sources
