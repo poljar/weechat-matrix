@@ -1883,12 +1883,12 @@ def matrix_config_server_read_cb(
 @utf8_decode
 def matrix_config_server_write_cb(data, config_file, section_name):
     if not W.config_write_line(config_file, section_name, ""):
-        return W.WECHAT_CONFIG_WRITE_ERROR
+        return W.WEECHAT_CONFIG_WRITE_ERROR
 
     for server in SERVERS.values():
         for option in server.config._option_ptrs.values():
             if not W.config_write_option(config_file, option):
-                return W.WECHAT_CONFIG_WRITE_ERROR
+                return W.WEECHAT_CONFIG_WRITE_ERROR
 
     return W.WEECHAT_CONFIG_WRITE_OK
 
