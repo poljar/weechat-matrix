@@ -133,16 +133,24 @@ Configuration is completed primarily through the Weechat interface.  First start
 
        /script load matrix.py
 
-1. Now set your username and password:
+2. Now set your username and password:
 
        /set matrix.server.matrix_org.username johndoe
        /set matrix.server.matrix_org.password jd_is_awesome
 
-1. Now try to connect:
+3. Now try to connect:
 
        /matrix connect matrix_org
+       
+4. Automatically load the script
 
-1. If everything works, save the configuration
+       $ ln -s ../matrix.py ~/.weechat/python/autoload
+       
+5. Automatically connect to the server
+
+       /set matrix.server.matrix_org.autoconnect on
+
+6. If everything works, save the configuration
 
        /save
 
