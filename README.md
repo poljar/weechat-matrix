@@ -21,7 +21,7 @@ support is still experimental.
 
     - Debian 11+ (testing/sid) or Ubuntu 19.10+ install libolm-dev
 
-    - Archlinux based distribution install package `libolm` from the Community repository
+    - Archlinux based distribution can install the `libolm` package from the Community repository
 
     - macOS `brew install libolm`
 
@@ -140,11 +140,11 @@ Configuration is completed primarily through the Weechat interface.  First start
 3. Now try to connect:
 
        /matrix connect matrix_org
-       
+
 4. Automatically load the script
 
        $ ln -s ../matrix.py ~/.weechat/python/autoload
-       
+
 5. Automatically connect to the server
 
        /set matrix.server.matrix_org.autoconnect on
