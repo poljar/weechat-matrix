@@ -62,14 +62,11 @@ class Formatted(object):
         # type: (List[FormattedString]) -> None
         self.substrings = substrings
 
-    @property
-    def textwrapper(self):
-        quote_pair = color_pair(G.CONFIG.color.quote_fg,
-                                G.CONFIG.color.quote_bg)
+    def textwrapper(self, width, colors):
         return textwrap.TextWrapper(
-            width=67,
-            initial_indent="{}> ".format(W.color(quote_pair)),
-            subsequent_indent="{}> ".format(W.color(quote_pair)),
+            width=width,
+            initial_indent="{}> ".format(W.color(colors)),
+            subsequent_indent="{}> ".format(W.color(colors)),
         )
 
     def is_formatted(self):
@@ -356,9 +353,21 @@ class Formatted(object):
             elif name == "strikethrough":
                 return string_strikethrough(string)
             elif name == "quote":
-                return self.textwrapper.fill(
-                    W.string_remove_color(string.replace("\n", ""), "")
-                )
+                quote_pair = color_pair(G.CONFIG.color.quote_fg,
+                                        G.CONFIG.color.quote_bg)
+
+                if G.CONFIG.look.quote_wrap >= 0:
+                    wrapper = self.textwrapper(G.CONFIG.look.quote_wrap, quote_pair)
+                    return wrapper.fill(
+                        W.string_remove_color(string.replace("\n", ""), "")
+                    )
+                else:
+                    # Don't wrap, just add quote markers to all lines
+                    return "{color_on}{text}{color_off}".format(
+                        color_on=W.color(quote_pair),
+                        text="> " + W.string_remove_color(string.replace("\n", "\n> "), ""),
+                        color_off=W.color("resetcolor")
+                    )
             elif name == "code":
                 code_color_pair = color_pair(
                     G.CONFIG.color.untagged_code_fg,

@@ -541,6 +541,16 @@ class MatrixConfig(WeechatConfig):
                  "block"),
             ),
             Option(
+                "quote_wrap",
+                "integer",
+                "",
+                -1,
+                1000,
+                "67",
+                ("After how many characters to soft-wrap lines in a quote "
+                 "block (reply message). Set to -1 to disable soft-wrapping."),
+            ),
+            Option(
                 "human_buffer_names",
                 "boolean",
                 "",
