@@ -356,11 +356,15 @@ class Formatted(object):
                 quote_pair = color_pair(G.CONFIG.color.quote_fg,
                                         G.CONFIG.color.quote_bg)
 
+                # Remove leading and trailing newlines; Riot sends an extra
+                # quoted "\n" when a user quotes a message.
+                string = string.strip("\n")
+                if len(string) == 0:
+                    return string
+
                 if G.CONFIG.look.quote_wrap >= 0:
                     wrapper = self.textwrapper(G.CONFIG.look.quote_wrap, quote_pair)
-                    return wrapper.fill(
-                        W.string_remove_color(string.replace("\n", ""), "")
-                    )
+                    return wrapper.fill(W.string_remove_color(string, ""))
                 else:
                     # Don't wrap, just add quote markers to all lines
                     return "{color_on}{text}{color_off}".format(
