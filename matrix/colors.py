@@ -88,10 +88,23 @@ class Formatted(object):
         substrings = []  # type: List[FormattedString]
         attributes = DEFAULT_ATTRIBUTES.copy()
 
+        # Find index of last markdown-italic end, if it exists; otherwise -1
+        italic_ends = list(re.finditer(r"\S\*", line))
+        last_italic_end = italic_ends[-1].span()[0] + 1 if italic_ends else -1
+
+        last_backtick = line.rfind("`")
+
         i = 0
         while i < len(line):
+            # Markdown escape
+            # NOTE: IRC-native formatting characters are not escaped
+            if i + 1 < len(line) and line[i] == "\\" \
+                    and line[i + 1] not in "\x02\x03\x0F\x1D\x1F":
+                text += line[i + 1]
+                i = i + 2
+
             # Bold
-            if line[i] == "\x02" and not attributes["code"]:
+            elif line[i] == "\x02" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
@@ -99,7 +112,7 @@ class Formatted(object):
                 i = i + 1
 
             # Markdown inline code
-            elif line[i] == "`":
+            elif line[i] == "`" and (attributes["code"] or last_backtick > i):
                 if text:
                     # strip leading and trailing spaces and compress consecutive
                     # spaces in inline code blocks
@@ -122,30 +135,31 @@ class Formatted(object):
                             FormattedString(text, attributes.copy())
                         )
                     text = ""
-                    attributes["italic"] = not attributes["italic"]
+                    attributes["italic"] = False
                     i = i + 1
-                    continue
 
                 elif attributes["italic"] and line[i - 1].isspace():
                     text = text + line[i]
                     i = i + 1
-                    continue
 
                 elif i + 1 < len(line) and line[i + 1].isspace():
                     text = text + line[i]
                     i = i + 1
-                    continue
 
                 elif i == len(line) - 1:
                     text = text + line[i]
                     i = i + 1
-                    continue
 
-                if text:
-                    substrings.append(FormattedString(text, attributes.copy()))
-                text = ""
-                attributes["italic"] = not attributes["italic"]
-                i = i + 1
+                elif last_italic_end <= i:
+                    text = text + line[i]
+                    i = i + 1
+
+                else:
+                    if text:
+                        substrings.append(FormattedString(text, attributes.copy()))
+                    text = ""
+                    attributes["italic"] = True
+                    i = i + 1
 
             # Color
             elif line[i] == "\x03" and not attributes["code"]:
@@ -185,6 +199,7 @@ class Formatted(object):
                     attributes["bgcolor"] = color_line_to_weechat(color_string)
                 else:
                     attributes["bgcolor"] = None
+
             # Reset
             elif line[i] == "\x0F" and not attributes["code"]:
                 if text:
