@@ -6,14 +6,24 @@
 
 [Weechat](https://weechat.org/) is an extensible chat client.
 
-[Matrix](https://matrix.org/blog/home) is an open network for secure, decentralized communication.
+[Matrix](https://matrix.org/blog/home) is an open network for secure,
+decentralized communication.
 
-[Weechat-Matrix](https://github.com/poljar/weechat-matrix/) is a Python plugin for Weechat that lets Weechat communicate over the Matrix protocol.
+[weechat-matrix](https://github.com/poljar/weechat-matrix/) is a Python plugin
+for Weechat that lets Weechat communicate over the Matrix protocol.
 
 # Project Status
 
-Weechat-Matrix already supports large parts of the Matrix protocol, end to end encryption
-support is still experimental.
+weechat-matrix is stable and quite usable as a daily driver. It already
+supports large parts of the Matrix protocol, including end-to-end encryption
+(though some features like cross-signing and session unwedging are
+unimplemented).
+
+However, due to some inherent limitations of Weechat *scripts*, development has
+moved to [weechat-matrix-rs](https://github.com/poljar/weechat-matrix-rs),
+a Weechat *plugin* written in Rust. As such, weechat-matrix is in maintenance
+mode and will likely not be receiving substantial new features. PRs are still
+accepted and welcome.
 
 # Installation
 
