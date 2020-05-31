@@ -88,66 +88,63 @@ class Formatted(object):
         substrings = []  # type: List[FormattedString]
         attributes = DEFAULT_ATTRIBUTES.copy()
 
+        def last_match_index(regex, subject, offset_in_match):
+            matches = list(re.finditer(regex, subject))
+            return matches[-1].span()[0] + offset_in_match if matches else -1
+
+        wrappers = {
+            "**": {
+                "key": "bold",
+                "last_index": last_match_index(r"\S\*\*", line, 1),
+            },
+            "*": {
+                "key": "italic",
+                "last_index": last_match_index(r"\S\*($|[^*])", line, 1),
+            },
+            "_": {
+                "key": "italic",
+                "last_index": last_match_index(r"\S_", line, 1),
+            },
+        }
+        wrapper_init_chars = set(k[0] for k in wrappers.keys())
+        wrapper_max_len = max(len(k) for k in wrappers.keys())
+
+        irc_toggles = {
+            "\x02": "bold",
+            "\x1D": "italic",
+            "\x1F": "underline",
+        }
+
+        last_backtick = line.rfind("`")
+
         i = 0
         while i < len(line):
-            # Bold
-            if line[i] == "\x02" and not attributes["code"]:
+            # Markdown escape
+            # NOTE: IRC-native formatting characters are not escaped
+            if i + 1 < len(line) and line[i] == "\\" \
+                    and line[i + 1] not in "\x02\x03\x0F\x1D\x1F":
+                text += line[i + 1]
+                i = i + 2
+
+            # IRC bold/italic/underline
+            elif line[i] in irc_toggles and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
-                attributes["bold"] = not attributes["bold"]
+                key = irc_toggles[line[i]]
+                attributes[key] = not attributes[key]
                 i = i + 1
 
-            # Markdown inline code
-            elif line[i] == "`":
-                if text:
-                    # strip leading and trailing spaces and compress consecutive
-                    # spaces in inline code blocks
-                    if attributes["code"]:
-                        text = text.strip()
-                        text = re.sub(r"\s+", " ", text)
-
-                    substrings.append(
-                        FormattedString(text, attributes.copy())
-                    )
-                text = ""
-                attributes["code"] = not attributes["code"]
-                i = i + 1
-
-            # Markdown emphasis
-            elif line[i] == "*" and not attributes["code"]:
-                if attributes["italic"] and not line[i - 1].isspace():
-                    if text:
-                        substrings.append(
-                            FormattedString(text, attributes.copy())
-                        )
-                    text = ""
-                    attributes["italic"] = not attributes["italic"]
-                    i = i + 1
-                    continue
-
-                elif attributes["italic"] and line[i - 1].isspace():
-                    text = text + line[i]
-                    i = i + 1
-                    continue
-
-                elif i + 1 < len(line) and line[i + 1].isspace():
-                    text = text + line[i]
-                    i = i + 1
-                    continue
-
-                elif i == len(line) - 1:
-                    text = text + line[i]
-                    i = i + 1
-                    continue
-
+            # IRC reset
+            elif line[i] == "\x0F" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
                 text = ""
-                attributes["italic"] = not attributes["italic"]
+                # Reset all the attributes
+                attributes = DEFAULT_ATTRIBUTES.copy()
                 i = i + 1
 
-            # Color
+            # IRC color
             elif line[i] == "\x03" and not attributes["code"]:
                 if text:
                     substrings.append(FormattedString(text, attributes.copy()))
@@ -185,37 +182,73 @@ class Formatted(object):
                     attributes["bgcolor"] = color_line_to_weechat(color_string)
                 else:
                     attributes["bgcolor"] = None
-            # Reset
-            elif line[i] == "\x0F" and not attributes["code"]:
+
+            # Markdown inline code
+            elif line[i] == "`" and (attributes["code"] or last_backtick > i):
                 if text:
-                    substrings.append(FormattedString(text, attributes.copy()))
+                    # strip leading and trailing spaces and compress consecutive
+                    # spaces in inline code blocks
+                    if attributes["code"]:
+                        text = text.strip()
+                        text = re.sub(r"\s+", " ", text)
+
+                    substrings.append(
+                        FormattedString(text, attributes.copy())
+                    )
                 text = ""
-                # Reset all the attributes
-                attributes = DEFAULT_ATTRIBUTES.copy()
+                attributes["code"] = not attributes["code"]
                 i = i + 1
 
-            # Italic
-            elif line[i] == "\x1D" and not attributes["code"]:
-                if text:
-                    substrings.append(FormattedString(text, attributes.copy()))
-                text = ""
-                attributes["italic"] = not attributes["italic"]
-                i = i + 1
+            # Markdown wrapper (emphasis/bold)
+            elif line[i] in wrapper_init_chars and not attributes["code"]:
+                for l in range(wrapper_max_len, 0, -1):
+                    if i + l <= len(line) and line[i : i + l] in wrappers:
+                        descriptor = wrappers[line[i : i + l]]
 
-            # Underline
-            elif line[i] == "\x1F" and not attributes["code"]:
-                if text:
-                    substrings.append(FormattedString(text, attributes.copy()))
-                text = ""
-                attributes["underline"] = not attributes["underline"]
-                i = i + 1
+                        if attributes[descriptor["key"]]:
+                            # Can only turn off if preceded by non-whitespace
+                            if not line[i - 1].isspace():
+                                if text:
+                                    substrings.append(
+                                        FormattedString(text, attributes.copy()))
+                                text = ""
+                                attributes[descriptor["key"]] = False
+                                i = i + l
+                            else:
+                                text = text + line[i : i + l]
+                                i = i + l
+
+                        # Must have a chance of closing this, and be followed
+                        # by non-whitespace
+                        elif descriptor["last_index"] >= i + l and \
+                                not line[i + l].isspace():
+                            if text:
+                                substrings.append(
+                                    FormattedString(text, attributes.copy()))
+                            text = ""
+                            attributes[descriptor["key"]] = True
+                            i = i + l
+
+                        else:
+                            text = text + line[i : i + l]
+                            i = i + l
+
+                        break
+
+                else:
+                    # No wrapper matched here (NOTE: cannot happen if "*" and
+                    # "_" are both in wrappers, but for completeness' sake)
+                    text = text + line[i]
+                    i = i + 1
 
             # Normal text
             else:
                 text = text + line[i]
                 i = i + 1
 
-        substrings.append(FormattedString(text, attributes))
+        if text:
+            substrings.append(FormattedString(text, attributes))
+
         return cls(substrings)
 
     @classmethod
