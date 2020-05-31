@@ -328,15 +328,21 @@ class Formatted(object):
                     text = add_attribute(text, "code", True)
                     attributes.pop("code")
 
-            elif attributes["fgcolor"] or attributes["bgcolor"]:
+            if attributes["fgcolor"] or attributes["bgcolor"]:
                 text = add_color(
                     text,
                     attributes["fgcolor"],
                     attributes["bgcolor"]
                 )
-            else:
-                for key, value in attributes.items():
-                    text = add_attribute(text, key, value)
+
+                if attributes["fgcolor"]:
+                    attributes.pop("fgcolor")
+
+                if attributes["bgcolor"]:
+                    attributes.pop("bgcolor")
+
+            for key, value in attributes.items():
+                text = add_attribute(text, key, value)
 
             return text
 
