@@ -109,6 +109,16 @@ def test_input_line_markdown_various2():
     assert "norm** <code>code **code *code</code> norm `norm" \
            == formatted.to_html()
 
+def test_input_line_backslash():
+    def convert(s): return Formatted.from_input_line(s).to_html()
+    assert "pre <em>italic* ital</em> norm" == convert("pre *italic\\* ital* norm")
+    assert "*norm* norm" == convert("\\*norm* norm")
+    assert "<em>*ital</em>" == convert("*\\*ital*")
+    assert "<code>C:\\path</code>" == convert("`C:\\path`")
+    assert "<code>with`tick</code>" == convert("`with\\`tick`")
+    assert "`un`matched" == convert("`un\\`matched")
+    assert "<strong>bold </strong><em><strong>*bital</strong></em> norm" == convert("**bold *\\*bital*** norm")
+
 def test_conversion():
     formatted = Formatted.from_input_line("*Hello*")
     formatted2 = Formatted.from_html(formatted.to_html())

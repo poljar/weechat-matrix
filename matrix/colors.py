@@ -88,23 +88,44 @@ class Formatted(object):
         substrings = []  # type: List[FormattedString]
         attributes = DEFAULT_ATTRIBUTES.copy()
 
-        def last_match_index(regex, subject, offset_in_match):
-            matches = list(re.finditer(regex, subject))
+        # Escaped things are not markdown delimiters, so substitute them away
+        # when (quickly) looking for the last delimiters in the line. Note that
+        # the replacement needs to be the same length as the original for the
+        # indices to be correct.
+        escaped_masked = re.sub(r"\\[\*_`]", "aa", line)
+
+        def last_match_index(regex, offset_in_match):
+            matches = list(re.finditer(regex, escaped_masked))
             return matches[-1].span()[0] + offset_in_match if matches else -1
 
+        # 'needs_word': whether the wrapper must surround words, for example
+        #   '*italic*' and not '* not-italic *'.
+        # 'validate': whether it can occur within the current attributes
         wrappers = {
             "**": {
                 "key": "bold",
-                "last_index": last_match_index(r"\S\*\*", line, 1),
+                "last_index": last_match_index(r"\S\*\*", 1),
+                "needs_word": True,
+                "validate": lambda attrs: not attrs["code"],
             },
             "*": {
                 "key": "italic",
-                "last_index": last_match_index(r"\S\*($|[^*])", line, 1),
+                "last_index": last_match_index(r"\S\*($|[^*])", 1),
+                "needs_word": True,
+                "validate": lambda attrs: not attrs["code"],
             },
             "_": {
                 "key": "italic",
-                "last_index": last_match_index(r"\S_", line, 1),
+                "last_index": last_match_index(r"\S_", 1),
+                "needs_word": True,
+                "validate": lambda attrs: not attrs["code"],
             },
+            "`": {
+                "key": "code",
+                "last_index": last_match_index(r"`", 0),
+                "needs_word": False,
+                "validate": lambda attrs: True,
+            }
         }
         wrapper_init_chars = set(k[0] for k in wrappers.keys())
         wrapper_max_len = max(len(k) for k in wrappers.keys())
@@ -114,8 +135,6 @@ class Formatted(object):
             "\x1D": "italic",
             "\x1F": "underline",
         }
-
-        last_backtick = line.rfind("`")
 
         i = 0
         while i < len(line):
@@ -184,32 +203,26 @@ class Formatted(object):
                 else:
                     attributes["bgcolor"] = None
 
-            # Markdown inline code
-            elif line[i] == "`" and (attributes["code"] or last_backtick > i):
-                if text:
-                    # strip leading and trailing spaces and compress consecutive
-                    # spaces in inline code blocks
-                    if attributes["code"]:
-                        text = text.strip()
-                        text = re.sub(r"\s+", " ", text)
-
-                    substrings.append(
-                        FormattedString(text, attributes.copy())
-                    )
-                text = ""
-                attributes["code"] = not attributes["code"]
-                i = i + 1
-
-            # Markdown wrapper (emphasis/bold)
-            elif line[i] in wrapper_init_chars and not attributes["code"]:
+            # Markdown wrapper (emphasis/bold/code)
+            elif line[i] in wrapper_init_chars:
                 for l in range(wrapper_max_len, 0, -1):
                     if i + l <= len(line) and line[i : i + l] in wrappers:
                         descriptor = wrappers[line[i : i + l]]
 
+                        if not descriptor["validate"](attributes):
+                            continue
+
                         if attributes[descriptor["key"]]:
-                            # Can only turn off if preceded by non-whitespace
-                            if not line[i - 1].isspace():
+                            # needs_word wrappers can only be turned off if
+                            # preceded by non-whitespace
+                            if (i >= 1 and not line[i - 1].isspace()) \
+                                    or not descriptor["needs_word"]:
                                 if text:
+                                    # strip leading and trailing spaces and
+                                    # compress consecutive spaces in inline
+                                    # code blocks
+                                    if descriptor["key"] == "code":
+                                        text = re.sub(r"\s+", " ", text.strip())
                                     substrings.append(
                                         FormattedString(text, attributes.copy()))
                                 text = ""
@@ -219,10 +232,11 @@ class Formatted(object):
                                 text = text + line[i : i + l]
                                 i = i + l
 
-                        # Must have a chance of closing this, and be followed
-                        # by non-whitespace
+                        # Must have a chance of closing this, and needs_word
+                        # wrappers must be followed by non-whitespace
                         elif descriptor["last_index"] >= i + l and \
-                                not line[i + l].isspace():
+                                (not line[i + l].isspace() or \
+                                    not descriptor["needs_word"]):
                             if text:
                                 substrings.append(
                                     FormattedString(text, attributes.copy()))
