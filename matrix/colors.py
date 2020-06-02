@@ -122,7 +122,8 @@ class Formatted(object):
             # Markdown escape
             # NOTE: IRC-native formatting characters are not escaped
             if i + 1 < len(line) and line[i] == "\\" \
-                    and line[i + 1] not in "\x02\x03\x0F\x1D\x1F":
+                    and line[i + 1] not in "\x02\x03\x0F\x1D\x1F" \
+                    and (not attributes["code"] or line[i + 1] == "`"):
                 text += line[i + 1]
                 i = i + 2
 
