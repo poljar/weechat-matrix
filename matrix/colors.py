@@ -92,7 +92,7 @@ class Formatted(object):
         # when (quickly) looking for the last delimiters in the line. Note that
         # the replacement needs to be the same length as the original for the
         # indices to be correct.
-        escaped_masked = re.sub(r"\\[\*_`]", "aa", line)
+        escaped_masked = re.sub(r"\\[\\*_`]", "aa", line)
 
         def last_match_index(regex, offset_in_match):
             matches = list(re.finditer(regex, escaped_masked))
@@ -136,13 +136,17 @@ class Formatted(object):
             "\x1F": "underline",
         }
 
+        # Characters that consume a prefixed backslash
+        escapable_chars = wrapper_init_chars.copy()
+        escapable_chars.add("\\")
+
         i = 0
         while i < len(line):
             # Markdown escape
-            # NOTE: IRC-native formatting characters are not escaped
             if i + 1 < len(line) and line[i] == "\\" \
-                    and line[i + 1] not in "\x02\x03\x0F\x1D\x1F" \
-                    and (not attributes["code"] or line[i + 1] == "`"):
+                    and (line[i + 1] in escapable_chars
+                            if not attributes["code"]
+                            else line[i + 1] == "`"):
                 text += line[i + 1]
                 i = i + 2
 
