@@ -182,10 +182,18 @@ def parse_redact_args(args):
             event_id, rest = (args, "")
 
     if had_example_text:
-        try:
-            _, _, reason = rest.split("\"", 2)
-        except ValueError:
-            reason = None
+        rest = rest.lstrip()
+        reason = None  # until it has been correctly determined
+        if rest[0] == '"':
+            escaped = False
+            for i in range(1, len(rest)):
+                if escaped:
+                    escaped = False
+                elif rest[i] == "\\":
+                    escaped = True
+                elif rest[i] == '"':
+                    reason = rest[i+1:]
+                    break
     else:
         reason = rest
 
