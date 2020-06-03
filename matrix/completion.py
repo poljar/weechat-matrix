@@ -137,13 +137,16 @@ def matrix_message_completion_cb(data, completion_item, buffer, completion):
                 if not event_id:
                     continue
 
-                message = line.message
+                # Make sure we'll be able to reliably detect the end of the
+                # quoted snippet
+                message_fmt = line.message.replace("\\", "\\\\") \
+                                          .replace('"', '\\"')
 
-                if len(message) > REDACTION_COMP_LEN + 2:
-                    message = message[:REDACTION_COMP_LEN] + ".."
+                if len(message_fmt) > REDACTION_COMP_LEN + 2:
+                    message_fmt = message_fmt[:REDACTION_COMP_LEN] + ".."
 
                 item = ('{event_id}|"{message}"').format(
-                    event_id=event_id, message=message
+                    event_id=event_id, message=message_fmt
                 )
 
                 W.hook_completion_list_add(

@@ -1360,7 +1360,7 @@ def matrix_reply_command_cb(data, buffer, args):
             # necessary purpose
             event_id, reply = parse_redact_args(args)
 
-            if not event_id:
+            if not event_id or not reply:
                 message = (
                     "{prefix}matrix: Invalid command "
                     "arguments (see /help reply)"
