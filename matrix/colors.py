@@ -335,6 +335,11 @@ class Formatted(object):
             text = formatted_string.text
             attributes = formatted_string.attributes.copy()
 
+            # Escape HTML tag characters
+            text = text.replace("&", "&amp;") \
+                       .replace("<", "&lt;") \
+                       .replace(">", "&gt;")
+
             if attributes["code"]:
                 if attributes["preformatted"]:
                     # XXX: This can't really happen since there's no way of
