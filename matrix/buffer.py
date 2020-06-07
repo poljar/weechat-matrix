@@ -667,7 +667,7 @@ class WeechatChannelBuffer(object):
             group_name = "000|o"
         elif user.prefix == "@":
             group_name = "001|h"
-        elif user.prefix > "+":
+        elif user.prefix == "+":
             group_name = "002|v"
 
         return group_name
