@@ -231,11 +231,12 @@ They can be added to the weechat status bar as usual:
 The `matrix_modes` bar item is replicated in the already used `buffer_modes` bar
 item.
 
-## Typing notices and read receipts
+## Typing notifications and read receipts
 
-The sending of typing notices and read receipts can be temporarily disabled via
-the `/room` command, they can also be permanently configured using standard
-weechat conditions settings with the following settings:
+The sending of typing notifications and read receipts can be temporarily
+disabled for a given room via the `/room` command. They can also be permanently
+configured using standard weechat conditions settings with the following
+settings:
 
 1. `matrix.network.read_markers_conditions`
 1. `matrix.network.typing_notice_conditions`
