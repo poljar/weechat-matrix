@@ -88,11 +88,21 @@ class Formatted(object):
         substrings = []  # type: List[FormattedString]
         attributes = DEFAULT_ATTRIBUTES.copy()
 
+        # Disallow backticks in URL's so that code blocks are unaffected by the
+        # URL handling
+        url_regex = r"\b[a-z]+://[^\s`]+"
+
         # Escaped things are not markdown delimiters, so substitute them away
-        # when (quickly) looking for the last delimiters in the line. Note that
-        # the replacement needs to be the same length as the original for the
-        # indices to be correct.
-        escaped_masked = re.sub(r"\\[\\*_`]", "aa", line)
+        # when (quickly) looking for the last delimiters in the line.
+        # Additionally, URL's are ignored for the purposes of markdown
+        # delimiters.
+        # Note that the replacement needs to be the same length as the original
+        # for the indices to be correct.
+        escaped_masked = re.sub(
+            r"\\[\\*_`]|(?:" + url_regex + ")",
+            lambda m: "a" * len(m[0]),
+            line
+        )
 
         def last_match_index(regex, offset_in_match):
             matches = list(re.finditer(regex, escaped_masked))
@@ -140,13 +150,30 @@ class Formatted(object):
         escapable_chars = wrapper_init_chars.copy()
         escapable_chars.add("\\")
 
+        # Collect URL spans
+        url_spans = [m.span() for m in re.finditer(url_regex, line)]
+        url_spans.reverse()  # we'll be popping from the end
+
+        # Whether we are currently in a URL
+        in_url = False
+
         i = 0
         while i < len(line):
+            # Update the 'in_url' flag. The first condition is not a while loop
+            # because URL's must contain '://', ensuring that we will not skip
+            # 2 URL's in one iteration.
+            if url_spans and i >= url_spans[-1][1]:
+                in_url = False
+                url_spans.pop()
+            if url_spans and i >= url_spans[-1][0]:
+                in_url = True
+
             # Markdown escape
             if i + 1 < len(line) and line[i] == "\\" \
                     and (line[i + 1] in escapable_chars
                             if not attributes["code"]
-                            else line[i + 1] == "`"):
+                            else line[i + 1] == "`") \
+                    and not in_url:
                 text += line[i + 1]
                 i = i + 2
 
@@ -208,7 +235,7 @@ class Formatted(object):
                     attributes["bgcolor"] = None
 
             # Markdown wrapper (emphasis/bold/code)
-            elif line[i] in wrapper_init_chars:
+            elif line[i] in wrapper_init_chars and not in_url:
                 for l in range(wrapper_max_len, 0, -1):
                     if i + l <= len(line) and line[i : i + l] in wrappers:
                         descriptor = wrappers[line[i : i + l]]
@@ -255,8 +282,9 @@ class Formatted(object):
                         break
 
                 else:
-                    # No wrapper matched here (NOTE: cannot happen if "*" and
-                    # "_" are both in wrappers, but for completeness' sake)
+                    # No wrapper matched here (NOTE: cannot happen since all
+                    # wrapper prefixes are also wrappers, but for completeness'
+                    # sake)
                     text = text + line[i]
                     i = i + 1
 
