@@ -88,13 +88,13 @@ class Formatted(object):
         substrings = []  # type: List[FormattedString]
         attributes = DEFAULT_ATTRIBUTES.copy()
 
-        # Disallow backticks in URL's so that code blocks are unaffected by the
+        # Disallow backticks in URLs so that code blocks are unaffected by the
         # URL handling
         url_regex = r"\b[a-z]+://[^\s`]+"
 
         # Escaped things are not markdown delimiters, so substitute them away
         # when (quickly) looking for the last delimiters in the line.
-        # Additionally, URL's are ignored for the purposes of markdown
+        # Additionally, URLs are ignored for the purposes of markdown
         # delimiters.
         # Note that the replacement needs to be the same length as the original
         # for the indices to be correct.
@@ -160,8 +160,8 @@ class Formatted(object):
         i = 0
         while i < len(line):
             # Update the 'in_url' flag. The first condition is not a while loop
-            # because URL's must contain '://', ensuring that we will not skip
-            # 2 URL's in one iteration.
+            # because URLs must contain '://', ensuring that we will not skip 2
+            # URLs in one iteration.
             if url_spans and i >= url_spans[-1][1]:
                 in_url = False
                 url_spans.pop()
