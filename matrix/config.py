@@ -233,6 +233,40 @@ def logbook_category(value):
     return "all"
 
 
+def parse_nick_prefix_colors(value):
+    """Parses the nick prefix color setting string
+    ("admin=COLOR1;mod=COLOR2;power=COLOR3") into a prefix -> color dict."""
+
+    def key_to_prefix(key):
+        if key == "admin":
+            return "&"
+        elif key == "mod":
+            return "@"
+        elif key == "power":
+            return "+"
+        else:
+            return ""
+
+    prefix_colors = {
+        "&": "lightgreen",
+        "@": "lightgreen",
+        "+": "yellow",
+    }
+
+    for setting in value.split(";"):
+        # skip malformed settings
+        if "=" not in setting:
+            continue
+
+        key, color = setting.split("=")
+        prefix = key_to_prefix(key)
+
+        if prefix:
+            prefix_colors[prefix] = color
+
+    return prefix_colors
+
+
 def eval_cast(string):
     """A function that passes a string to weechat which evaluates it using its
     expression evaluation syntax.
@@ -817,6 +851,21 @@ class MatrixConfig(WeechatConfig):
                 0,
                 "default",
                 "Background counterpart of untagged_code_fg",
+            ),
+            Option(
+                "nick_prefixes",
+                "string",
+                "",
+                0,
+                0,
+                "admin=lightgreen;mod=lightgreen;power=yellow",
+                ('Colors for nick prefixes indicating power level. '
+                 'Format is "admin:color1;mod:color2;power:color3", '
+                 'where "admin" stands for admins (power level = 100), '
+                 '"mod" stands for moderators (power level >= 50) and '
+                 '"power" for any other power user (power level > 0). '
+                 'Requires restart to apply changes.'),
+                parse_nick_prefix_colors,
             ),
         ]
 

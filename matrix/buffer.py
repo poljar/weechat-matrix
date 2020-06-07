@@ -468,7 +468,6 @@ class WeechatChannelBuffer(object):
         own_lines = W.hdata_pointer(self._hdata, self._ptr, "own_lines")
         return W.hdata_integer(W.hdata_get("lines"), own_lines, "lines_count")
 
-
     @property
     def lines(self):
         own_lines = W.hdata_pointer(self._hdata, self._ptr, "own_lines")
@@ -675,17 +674,8 @@ class WeechatChannelBuffer(object):
     @staticmethod
     def _get_prefix_color(prefix):
         # type: (str) -> str
-        # TODO make this configurable
-        color = ""
 
-        if prefix == "&":
-            color = "lightgreen"
-        elif prefix == "@":
-            color = "lightgreen"
-        elif prefix == "+":
-            color = "yellow"
-
-        return color
+        return G.CONFIG.color.nick_prefixes.get(prefix, "")
 
     def _add_user_to_nicklist(self, user):
         # type: (WeechatUser) -> None
