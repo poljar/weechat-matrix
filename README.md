@@ -241,6 +241,31 @@ settings:
 1. `matrix.network.read_markers_conditions`
 1. `matrix.network.typing_notice_conditions`
 
+# Navigating room buffers using go.py
+
+If you try to use the `go.py` script to navigate buffers created by
+weechat-matrix, `go.py` will by default use the full buffer name which does not
+contain a human-readable room display name but only the Matrix room ID. This is
+necessary so that the logger file is able to produce unique, permanent
+filenames for a room.
+
+However, buffers also have human-readable short names. To make `go.py` use the
+short names for navigation, you can run the following command:
+
+```
+/set plugins.var.python.go.short_name "on"
+```
+
+As an alternative, you can also force weechat-matrix to use human-readable
+names as the full buffer names by running
+
+```
+/set matrix.look.human_buffer_names on
+```
+
+Beware that you will then also need to adjust your logger setup to prevent room
+name conflicts from causing logger file conflicts.
+
 # Helpful Commands
 
 `/help matrix` will print information about the `/matrix` command.
