@@ -241,7 +241,7 @@ settings:
 1. `matrix.network.read_markers_conditions`
 1. `matrix.network.typing_notice_conditions`
 
-# Navigating room buffers using go.py
+## Navigating room buffers using go.py
 
 If you try to use the `go.py` script to navigate buffers created by
 weechat-matrix, `go.py` will by default use the full buffer name which does not
