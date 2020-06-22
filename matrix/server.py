@@ -852,7 +852,7 @@ class MatrixServer(object):
             timeout = 0 if self.transport_type == TransportType.HTTP else 30000
             sync_filter = {
                 "room": {
-                    "timeline": {"limit": 5000},
+                    "timeline": {"limit": limit},
                     "state": {"lazy_load_members": True}
                 }
             }
@@ -1968,7 +1968,7 @@ def matrix_timer_cb(server_name, remaining_calls):
         timeout = 0 if server.transport_type == TransportType.HTTP else 30000
         sync_filter = {
             "room": {
-                "timeline": {"limit": 5000},
+                "timeline": {"limit": 500},
                 "state": {"lazy_load_members": True}
             }
         }
