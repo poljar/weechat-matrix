@@ -850,6 +850,7 @@ class MatrixServer(object):
             ).format(prefix=W.prefix("network"), script_name=SCRIPT_NAME)
             W.prnt(self.server_buffer, msg)
             timeout = 0 if self.transport_type == TransportType.HTTP else 30000
+            limit = (G.CONFIG.network.max_initial_sync_events if self.first_sync else 500)
             sync_filter = {
                 "room": {
                     "timeline": {"limit": limit},
