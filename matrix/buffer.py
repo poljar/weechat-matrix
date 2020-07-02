@@ -904,7 +904,7 @@ class RoomBuffer(object):
 
         self.last_message = None
 
-        buffer_name = "matrix.{}.{}".format(server_name, room.room_id)
+        buffer_name = "{}.{}.{}".format(G.SCRIPT_NAME, server_name, room.room_id)
 
         # This dict remembers the connection from a user_id to the name we
         # displayed in the buffer
