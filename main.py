@@ -65,7 +65,7 @@ from matrix.bar_items import (
 from matrix.buffer import room_buffer_close_cb, room_buffer_input_cb
 # Weechat searches for the registered callbacks in the scope of the main script
 # file, import the callbacks here so weechat can find them.
-from matrix.commands import (hook_commands, hook_page_up,
+from matrix.commands import (hook_commands, hook_key_bindings, hook_page_up,
                              matrix_command_buf_clear_cb, matrix_command_cb,
                              matrix_command_pgup_cb, matrix_invite_command_cb,
                              matrix_join_command_cb, matrix_kick_command_cb,
@@ -74,7 +74,8 @@ from matrix.commands import (hook_commands, hook_page_up,
                              matrix_olm_command_cb, matrix_devices_command_cb,
                              matrix_room_command_cb, matrix_uploads_command_cb,
                              matrix_upload_command_cb, matrix_send_anyways_cb,
-                             matrix_reply_command_cb)
+                             matrix_reply_command_cb,
+                             matrix_cursor_reply_signal_cb)
 from matrix.completion import (init_completion, matrix_command_completion_cb,
                                matrix_debug_completion_cb,
                                matrix_message_completion_cb,
@@ -695,6 +696,7 @@ if __name__ == "__main__":
         G.CONFIG.read()
 
         hook_commands()
+        hook_key_bindings()
         init_bar_items()
         init_completion()
 

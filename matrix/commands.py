@@ -544,6 +544,15 @@ def hook_commands():
         hook_page_up()
 
 
+def hook_key_bindings():
+    W.hook_hsignal("matrix_cursor_reply", "matrix_cursor_reply_signal_cb", "")
+
+    binding = "@chat(python.{}*):r".format(G.BUFFER_NAME_PREFIX)
+    W.key_bind("cursor", {
+        binding: "hsignal:matrix_cursor_reply",
+    })
+
+
 def format_device(device_id, fp_key, display_name):
     fp_key = partition_key(fp_key)
     message = ("    - Device ID:      {device_color}{device_id}{ncolor}\n"
@@ -1930,3 +1939,31 @@ def matrix_send_anyways_cb(data, buffer, args):
         W.prnt("", message)
 
     return W.WEECHAT_RC_ERROR
+
+
+@utf8_decode
+def matrix_cursor_reply_signal_cb(data, signal, ht):
+    tags = ht["_chat_line_tags"].split(",")
+
+    W.command("", "/cursor stop")
+
+    if "matrix_message" in tags:
+        for tag in tags:
+            if tag.startswith("matrix_id_"):
+                matrix_id = tag[10:]
+                break
+        else:
+            return W.WEECHAT_RC_OK
+
+        buffer_name = ht["_buffer_full_name"]
+        bufptr = W.buffer_search("==", buffer_name)
+
+        current_input = W.buffer_get_string(bufptr, "input")
+        input_pos = W.buffer_get_integer(bufptr, "input_pos")
+
+        new_prefix = "/reply-matrix {} ".format(matrix_id)
+
+        W.buffer_set(bufptr, "input", new_prefix + current_input)
+        W.buffer_set(bufptr, "input_pos", str(len(new_prefix) + input_pos))
+
+    return W.WEECHAT_RC_OK
