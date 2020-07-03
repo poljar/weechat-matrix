@@ -11,12 +11,12 @@ lib := $(patsubst matrix/%.py, $(DESTDIR)$(PREFIX)/python/matrix/%.py, \
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-install: install-dir install-lib ## Install the plugin to $(DESTDIR)/$(PREFIX)
+install: install-lib | $(DESTDIR)$(PREFIX)/python/matrix/ ## Install the plugin to $(DESTDIR)/$(PREFIX)
 	install -m644 main.py $(DESTDIR)$(PREFIX)/python/matrix.py
 
 install-lib: $(lib)
-install-dir:
-	install -d $(DESTDIR)$(PREFIX)/python/matrix
+$(DESTDIR)$(PREFIX)/python/matrix/:
+	install -d $@
 
 uninstall: ## Uninstall the plugin from $(PREFIX)
 	rm $(DESTDIR)$(PREFIX)/python/matrix.py $(DESTDIR)$(PREFIX)/python/matrix/*
@@ -24,7 +24,7 @@ uninstall: ## Uninstall the plugin from $(PREFIX)
 
 phony:
 
-$(DESTDIR)$(PREFIX)/python/matrix/%.py: matrix/%.py phony
+$(DESTDIR)$(PREFIX)/python/matrix/%.py: matrix/%.py phony | $(DESTDIR)$(PREFIX)/python/matrix/
 	install -m644 $< $@
 
 test: ## Run automated tests
