@@ -241,6 +241,27 @@ settings:
 1. `matrix.network.read_markers_conditions`
 1. `matrix.network.typing_notice_conditions`
 
+## Cursor bindings
+
+While you can reply on a matrix message using the `/reply-matrix` command (see
+its help in weechat), weechat-matrix also adds a binding in `/cursor` mode to
+easily reply to a particular message. This mode can be triggered either by
+running `/cursor`, or by middle-clicking somewhere on the screen. See weechat's
+help for `/cursor`.
+
+The default binding is:
+
+    /key bindctxt cursor @chat(python.matrix.*):r hsignal:matrix_cursor_reply
+
+This means that you can reply to a message in a Matrix buffer using the middle
+mouse button, then `r`.
+
+This binding is automatically set when the script is loaded and there is no
+such binding yet. If you want to use a different key than `r`, you can execute
+the above command with a different key in place of `r`. To use modifier keys
+like control and alt, use alt-k, then your wanted binding key combo, to enter
+weechat's representation of that key combo in the input bar.
+
 ## Navigating room buffers using go.py
 
 If you try to use the `go.py` script to navigate buffers created by
