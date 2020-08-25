@@ -62,6 +62,7 @@ class MockConfig(object):
             'redactions': None,
             'server_buffer': None,
             'new_channel_position': None,
+            'markdown_input': True,
         },
         'network': {
             'debug_buffer': None,
