@@ -60,7 +60,7 @@ def test_normalize_spaces_in_inline_code():
 
 @given(
     text(alphabet=characters(min_codepoint=32,
-                             blacklist_characters="*_"))
+                             blacklist_characters="*_`"))
     .map(lambda s: '*' + s))
 def test_unpaired_prefix_asterisk_without_space_is_literal(text):
    """An unpaired asterisk at the beginning of the line, without a space
