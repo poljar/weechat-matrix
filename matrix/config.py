@@ -597,6 +597,16 @@ class MatrixConfig(WeechatConfig):
                  "since conflicts can happen otherwise "
                  "(requires a script reload)."),
             ),
+            Option(
+                "markdown_input",
+                "boolean",
+                "",
+                0,
+                0,
+                "on",
+                ("If turned on, markdown usage in messages will be converted "
+                 "to actual markup (**bold**, *italic*, _italic_, `code`)."),
+            ),
         ]
 
         network_options = [

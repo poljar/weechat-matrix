@@ -88,6 +88,9 @@ class Formatted(object):
         substrings = []  # type: List[FormattedString]
         attributes = DEFAULT_ATTRIBUTES.copy()
 
+        # If this is false, only IRC formatting characters will be parsed.
+        do_markdown = G.CONFIG.look.markdown_input
+
         # Disallow backticks in URLs so that code blocks are unaffected by the
         # URL handling
         url_regex = r"\b[a-z]+://[^\s`]+"
@@ -169,7 +172,8 @@ class Formatted(object):
                 in_url = True
 
             # Markdown escape
-            if i + 1 < len(line) and line[i] == "\\" \
+            if do_markdown and \
+                    i + 1 < len(line) and line[i] == "\\" \
                     and (line[i + 1] in escapable_chars
                             if not attributes["code"]
                             else line[i + 1] == "`") \
@@ -235,7 +239,7 @@ class Formatted(object):
                     attributes["bgcolor"] = None
 
             # Markdown wrapper (emphasis/bold/code)
-            elif line[i] in wrapper_init_chars and not in_url:
+            elif do_markdown and line[i] in wrapper_init_chars and not in_url:
                 for l in range(wrapper_max_len, 0, -1):
                     if i + l <= len(line) and line[i : i + l] in wrappers:
                         descriptor = wrappers[line[i : i + l]]
