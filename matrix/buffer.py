@@ -927,6 +927,9 @@ class RoomBuffer(object):
             room.room_id
         )
 
+        if room.canonical_alias:
+            self.update_canonical_alias_localvar()
+
     @property
     def backlog_pending(self):
         return self._backlog_pending
@@ -1149,6 +1152,7 @@ class RoomBuffer(object):
                              else "#" + room_name)
             elif self.room.canonical_alias:
                 room_name = self.room.canonical_alias
+                self.update_canonical_alias_localvar()
             elif self.room.name == "#":
                 room_name = "##"
         else:
@@ -1163,6 +1167,13 @@ class RoomBuffer(object):
         if G.CONFIG.human_buffer_names:
             buffer_name = "{}.{}".format(self.server_name, room_name)
             self.weechat_buffer.name = buffer_name
+
+    def update_canonical_alias_localvar(self):
+        W.buffer_set(
+            self.weechat_buffer._ptr,
+            "localvar_set_canonical_alias",
+            self.room.canonical_alias
+        )
 
     def _redact_line(self, event):
         def predicate(event_id, line):
