@@ -60,7 +60,7 @@ accepted and welcome.
 
     To check the python version that weechat is using, run:
 
-        /python version
+       /python version
 
 ## Using virtualenv
 If you want to install dependencies inside a virtualenv, rather than
