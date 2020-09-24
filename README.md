@@ -58,7 +58,7 @@ accepted and welcome.
 
     The minimal supported python2 version is 2.7.10.
 
-    The minimal supported python3 version is 3.6.0.
+    The minimal supported python3 version is 3.5.4 or 3.6.1.
 
     To check the python version that weechat is using, run:
 
