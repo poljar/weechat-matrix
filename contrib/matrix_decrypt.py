@@ -44,6 +44,7 @@ def main():
         description='Download and decrypt matrix attachments'
     )
     parser.add_argument('url', help='the url of the attachment')
+    parser.add_argument('file', nargs='?', help='save attachment to <file>')
     parser.add_argument('--plumber',
                         help='program that gets called with the '
                              'dowloaded file')
@@ -68,11 +69,19 @@ def main():
         print("Error downloading file")
         return -2
 
-    plumber = args.plumber or "/usr/bin/rifle"
+    plumber = args.plumber
     plaintext = decrypt_attachment(request.content, key, hash, iv)
-    file_name = save_file(plaintext)
 
-    subprocess.run([plumber, "{file}".format(file=file_name)])
+    if args.file is None:
+        file_name = save_file(plaintext)
+        if plumber is None:
+            plumber = "/usr/bin/rifle"
+    else:
+        file_name = args.file
+        open(file_name, "wb").write(plaintext)
+
+    if plumber is not None:
+        subprocess.run([plumber, "{file}".format(file=file_name)])
 
     return 0
 
