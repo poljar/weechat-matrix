@@ -75,7 +75,7 @@ def main():
     if args.file is None:
         file_name = save_file(plaintext)
         if plumber is None:
-            plumber = "/usr/bin/rifle"
+            plumber = "xdg-open"
     else:
         file_name = args.file
         open(file_name, "wb").write(plaintext)
