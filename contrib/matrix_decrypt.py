@@ -81,7 +81,7 @@ def main():
         open(file_name, "wb").write(plaintext)
 
     if plumber is not None:
-        subprocess.run([plumber, "{file}".format(file=file_name)])
+        subprocess.run([plumber, file_name])
 
     return 0
 
