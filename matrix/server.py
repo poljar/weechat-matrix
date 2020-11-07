@@ -1618,6 +1618,8 @@ class MatrixServer(object):
 
         if isinstance(response, ErrorResponse):
             self.handle_error_response(response)
+            room_buffer = self.room_buffers[response.room_id]
+            room_buffer.backlog_pending = False
 
         elif isinstance(response, ToDeviceResponse):
             try:
