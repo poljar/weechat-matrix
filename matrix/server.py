@@ -60,6 +60,7 @@ from nio import (
     DeleteDevicesResponse,
     TransportType,
     RoomMessagesResponse,
+    RoomMessagesError,
     EncryptionError,
     GroupEncryptionError,
     OlmTrustError,
@@ -1618,8 +1619,9 @@ class MatrixServer(object):
 
         if isinstance(response, ErrorResponse):
             self.handle_error_response(response)
-            room_buffer = self.room_buffers[response.room_id]
-            room_buffer.backlog_pending = False
+            if isinstance(response, RoomMessagesError):
+                room_buffer = self.room_buffers[response.room_id]
+                room_buffer.backlog_pending = False
 
         elif isinstance(response, ToDeviceResponse):
             try:
