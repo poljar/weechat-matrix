@@ -36,7 +36,7 @@ import textwrap
 from builtins import str
 from itertools import chain
 # pylint: disable=unused-import
-from typing import Any, AnyStr, Deque, Dict, List, Optional, Set, Text, Tuple
+from typing import Any, AnyStr, Dict, List, Optional, Set, Text, Tuple
 
 import logbook
 import json

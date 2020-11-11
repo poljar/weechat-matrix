@@ -26,7 +26,6 @@ from collections import defaultdict, deque
 from atomicwrites import atomic_write
 from typing import (
     Any,
-    Deque,
     Dict,
     Optional,
     List,
@@ -321,7 +320,6 @@ class MatrixServer(object):
         self.device_deletion_queue = dict()              # type: Dict[str, str]
 
         self.encryption_queue = defaultdict(deque)  \
-            # type: DefaultDict[str, Deque[EncryptionQueueItem]]
         self.backlog_queue = dict()      # type: Dict[str, str]
 
         self.user_gc_time = time.time()    # type: float
