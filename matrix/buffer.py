@@ -942,7 +942,7 @@ class RoomBuffer(object):
 
     @property
     def warning_prefix(self):
-        return "⚠️ "
+        return G.CONFIG.encryption_warning_sign
 
     @property
     def typing(self):
