@@ -1,7 +1,7 @@
 pyOpenSSL
 typing ; python_version < "3.5"
 webcolors
-future
+future; python_version < "3.2"
 atomicwrites
 attrs
 logbook
