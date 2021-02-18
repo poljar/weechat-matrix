@@ -1333,7 +1333,7 @@ class MatrixServer(object):
     """
     def _handle_login_info(self, response):
         if ("m.login.sso" in response.flows
-                and (not self.config.username or self.config.password)):
+                and (not self.config.username or not self.config.password)):
             self.start_login_sso()
         elif "m.login.password" in response.flows:
             self.login()
