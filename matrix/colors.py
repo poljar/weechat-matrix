@@ -103,7 +103,7 @@ class Formatted(object):
         # for the indices to be correct.
         escaped_masked = re.sub(
             r"\\[\\*_`]|(?:" + url_regex + ")",
-            lambda m: "a" * len(m[0]),
+            lambda m: "a" * len(m.group(0)),
             line
         )
 
