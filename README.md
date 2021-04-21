@@ -33,6 +33,8 @@ accepted and welcome.
 
     - Archlinux based distribution can install the `libolm` package from the Community repository
 
+    - FreeBSD `pkg install olm`
+
     - macOS `brew install libolm`
 
     - Failing any of the above see https://gitlab.matrix.org/matrix-org/olm
