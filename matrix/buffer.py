@@ -500,7 +500,14 @@ class WeechatChannelBuffer(object):
         tags = tags or []
 
         tags_string = ",".join(tags)
-        W.prnt_date_tags(self._ptr, date, tags_string, data)
+
+        for line in self._multiline_split(data):
+            W.prnt_date_tags(self._ptr, date, tags_string, line)
+
+    def _multiline_split(self, data):
+        prefix, tab, msg = data.partition("\t")
+        for line in msg.split("\n"):
+            yield prefix + tab + line
 
     def error(self, string):
         # type: (str) -> None
