@@ -501,13 +501,13 @@ class WeechatChannelBuffer(object):
 
         tags_string = ",".join(tags)
 
-        for line in self._multiline_split(data):
-            W.prnt_date_tags(self._ptr, date, tags_string, line)
-
-    def _multiline_split(self, data):
-        prefix, tab, msg = data.partition("\t")
-        for line in msg.split("\n"):
-            yield prefix + tab + line
+        # Ensure all lines sent to weechat specifies a prefix. For lines after the
+        # first, we want to disable the prefix, which we do by specifying the same
+        # number of spaces, so it aligns correctly.
+        prefix, _, _ = data.partition("\t")
+        prefix_spaces = " " * len(W.string_remove_color(prefix, ""))
+        data = data.replace("\n", "\n{}\t".format(prefix_spaces))
+        W.prnt_date_tags(self._ptr, date, tags_string, data)
 
     def error(self, string):
         # type: (str) -> None
