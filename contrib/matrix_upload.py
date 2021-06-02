@@ -113,7 +113,7 @@ class EncryptedUpload(Upload):
         self.source_mimetype = self.mimetype
         self.mimetype = "application/octet-stream"
 
-        with open(self.filename, "rb") as file:
+        with open(self.file, "rb") as file:
             self.ciphertext, self.file_keys = encrypt_attachment(file.read())
 
     def send_progress(self):
