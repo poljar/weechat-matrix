@@ -811,19 +811,17 @@ def olm_export_command(server, args):
     file_path = os.path.expanduser(args.file)
     try:
         server.client.export_keys(file_path, args.passphrase)
+        server.info("Successfully exported keys")
     except (OSError, IOError) as e:
         server.error("Error exporting keys: {}".format(str(e)))
-
-    server.info("Successfully exported keys")
 
 def olm_import_command(server, args):
     file_path = os.path.expanduser(args.file)
     try:
         server.client.import_keys(file_path, args.passphrase)
+        server.info("Successfully imported keys")
     except (OSError, IOError, EncryptionError) as e:
         server.error("Error importing keys: {}".format(str(e)))
-
-    server.info("Successfully imported keys")
 
 
 def olm_sas_command(server, args):
