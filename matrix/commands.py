@@ -19,6 +19,7 @@ from __future__ import unicode_literals
 import argparse
 import os
 import re
+import shlex
 from builtins import str
 from future.moves.itertools import zip_longest
 from collections import defaultdict
@@ -60,7 +61,7 @@ class WeechatCommandParser(object):
     @staticmethod
     def _run_parser(parser, args):
         try:
-            parsed_args = parser.parse_args(args.split())
+            parsed_args = parser.parse_args(shlex.split(args))
             return parsed_args
         except ParseError:
             return None
