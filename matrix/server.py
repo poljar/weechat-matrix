@@ -1231,6 +1231,9 @@ class MatrixServer(object):
         server_buffer_prnt(self, pprint.pformat(message.response.body))
 
     def handle_own_messages_error(self, response):
+        if response.room_id not in self.room_buffers:
+            return
+
         room_buffer = self.room_buffers[response.room_id]
 
         if response.uuid not in room_buffer.printed_before_ack_queue:
