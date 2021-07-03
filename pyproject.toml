@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "matrix"
-version = "0.2.0"
+version = "0.3.0"
 license = "ISC"
 description = "Weechat protocol script for Matrix."
 authors = ["Damir Jelić <poljar@termina.org.uk>"]
@@ -19,7 +19,7 @@ future = "^0.18.2"
 attrs = "^19.3.0"
 logbook = "^1.5.3"
 pygments = "^2.6.1"
-matrix-nio = { version = "^0.9.0", extras = [ "e2e" ] }
+matrix-nio = { version = "^0.18.0", extras = [ "e2e" ] }
 python-magic = { version = "^0.4.15", optional = true }
 aiohttp = { version = "^3.6.2", optional = true }
 requests = { version = "^2.23.0", optional = true }

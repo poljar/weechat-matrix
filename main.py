@@ -109,7 +109,7 @@ except ImportError:
 WEECHAT_SCRIPT_NAME = SCRIPT_NAME
 WEECHAT_SCRIPT_DESCRIPTION = "matrix chat plugin"              # type: str
 WEECHAT_SCRIPT_AUTHOR = "Damir Jelić <poljar@termina.org.uk>"  # type: str
-WEECHAT_SCRIPT_VERSION = "0.2.0"                               # type: str
+WEECHAT_SCRIPT_VERSION = "0.3.0"                               # type: str
 WEECHAT_SCRIPT_LICENSE = "ISC"                                 # type: str
 # yapf: enable
 
