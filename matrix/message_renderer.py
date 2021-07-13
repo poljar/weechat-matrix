@@ -42,14 +42,15 @@ class Render(object):
         return Render._media(url, description)
 
     @staticmethod
-    def encrypted_media(mxc, body, key, hash,  iv, homeserver=None):
+    def encrypted_media(mxc, body, key, hash, iv, homeserver=None, mime=None):
         """Render a mxc media URI of an encrypted file."""
         http_url = Api.encrypted_mxc_to_plumb(
             mxc,
             key,
             hash,
             iv,
-            homeserver
+            homeserver,
+            mime,
         )
         url = http_url if http_url else mxc
         description = "{}".format(body) if body else "file"

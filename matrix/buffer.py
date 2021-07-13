@@ -1375,7 +1375,7 @@ class RoomBuffer(object):
         else:
             data = Render.encrypted_media(
                 event.url, event.body, event.key["k"], event.hashes["sha256"],
-                event.iv, self.homeserver.geturl()
+                event.iv, self.homeserver.geturl(), event.mimetype,
             )
 
         extra_prefix = (self.warning_prefix if event.decrypted
