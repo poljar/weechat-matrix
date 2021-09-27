@@ -134,9 +134,23 @@ We recommend you install this under your `PATH` as `matrix_upload` (without the 
 
 ## Downloading encrypted files
 
-Encrypted files can be opened by passing the displayed `emxc://` URI to the
+Encrypted files are displayed as an `emxc://` URI which cannot be directly
+opened. They can be opened in two different ways:
+
+- **In the CLI** by running the
 [contrib/matrix_decrypt](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_decrypt.py)
 helper script.
+
+- **In the browser** by using
+  [matrix-decryptapp](https://github.com/seirl/matrix-decryptapp). This is a
+  static website which cannot see your data, all the decryption happens
+  on the client side. You can either host it yourself or directly use the
+  instance hosted on `seirl.github.io`. This weechat trigger will convert all
+  your `emxc://` URLs into clickable https links:
+
+  ```
+  /trigger addreplace emxc_decrypt modifier weechat_print "" ";($|[^\w/#:\[])(emxc://([^ ]+));${re:1}https://seirl.github.io/matrix-decryptapp/#${re:2};"
+  ```
 
 # Configuration
 
