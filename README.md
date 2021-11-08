@@ -9,7 +9,7 @@
 [Matrix](https://matrix.org/blog/home) is an open network for secure,
 decentralized communication.
 
-[weechat-matrix](https://github.com/poljar/weechat-matrix/) is a Python plugin
+[weechat-matrix](https://github.com/poljar/weechat-matrix/) is a Python script
 for Weechat that lets Weechat communicate over the Matrix protocol.
 
 # Project Status
@@ -92,8 +92,8 @@ above.
 
 
 Once the virtualenv is prepared in the right location, Weechat-Matrix
-will automatically activate it when the plugin is loaded. This should
-not affect other plugins, which seem to have a separate Python
+will automatically activate it when the script is loaded. This should
+not affect other script, which seem to have a separate Python
 environment.
 
 Note that this only supports virtualenv tools that support the
@@ -156,7 +156,7 @@ helper script.
 
 Configuration is completed primarily through the Weechat interface.  First start Weechat, and then issue the following commands:
 
-1. Start by loading the Weechat-Matrix plugin:
+1. Start by loading the Weechat-Matrix script:
 
        /script load matrix.py
 
@@ -183,7 +183,7 @@ Configuration is completed primarily through the Weechat interface.  First start
 
 ## For using a custom (not matrix.org) matrix server:
 
-1. Add your custom server to the plugin:
+1. Add your custom server to the script:
 
        /matrix server add myserver myserver.org
 
