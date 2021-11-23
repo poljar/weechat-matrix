@@ -214,7 +214,7 @@ class Upload(object):
                 self.file_keys["key"]["k"],
                 self.file_keys["hashes"]["sha256"],
                 self.file_keys["iv"],
-                mimetype=self.file_keys.get("mimetype"),
+                mime=self.file_keys.get("mimetype"),
             )
 
         return Render.media(self.content_uri, self.file_name)
