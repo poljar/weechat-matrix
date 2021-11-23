@@ -2,7 +2,6 @@
 
 WEECHAT_HOME ?= $(HOME)/.weechat
 PREFIX ?= $(WEECHAT_HOME)
-PYTHON ?= python
 
 INSTALLDIR := $(DESTDIR)$(PREFIX)/python/matrix
 
@@ -31,7 +30,6 @@ $(INSTALLDIR)/%.py: matrix/%.py phony | $(INSTALLDIR)
 
 test: ## Run automated tests
 	python3 -m pytest
-	python2 -m pytest
 
 typecheck: ## Run type check
 	mypy -p matrix --ignore-missing-imports --warn-redundant-casts
