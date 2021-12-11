@@ -303,11 +303,6 @@ class MatrixServer(object):
         # Enable http2 negotiation on the ssl context.
         self.ssl_context.set_alpn_protocols(["h2", "http/1.1"])
 
-        try:
-            self.ssl_context.set_npn_protocols(["h2", "http/1.1"])
-        except NotImplementedError:
-            pass
-
         self.address = None
         self.homeserver = None
         self.client = None  # type: Optional[HttpClient]
