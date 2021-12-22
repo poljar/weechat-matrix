@@ -131,6 +131,7 @@ would have been copied using `make install`.
 Uploads are done using a helper script, which is found under
 [contrib/matrix_upload](https://github.com/poljar/weechat-matrix/blob/master/contrib/matrix_upload.py).
 We recommend you install this under your `PATH` as `matrix_upload` (without the `.py` suffix).
+Uploads can be done from Weechat with: `/upload <file>`.
 
 ## Downloading encrypted files
 
