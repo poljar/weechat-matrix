@@ -1,6 +1,12 @@
 .PHONY: install install-lib install-dir uninstall phony test typecheck
 
-WEECHAT_HOME ?= $(HOME)/.weechat
+XDG_DATA_HOME ?= $(HOME)/.local/share
+
+ifneq ("$(wildcard $(XDG_DATA_HOME)/weechat)","")
+	WEECHAT_HOME ?= $(XDG_DATA_HOME)/weechat
+else
+	WEECHAT_HOME ?= $(HOME)/.weechat
+endif
 PREFIX ?= $(WEECHAT_HOME)
 
 INSTALLDIR := $(DESTDIR)$(PREFIX)/python/matrix
