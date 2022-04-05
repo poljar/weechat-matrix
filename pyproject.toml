@@ -15,7 +15,7 @@ python = "^3.6"
 pyOpenSSL = "^19.1.0"
 webcolors = "^1.11.1"
 atomicwrites = "^1.3.0"
-future = "^0.18.2"
+future = { version = "^0.18.2", python = "<3.2" }
 attrs = "^19.3.0"
 logbook = "^1.5.3"
 pygments = "^2.6.1"
