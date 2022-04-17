@@ -33,6 +33,13 @@ Packaged as `community/weechat-matrix`.
 
     pacman -S weechat-matrix
 
+## Alpine Linux
+
+    apk add weechat-matrix
+
+Then follow the instructions printed during installation to make the script
+available to weechat.
+
 ## Other platforms
 
 1. Install libolm 3.1+
