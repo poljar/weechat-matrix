@@ -27,11 +27,17 @@ accepted and welcome.
 
 # Installation
 
+## Arch Linux
+
+Packaged as `community/weechat-matrix`.
+
+    pacman -S weechat-matrix
+
+## Other platforms
+
 1. Install libolm 3.1+
 
     - Debian 11+ (testing/sid) or Ubuntu 19.10+ install libolm-dev
-
-    - Archlinux based distribution can install the `libolm` package from the Community repository
 
     - FreeBSD `pkg install olm`
 
