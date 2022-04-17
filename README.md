@@ -50,7 +50,7 @@ Packaged as `community/weechat-matrix`.
     ```
     git clone https://github.com/poljar/weechat-matrix.git
     cd weechat-matrix
-    pip install -r requirements.txt
+    pip install --user -r requirements.txt
     ```
 
 3. As your regular user, just run: `make install` in this repository directory.
