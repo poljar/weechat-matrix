@@ -1073,6 +1073,7 @@ class RoomBuffer(object):
                 user.user_id.startswith("@whatsapp_") or
                 user.user_id.startswith("@facebook_") or
                 user.user_id.startswith("@telegram_") or
+                user.user_id.startswith("@signal_") or
                 user.user_id.startswith("@_telegram_") or
                 user.user_id.startswith("@_xmpp_") or
                 user.user_id.startswith("@irc_")):
