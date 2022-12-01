@@ -45,6 +45,7 @@ from nio import (
     LocalProtocolError,
     LoginResponse,
     LoginInfoResponse,
+    JoinedRoomsResponse,
     Response,
     Rooms,
     RoomSendResponse,
@@ -1636,6 +1637,17 @@ class MatrixServer(object):
 
         elif isinstance(response, RoomSendResponse):
             self.handle_own_messages(response)
+
+        elif isinstance(response, JoinedRoomsResponse):
+            for room_id in response.rooms:
+                try:
+                    self.find_room_from_id(room_id)
+                except KeyError:
+                    self.create_room_buffer(room_id, self.next_batch)
+
+            if len(response.rooms) == 1:
+                buffer = self.find_room_from_id(response.rooms[0])
+                buffer.weechat_buffer.display()
 
         elif isinstance(response, RoomMessagesResponse):
             self.handle_backlog_response(response)
