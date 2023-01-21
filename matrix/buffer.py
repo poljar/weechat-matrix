@@ -1076,7 +1076,8 @@ class RoomBuffer(object):
                 user.user_id.startswith("@signal_") or
                 user.user_id.startswith("@_telegram_") or
                 user.user_id.startswith("@_xmpp_") or
-                user.user_id.startswith("@irc_")):
+                user.user_id.startswith("@irc_") or
+                user.user_id.startswith("@hbirc_")):
             if user.display_name:
                 short_name = user.display_name[0:50]
         elif user.user_id.startswith("@twilio_"):
