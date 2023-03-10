@@ -10,3 +10,4 @@ matrix-nio[e2e]>=0.18.7
 aiohttp ; python_version >= "3.5"
 python-magic
 requests
+cffi
