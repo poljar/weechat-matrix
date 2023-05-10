@@ -185,7 +185,7 @@ Configuration is completed primarily through the Weechat interface.  First start
 
 4. Automatically load the script
 
-       $ ln -s ../matrix.py ~/.weechat/python/autoload
+       $ ln -s ../matrix.py ~/.local/share/weechat/python/autoload
 
 5. Automatically connect to the server
 
