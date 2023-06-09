@@ -327,3 +327,19 @@ name conflicts from causing logger file conflicts.
 device verification.
 
 `/matrix help [command]` will print information for subcommands, such as `/matrix help server`
+
+# Verify your Weechat-Matrix-Client
+
+To verify your Weechat-Matrix-Client the following steps are required.
+
+| Verified client (e.g) Element | Weechat client |
+| ----------------------------- | -------------- |
+|     | run `/olm start <matrix user id> <session id of verified client>` |
+| accept the incomming verification request |    |
+| compare the emojis | compare the emojis |
+| confirm if emojis match | run `/olm confirm <matrix user id> <session id of verified client>` |
+
+Now your Weechat-Matrix-Client is a verified device.
+
+To chat you need to verify all previously used devices of your accounts.
+Run `/olm verify <matrix user id> <session id of already verified clients>` to do that.
