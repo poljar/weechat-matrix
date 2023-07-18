@@ -6,7 +6,7 @@ atomicwrites
 attrs
 logbook
 pygments
-matrix-nio[e2e]>=0.18.7
+matrix-nio[e2e]>=0.21.0
 aiohttp ; python_version >= "3.5"
 python-magic
 requests
