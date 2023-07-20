@@ -334,7 +334,7 @@ To verify your Weechat-Matrix-Client the following steps are required.
 
 | Verified client (e.g) Element | Weechat client |
 | ----------------------------- | -------------- |
-|     | run `/olm start <matrix user id> <session id of verified client>` |
+|     | run `/olm verification start <matrix user id> <session id of verified client>` |
 | accept the incomming verification request |    |
 | compare the emojis | compare the emojis |
 | confirm if emojis match | run `/olm confirm <matrix user id> <session id of verified client>` |
