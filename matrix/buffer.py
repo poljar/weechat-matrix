@@ -500,6 +500,13 @@ class WeechatChannelBuffer(object):
         tags = tags or []
 
         tags_string = ",".join(tags)
+
+        # Ensure all lines sent to weechat specifies a prefix. For lines after the
+        # first, we want to disable the prefix, which we do by specifying the same
+        # number of spaces, so it aligns correctly.
+        prefix, _, _ = data.partition("\t")
+        prefix_spaces = " " * len(W.string_remove_color(prefix, ""))
+        data = data.replace("\n", "\n{}\t".format(prefix_spaces))
         W.prnt_date_tags(self._ptr, date, tags_string, data)
 
     def error(self, string):
