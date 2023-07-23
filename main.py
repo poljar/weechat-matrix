@@ -29,6 +29,7 @@ activate_this = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'venv'
 if os.path.exists(activate_this):
     exec(open(activate_this).read(), {'__file__': activate_this})
 
+import logging
 import socket
 import ssl
 import textwrap
@@ -38,11 +39,9 @@ from itertools import chain
 # pylint: disable=unused-import
 from typing import Any, AnyStr, Deque, Dict, List, Optional, Set, Text, Tuple
 
-import logbook
 import json
 import OpenSSL.crypto as crypto
 from future.utils import bytes_to_native_str as n
-from logbook import Logger, StreamHandler
 
 try:
     from json.decoder import JSONDecodeError
@@ -114,7 +113,7 @@ WEECHAT_SCRIPT_LICENSE = "ISC"                                 # type: str
 # yapf: enable
 
 
-logger = Logger("matrix-cli")
+logger = logging.getLogger(__name__)
 
 
 def print_certificate_info(buff, sock, cert):
@@ -532,20 +531,8 @@ def server_buffer_cb(server_name, buffer, input_data):
     return W.WEECHAT_RC_OK
 
 
-class WeechatHandler(StreamHandler):
-    def __init__(self, level=logbook.NOTSET, format_string=None, filter=None,
-                 bubble=False):
-        StreamHandler.__init__(
-            self,
-            object(),
-            level,
-            format_string,
-            None,
-            filter,
-            bubble
-        )
-
-    def write(self, item):
+class WeechatHandler(logging.StreamHandler):
+    def emit(self, record):
         buf = ""
 
         if G.CONFIG.network.debug_buffer:
@@ -555,7 +542,7 @@ class WeechatHandler(StreamHandler):
 
             buf = G.CONFIG.debug_buffer
 
-        W.prnt(buf, item)
+        W.prnt(buf, record)
 
 
 def buffer_switch_cb(_, _signal, buffer_ptr):
@@ -688,8 +675,7 @@ if __name__ == "__main__":
             W.prnt("", message)
 
         handler = WeechatHandler()
-        handler.format_string = "{record.channel}: {record.message}"
-        handler.push_application()
+        logger.addHandler(handler)
 
         # TODO if this fails we should abort and unload the script.
         G.CONFIG = MatrixConfig()

@@ -16,9 +16,9 @@
 
 from __future__ import unicode_literals
 
+import logging
 import sys
 from typing import Any, Dict, Optional
-from logbook import Logger
 from collections import OrderedDict
 
 from .utf import WeechatWrapper
@@ -44,5 +44,5 @@ ENCRYPTION = True  # type: bool
 SCRIPT_NAME = "matrix"  # type: str
 BUFFER_NAME_PREFIX = "{}.".format(SCRIPT_NAME)  # type: str
 TYPING_NOTICE_TIMEOUT = 4000  # 4 seconds typing notice lifetime
-LOGGER = Logger("weechat-matrix")
+LOGGER = logging.getLogger(__name__)
 UPLOADS = OrderedDict()  # type: Dict[str, Upload]
