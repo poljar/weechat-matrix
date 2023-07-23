@@ -165,6 +165,15 @@ class ServerConfig(ConfigSection):
                 ("Check that the SSL connection is fully trusted"),
             ),
             Option(
+                "ssl_enable",
+                "boolean",
+                "",
+                0,
+                0,
+                "on",
+                ("Use ssl"),
+            ),
+            Option(
                 "username",
                 "string",
                 "",
@@ -255,6 +264,7 @@ class ServerConfig(ConfigSection):
     port = ConfigSection.option_property("port", "integer")
     proxy = ConfigSection.option_property("proxy", "string", evaluate=True)
     ssl_verify = ConfigSection.option_property("ssl_verify", "boolean")
+    ssl_enable = ConfigSection.option_property("ssl_enable", "boolean")
     username = ConfigSection.option_property("username", "string",
         evaluate=True)
     device_name = ConfigSection.option_property("device_name", "string",
@@ -529,6 +539,12 @@ class MatrixServer(object):
             else:
                 self.ssl_context.check_hostname = False
                 self.ssl_context.verify_mode = ssl.CERT_NONE
+        elif option_name == "ssl_enable":
+            value = W.config_boolean(option)
+            if value:
+                self.ssl_context.enabled = True
+            else:
+                self.ssl_context.enabled = False
         elif option_name == "username":
             value = W.config_string(option)
             self.access_token = ""

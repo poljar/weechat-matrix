@@ -200,17 +200,21 @@ def wrap_socket(server, file_descriptor):
     # weechat already did that for us
     sock.setblocking(False)
 
-    message = "{prefix}matrix: Doing SSL handshake...".format(
-        prefix=W.prefix("network"))
-    W.prnt(server.server_buffer, message)
+    if server.ssl_context.enabled:
+        message = "{prefix}matrix: Doing SSL handshake...".format(
+            prefix=W.prefix("network"))
+        W.prnt(server.server_buffer, message)
 
-    ssl_socket = server.ssl_context.wrap_socket(
-        sock, do_handshake_on_connect=False,
-        server_hostname=server.address)  # type: ssl.SSLSocket
+        ssl_socket = server.ssl_context.wrap_socket(
+            sock, do_handshake_on_connect=False,
+            server_hostname=server.address)  # type: ssl.SSLSocket
 
-    server.socket = ssl_socket
+        server.socket = ssl_socket
 
-    try_ssl_handshake(server)
+        try_ssl_handshake(server)
+    else:
+        server.socket = sock
+        finalize_connection(server)
 
 
 @utf8_decode
@@ -361,11 +365,14 @@ def finalize_connection(server):
     server.connecting = False
     server.reconnect_delay = 0
 
-    negotiated_protocol = (server.socket.selected_alpn_protocol() or
-            server.socket.selected_npn_protocol())
+    if server.ssl_context.enabled:
+        negotiated_protocol = (server.socket.selected_alpn_protocol() or
+                server.socket.selected_npn_protocol())
 
-    if negotiated_protocol == "h2":
-        server.transport_type = TransportType.HTTP2
+        if negotiated_protocol == "h2":
+            server.transport_type = TransportType.HTTP2
+        else:
+            server.transport_type = TransportType.HTTP
     else:
         server.transport_type = TransportType.HTTP
 
