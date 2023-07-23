@@ -940,10 +940,12 @@ class MatrixServer(object):
         if not room_buffer.prev_batch:
             return False
 
+        lines = W.window_get_integer(W.current_window(), "win_chat_height")
+
         uuid, request = self.client.room_messages(
             room_id,
             room_buffer.prev_batch,
-            limit=10)
+            limit=lines)
 
         room_buffer.backlog_pending = True
         self.backlog_queue[uuid] = room_id
