@@ -91,6 +91,13 @@ class WeechatCommandParser(object):
         return WeechatCommandParser._run_parser(parser, args)
 
     @staticmethod
+    def query(args):
+        parser = WeechatArgParse(prog="query")
+        parser.add_argument("user_id")
+
+        return WeechatCommandParser._run_parser(parser, args)
+
+    @staticmethod
     def join(args):
         parser = WeechatArgParse(prog="join")
         parser.add_argument("room_id")
@@ -385,6 +392,23 @@ def hook_commands():
         "",
         # Callback
         "matrix_join_command_cb",
+        "",
+    )
+
+    W.hook_command(
+        # Command name and short description
+        "query",
+        "query an user",
+        # Synopsis
+        ("<user-id>"),
+        # Description
+        (
+            "user-id: user-id of the room to join"
+        ),
+        # Completions
+        "",
+        # Callback
+        "matrix_query_command_cb",
         "",
     )
 
@@ -1103,6 +1127,50 @@ def matrix_join_command_cb(data, buffer, args):
         if buffer in server.buffers.values() or buffer == server.server_buffer:
             server.room_join(parsed_args.room_id)
             break
+
+    return W.WEECHAT_RC_OK
+
+@utf8_decode
+def matrix_query_command_cb(data, buffer, args):
+    parsed_args = WeechatCommandParser.query(args)
+    if not parsed_args:
+        return W.WEECHAT_RC_OK
+
+    user_id = parsed_args.user_id
+    matrix_user_id = ':' in user_id and '.' in user_id.split(':')[-1]
+
+    if not user_id.startswith('@'):
+        user_id = f"@{user_id}"
+
+    def join_or_create_user_room(user_id):
+        room = server.find_room_from_user_id(user_id)
+        if room and room.joined:
+            room.weechat_buffer.display()
+            return
+            # if not room.joined:
+                # server.room_join(room.room.room_id)
+                # FIXME: we may still need to create a new room and replace the
+                # one already existing
+        server.create_private_messaging_room(user_id)
+
+    for server in SERVERS.values():
+        if buffer == server.server_buffer:
+            if not matrix_user_id:
+                user_id = f"{user_id}:{server.address}"
+
+            join_or_create_user_room(user_id)
+            break
+        else:
+            buffer = server.find_room_from_ptr(buffer)
+            if buffer:
+                if not matrix_user_id:
+                    user_id = f"{user_id}:{server.address}"
+                    for room_user in buffer.weechat_buffer.users.values():
+                        if parsed_args.user_id == room_user.nick:
+                            user_id = room_user.host
+                            break
+                join_or_create_user_room(user_id)
+                break
 
     return W.WEECHAT_RC_OK
 

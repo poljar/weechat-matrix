@@ -45,6 +45,7 @@ from nio import (
     LocalProtocolError,
     LoginResponse,
     LoginInfoResponse,
+    JoinedRoomsResponse,
     Response,
     Rooms,
     RoomSendResponse,
@@ -59,6 +60,7 @@ from nio import (
     DeleteDevicesAuthResponse,
     DeleteDevicesResponse,
     TransportType,
+    RoomCreateResponse,
     RoomMessagesResponse,
     RoomMessagesError,
     EncryptionError,
@@ -1636,6 +1638,17 @@ class MatrixServer(object):
         elif isinstance(response, RoomSendResponse):
             self.handle_own_messages(response)
 
+        elif isinstance(response, JoinedRoomsResponse):
+            for room_id in response.rooms:
+                try:
+                    self.find_room_from_id(room_id)
+                except KeyError:
+                    self.create_room_buffer(room_id, self.next_batch)
+
+            if len(response.rooms) == 1:
+                buffer = self.find_room_from_id(response.rooms[0])
+                buffer.weechat_buffer.display()
+
         elif isinstance(response, RoomMessagesResponse):
             self.handle_backlog_response(response)
 
@@ -1650,6 +1663,14 @@ class MatrixServer(object):
 
         elif isinstance(response, DeleteDevicesResponse):
             self.info("Device successfully deleted")
+
+        elif isinstance(response, RoomCreateResponse):
+            try:
+                buffer = self.find_room_from_id(response.room_id)
+            except KeyError:
+                self.create_room_buffer(response.room_id, self.next_batch)
+                buffer = self.find_room_from_id(response.room_id)
+            buffer.weechat_buffer.display()
 
         elif isinstance(response, KeysQueryResponse):
             self.keys_queried = False
@@ -1766,6 +1787,10 @@ class MatrixServer(object):
         self.room_buffers[room_id] = buf
         self.buffers[room_id] = buf.weechat_buffer._ptr
 
+    def create_private_messaging_room(self, user_id):
+        _, request = self.client.room_create(is_direct=True, invite={user_id})
+        self.send_or_queue(request)
+
     def find_room_from_ptr(self, pointer):
         try:
             room_id = key_from_value(self.buffers, pointer)
@@ -1778,6 +1803,15 @@ class MatrixServer(object):
     def find_room_from_id(self, room_id):
         room_buffer = self.room_buffers[room_id]
         return room_buffer
+
+    def find_room_from_user_id(self, user_id):
+        for room_buffer in self.room_buffers.values():
+            if (room_buffer.weechat_buffer.type == "private" and
+                    len(room_buffer.weechat_buffer.users) <= 2):
+                user_ids = [
+                    u.host for u in room_buffer.weechat_buffer.users.values()]
+                if self.user_id and user_id in user_ids:
+                    return room_buffer
 
     def garbage_collect_users(self):
         """ Remove inactive users.

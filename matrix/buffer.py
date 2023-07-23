@@ -32,6 +32,7 @@ from nio import (
     RedactedEvent,
     RedactionEvent,
     RoomAliasEvent,
+    RoomCreateEvent,
     RoomEncryptionEvent,
     RoomMemberEvent,
     RoomMessage,
@@ -748,6 +749,9 @@ class WeechatChannelBuffer(object):
         tags = self._message_tags(user, "invite")
         message = self._membership_message(user, "invite")
         self.print_date_tags(message, date, tags + (extra_tags or []))
+
+    def display(self):
+        W.buffer_set(self._ptr, "display", "1")
 
     def remove_user_from_nicklist(self, user):
         # type: (WeechatUser) -> None
@@ -1541,6 +1545,9 @@ class RoomBuffer(object):
             self.print_megolm(event, extra_tags)
 
         elif isinstance(event, UnknownEvent):
+            pass
+
+        elif isinstance(event, RoomCreateEvent):
             pass
 
         elif isinstance(event, BadEvent):
